@@ -1,0 +1,9 @@
+node_modules/
+dist/
+bun.lock
+.portless/
+.env.local
+.playwright-cli/
+.playwright-cli-multi-tab/
+tmp/
+.wrangler/
