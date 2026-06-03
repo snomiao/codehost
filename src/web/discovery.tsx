@@ -4,7 +4,8 @@ import { SignalingClient } from "../shared/signaling-client";
 import type { RtcSignal } from "../shared/rtc";
 import { RtcClient } from "./rtc-client";
 import { getSignalUrl } from "./config";
-import { clearTunnelClient, registerTunnelHost, setTunnelClient } from "./tunnel-host";
+import { registerTunnelHost } from "./tunnel-host";
+import { connBroker } from "./conn-broker";
 
 const TOKEN_KEY = "codehost.token";
 
@@ -27,9 +28,16 @@ export function Discovery() {
   const rtcRef = useRef<RtcClient | null>(null);
   const activePeerRef = useRef<string | null>(null);
 
-  // Register the Service Worker once; it routes /vs/<peerId>/* to the channel.
+  // Register the Service Worker + connection broker once. The broker shares one
+  // WebRTC connection per server across tabs; on owner failover it asks us to
+  // reload the iframe so it reconnects through the new owner.
   useEffect(() => {
     void registerTunnelHost();
+    connBroker.onLost((peerId) => {
+      if (peerId !== activePeerRef.current) return;
+      setIframeSrc(null);
+      setTimeout(() => setIframeSrc(`/vs/${peerId}/`), 400);
+    });
   }, []);
 
   useEffect(() => {
@@ -50,7 +58,7 @@ export function Discovery() {
     return () => {
       rtcRef.current?.close();
       rtcRef.current = null;
-      if (activePeerRef.current) clearTunnelClient(activePeerRef.current);
+      if (activePeerRef.current) connBroker.disconnect(activePeerRef.current);
       client.close();
       clientRef.current = null;
       setConnected(false);
@@ -74,36 +82,42 @@ export function Discovery() {
     if (!client) return;
 
     rtcRef.current?.close();
+    rtcRef.current = null;
     setIframeSrc(null);
     setActivePeerId(server.peerId);
     activePeerRef.current = server.peerId;
     setConnState("connecting");
 
-    const rtc = new RtcClient({
-      sendSignal: (data: RtcSignal) => client.sendSignal(server.peerId, data),
-      onState: (state) => {
-        if (state === "failed" || state === "disconnected") setConnState("failed");
-      },
-      onOpen: (channel) => {
-        setConnState("connected");
-        // Hand the channel to the tunnel host (which the SW + WS shim use) and
-        // load this server's VS Code over the tunnel in the iframe.
-        setTunnelClient(server.peerId, channel);
-        setIframeSrc(`/vs/${server.peerId}/`);
-      },
-      onClose: () => {
-        clearTunnelClient(server.peerId);
-        setConnState((s) => (s === "connected" ? "idle" : s));
-      },
-    });
-    rtcRef.current = rtc;
-    await rtc.start();
+    // The broker decides whether this tab owns the connection. `establish` is
+    // only invoked when we're the owner (or get promoted on failover); other
+    // tabs reuse the owner's channel via a proxy, so they never open WebRTC.
+    const establish = () =>
+      new Promise<RTCDataChannel>((resolve, reject) => {
+        const rtc = new RtcClient({
+          sendSignal: (data: RtcSignal) => client.sendSignal(server.peerId, data),
+          onState: (state) => {
+            if (state === "failed" || state === "disconnected") setConnState("failed");
+          },
+          onOpen: (channel) => resolve(channel),
+          onClose: () => setConnState((s) => (s === "connected" ? "idle" : s)),
+        });
+        rtcRef.current = rtc;
+        rtc.start().catch(reject);
+      });
+
+    try {
+      await connBroker.connect(server.peerId, establish);
+      setConnState("connected");
+      setIframeSrc(`/vs/${server.peerId}/`);
+    } catch {
+      setConnState("failed");
+    }
   }
 
   function disconnect() {
     rtcRef.current?.close();
     rtcRef.current = null;
-    if (activePeerRef.current) clearTunnelClient(activePeerRef.current);
+    if (activePeerRef.current) connBroker.disconnect(activePeerRef.current);
     setIframeSrc(null);
     setActivePeerId(null);
     activePeerRef.current = null;

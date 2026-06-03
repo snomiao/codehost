@@ -1,15 +1,13 @@
-import { TunnelClient } from "./tunnel-client";
+import { connBroker } from "./conn-broker";
 import { makeTunnelWebSocket } from "./tunnel-websocket";
 
-// Page-side glue between the Service Worker and the per-peer TunnelClients.
-// - Registers the SW.
-// - Holds a TunnelClient for each connected peer (keyed by peerId).
+// Page-side glue between the Service Worker and the connection broker.
+// - Registers the SW and starts the broker (SharedWorker coordination).
 // - Answers the SW's `tunnel-fetch` messages by running the request over the
-//   matching data channel and streaming the response back through the port.
+//   right tunnel for the peer (local channel if this tab owns it, else a proxy
+//   to the owner tab) and streaming the response back through the port.
 // - Exposes window.__codehostMakeWS so the VS Code iframe's injected bootstrap
 //   can install a WebSocket shim bound to the right peer (same-origin access).
-
-const clients = new Map<string, TunnelClient>();
 
 declare global {
   interface Window {
@@ -18,6 +16,8 @@ declare global {
 }
 
 export async function registerTunnelHost(): Promise<void> {
+  connBroker.init();
+
   if (!("serviceWorker" in navigator)) {
     console.warn("[codehost] no service worker support; VS Code tunneling unavailable");
     return;
@@ -25,37 +25,21 @@ export async function registerTunnelHost(): Promise<void> {
 
   navigator.serviceWorker.addEventListener("message", onSwMessage);
 
-  window.__codehostMakeWS = (peerId: string, basePath: string) => {
-    const client = clients.get(peerId);
-    return client ? makeTunnelWebSocket(client, basePath) : undefined;
-  };
+  window.__codehostMakeWS = (peerId: string, basePath: string) =>
+    makeTunnelWebSocket(connBroker.tunnelFor(peerId), basePath);
 
   // Built to /sw.js at the web root (see vite.sw.config.ts) so its scope is "/".
   await navigator.serviceWorker.register("/sw.js", { type: "module", scope: "/" });
   await navigator.serviceWorker.ready;
 }
 
-export function setTunnelClient(peerId: string, channel: RTCDataChannel): TunnelClient {
-  const client = new TunnelClient(channel);
-  clients.set(peerId, client);
-  return client;
-}
-
-export function clearTunnelClient(peerId: string): void {
-  clients.delete(peerId);
-}
-
 function onSwMessage(event: MessageEvent): void {
   const msg = event.data;
   if (msg?.type !== "tunnel-fetch") return;
   const port = event.ports[0];
-  const client = clients.get(msg.peerId);
-  if (!client) {
-    port.postMessage({ type: "error", message: "peer not connected" });
-    return;
-  }
 
-  void client
+  void connBroker
+    .tunnelFor(msg.peerId)
     .fetch(msg.method, msg.path, msg.headers, msg.body ? new Uint8Array(msg.body) : undefined)
     .then(async (res) => {
       const headers: Record<string, string> = {};

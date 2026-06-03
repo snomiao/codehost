@@ -29,6 +29,19 @@ export interface TunnelWsHandlers {
   onClose: (code: number, reason: string) => void;
 }
 
+export interface TunnelWsHandle {
+  sendText: (text: string) => void;
+  sendBin: (data: Uint8Array) => void;
+  close: (code?: number, reason?: string) => void;
+}
+
+/** The subset of a tunnel the Service Worker glue and WS shim depend on. Both
+ *  the local {@link TunnelClient} and the cross-tab proxy implement it. */
+export interface TunnelLike {
+  fetch(method: string, path: string, headers: Record<string, string>, body?: Uint8Array): Promise<Response>;
+  openWs(path: string, protocols: string[] | undefined, handlers: TunnelWsHandlers): TunnelWsHandle;
+}
+
 export class TunnelClient {
   private nextStreamId = 1;
   private https = new Map<number, HttpWaiter>();

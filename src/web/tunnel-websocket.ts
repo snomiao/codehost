@@ -1,4 +1,4 @@
-import type { TunnelClient } from "./tunnel-client";
+import type { TunnelLike, TunnelWsHandle } from "./tunnel-client";
 
 // Minimal WebSocket implementation backed by a TunnelClient stream. Installed
 // into the VS Code iframe as `window.WebSocket` so the workbench's socket
@@ -9,7 +9,7 @@ import type { TunnelClient } from "./tunnel-client";
 
 type Listener = (ev: any) => void;
 
-export function makeTunnelWebSocket(client: TunnelClient, basePath: string) {
+export function makeTunnelWebSocket(client: TunnelLike, basePath: string) {
   return class TunnelWebSocket implements Partial<WebSocket> {
     static readonly CONNECTING = 0;
     static readonly OPEN = 1;
@@ -31,7 +31,7 @@ export function makeTunnelWebSocket(client: TunnelClient, basePath: string) {
     onerror: Listener | null = null;
 
     private listeners = new Map<string, Set<Listener>>();
-    private handle: ReturnType<TunnelClient["openWs"]>;
+    private handle: TunnelWsHandle;
 
     constructor(url: string | URL, protocols?: string | string[]) {
       this.url = String(url);
