@@ -15,9 +15,10 @@ interface Attachment {
 }
 
 /** How often the room scans for dead sockets, and how long a socket may go
- *  silent before eviction. Clients heartbeat every ~30s; allow three misses. */
-const SWEEP_MS = 30_000;
-const STALE_MS = 95_000;
+ *  silent before eviction. Clients heartbeat every ~10s; allow ~3 misses, so a
+ *  crashed peer drops out within ~35-50s instead of lingering as a phantom. */
+const SWEEP_MS = 15_000;
+const STALE_MS = 35_000;
 
 /**
  * One Durable Object instance per token-room. Holds the live WebSocket

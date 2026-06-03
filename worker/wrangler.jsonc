@@ -11,6 +11,8 @@
   // SQLite-backed Durable Objects are available on the Workers free plan.
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room"] }],
   // The page derives its signaling URL as wss://signal.<page host>, so the
-  // Worker is served on signal.codehost.dev via a custom-domain route.
-  "routes": [{ "pattern": "signal.codehost.dev", "custom_domain": true }]
+  // Worker is served on signal.codehost.dev via a custom-domain route. This is
+  // already provisioned in Cloudflare; re-reconciling it needs a Zone-scoped
+  // token, so it's left out of routine deploys (uncomment for first setup).
+  // "routes": [{ "pattern": "signal.codehost.dev", "custom_domain": true }]
 }

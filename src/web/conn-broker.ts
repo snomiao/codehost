@@ -29,7 +29,7 @@ class ConnBroker {
   private establishers = new Map<string, Establish>(); // peerId -> how to (re)connect
   private establishing = new Set<string>(); // peerIds whose channel is opening
   private remoteReady = new Set<string>(); // peerIds served by a remote owner
-  private readyWaiters = new Map<string, Array<() => void>>();
+  private readyWaiters = new Map<string, Array<{ resolve: () => void; reject: (e: unknown) => void }>>();
   private pending = new Map<number, (payload: AnyMsg) => void>(); // requester: callId -> sink
   private ownerWs = new Map<string, TunnelWsHandle>(); // owner: `${tab}:${callId}` -> ws
   private callSeq = 1;
@@ -116,6 +116,7 @@ class ConnBroker {
       this.resolveReady(peerId);
     } catch (err) {
       console.error("[codehost] failed to establish owner connection", err);
+      this.rejectReady(peerId, err); // unblock connect() so the UI shows failure
     } finally {
       this.establishing.delete(peerId);
     }
@@ -123,9 +124,9 @@ class ConnBroker {
 
   private waitReady(peerId: string): Promise<void> {
     if (this.locals.has(peerId)) return Promise.resolve();
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       const arr = this.readyWaiters.get(peerId) ?? [];
-      arr.push(resolve);
+      arr.push({ resolve, reject });
       this.readyWaiters.set(peerId, arr);
     });
   }
@@ -134,7 +135,14 @@ class ConnBroker {
     const arr = this.readyWaiters.get(peerId);
     if (!arr) return;
     this.readyWaiters.delete(peerId);
-    for (const resolve of arr) resolve();
+    for (const w of arr) w.resolve();
+  }
+
+  private rejectReady(peerId: string, err: unknown): void {
+    const arr = this.readyWaiters.get(peerId);
+    if (!arr) return;
+    this.readyWaiters.delete(peerId);
+    for (const w of arr) w.reject(err);
   }
 
   // ---- SharedWorker wire ----

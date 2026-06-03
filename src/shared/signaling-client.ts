@@ -89,8 +89,9 @@ export class SignalingClient {
     };
   }
 
-  // Heartbeat keeps the room's liveness sweep from evicting us; matches the
-  // DO's STALE_MS budget with room to spare for a couple of missed beats.
+  // Heartbeat keeps the room's liveness sweep from evicting us. At 10s, the DO
+  // (STALE_MS 35s) tolerates ~3 missed beats before treating us as gone — fast
+  // enough that a crashed peer stops showing as a phantom server within ~1 sweep.
   private startHeartbeat(): void {
     this.stopHeartbeat();
     this.heartbeat = setInterval(() => {
@@ -99,7 +100,7 @@ export class SignalingClient {
       } catch {
         // socket gone; onclose will reconnect
       }
-    }, 30000);
+    }, 10000);
   }
 
   private stopHeartbeat(): void {

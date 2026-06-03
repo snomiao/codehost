@@ -98,11 +98,23 @@ export function Discovery() {
           onState: (state) => {
             if (state === "failed" || state === "disconnected") setConnState("failed");
           },
-          onOpen: (channel) => resolve(channel),
+          onOpen: (channel) => {
+            clearTimeout(timer);
+            resolve(channel);
+          },
           onClose: () => setConnState((s) => (s === "connected" ? "idle" : s)),
         });
         rtcRef.current = rtc;
-        rtc.start().catch(reject);
+        // Don't hang forever dialing a peer that never answers (e.g. a stale
+        // server still listed in the room): fail the attempt after 15s.
+        const timer = setTimeout(() => {
+          rtc.close();
+          reject(new Error("connection timed out"));
+        }, 15000);
+        rtc.start().catch((err) => {
+          clearTimeout(timer);
+          reject(err);
+        });
       });
 
     try {
