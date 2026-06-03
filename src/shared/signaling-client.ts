@@ -30,6 +30,7 @@ export class SignalingClient {
   private ws: WebSocket | null = null;
   private closed = false;
   private reconnectDelay = 1000;
+  private heartbeat: ReturnType<typeof setInterval> | null = null;
 
   constructor(private opts: SignalingClientOptions) {
     this.peerId = opts.peerId ?? newPeerId();
@@ -58,6 +59,7 @@ export class SignalingClient {
         ...(this.opts.meta ? { meta: this.opts.meta } : {}),
       };
       ws.send(JSON.stringify(hello));
+      this.startHeartbeat();
       this.opts.onOpen?.();
     };
 
@@ -73,6 +75,7 @@ export class SignalingClient {
     };
 
     ws.onclose = () => {
+      this.stopHeartbeat();
       this.opts.onClose?.();
       if (!this.closed) this.scheduleReconnect();
     };
@@ -84,6 +87,26 @@ export class SignalingClient {
         // ignore
       }
     };
+  }
+
+  // Heartbeat keeps the room's liveness sweep from evicting us; matches the
+  // DO's STALE_MS budget with room to spare for a couple of missed beats.
+  private startHeartbeat(): void {
+    this.stopHeartbeat();
+    this.heartbeat = setInterval(() => {
+      try {
+        this.ws?.send(JSON.stringify({ type: "ping" }));
+      } catch {
+        // socket gone; onclose will reconnect
+      }
+    }, 30000);
+  }
+
+  private stopHeartbeat(): void {
+    if (this.heartbeat != null) {
+      clearInterval(this.heartbeat);
+      this.heartbeat = null;
+    }
   }
 
   private scheduleReconnect(): void {
@@ -101,6 +124,7 @@ export class SignalingClient {
 
   close(): void {
     this.closed = true;
+    this.stopHeartbeat();
     try {
       this.ws?.close();
     } catch {

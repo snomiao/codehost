@@ -10,7 +10,14 @@ interface Attachment {
   peerId: string;
   role: Role;
   meta: PeerMeta | null;
+  /** Wall-clock ms of the last message from this socket (hello / ping / signal). */
+  lastSeen: number;
 }
+
+/** How often the room scans for dead sockets, and how long a socket may go
+ *  silent before eviction. Clients heartbeat every ~30s; allow three misses. */
+const SWEEP_MS = 30_000;
+const STALE_MS = 95_000;
 
 /**
  * One Durable Object instance per token-room. Holds the live WebSocket
@@ -49,21 +56,52 @@ export class Room implements DurableObject {
         peerId: msg.peerId,
         role: msg.role,
         meta: msg.meta ?? null,
+        lastSeen: Date.now(),
       };
       ws.serializeAttachment(att);
       this.send(ws, { type: "welcome", peerId: msg.peerId });
       this.broadcastPeers();
+      void this.ensureSweep();
+      return;
+    }
+
+    if (msg.type === "ping") {
+      this.touch(ws);
       return;
     }
 
     if (msg.type === "signal") {
-      const from = this.attachment(ws)?.peerId;
-      if (!from) return;
+      const att = this.touch(ws);
+      if (!att) return;
       const target = this.findByPeerId(msg.to);
       if (target) {
-        this.send(target, { type: "signal", from, data: msg.data });
+        this.send(target, { type: "signal", from: att.peerId, data: msg.data });
       }
       return;
+    }
+  }
+
+  /** Periodic sweep: evict sockets that stopped heart-beating. Covers daemons
+   *  killed with `kill -9`, whose WebSocket lingers in the room until the edge
+   *  notices the dead TCP connection — otherwise they show as phantom servers. */
+  async alarm(): Promise<void> {
+    const now = Date.now();
+    let evicted = false;
+    for (const ws of this.state.getWebSockets()) {
+      const att = this.attachment(ws);
+      if (att && now - att.lastSeen > STALE_MS) {
+        try {
+          ws.close(1001, "stale");
+        } catch {
+          // already closing
+        }
+        evicted = true;
+      }
+    }
+    if (evicted) this.broadcastPeers();
+    // Keep sweeping while anyone is connected; let idle rooms go quiet.
+    if (this.state.getWebSockets().length > 0) {
+      await this.state.storage.setAlarm(now + SWEEP_MS);
     }
   }
 
@@ -84,6 +122,22 @@ export class Room implements DurableObject {
 
   private attachment(ws: WebSocket): Attachment | null {
     return (ws.deserializeAttachment() as Attachment | null) ?? null;
+  }
+
+  /** Refresh a socket's liveness timestamp; returns its attachment if known. */
+  private touch(ws: WebSocket): Attachment | null {
+    const att = this.attachment(ws);
+    if (!att) return null;
+    att.lastSeen = Date.now();
+    ws.serializeAttachment(att);
+    return att;
+  }
+
+  /** Arm the sweep alarm if one isn't already pending. */
+  private async ensureSweep(): Promise<void> {
+    if ((await this.state.storage.getAlarm()) == null) {
+      await this.state.storage.setAlarm(Date.now() + SWEEP_MS);
+    }
   }
 
   private findByPeerId(peerId: string): WebSocket | null {

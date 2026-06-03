@@ -38,7 +38,14 @@ export interface SignalMessage {
   data: unknown;
 }
 
-export type ClientMessage = HelloMessage | SignalMessage;
+/** Liveness heartbeat. The room evicts members that stop sending these, so a
+ *  hard-killed daemon (whose WebSocket lingers until the edge times it out)
+ *  doesn't haunt the peer list as a dead server. */
+export interface PingMessage {
+  type: "ping";
+}
+
+export type ClientMessage = HelloMessage | SignalMessage | PingMessage;
 
 // ---- Server -> Client ----
 
