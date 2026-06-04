@@ -65,6 +65,11 @@ async function proxyOverTunnel(request: Request, peerId: string): Promise<Respon
   const url = new URL(request.url);
   const headers: Record<string, string> = {};
   request.headers.forEach((v, k) => (headers[k] = v));
+  // Tell the daemon our public host so VS Code advertises it as the client's
+  // remoteAuthority and builds same-origin resource URLs (vscode-remote-resource,
+  // extension grammars) that route back through the tunnel — instead of the
+  // unreachable 127.0.0.1:<port> it bakes in when it only sees the local host.
+  headers["x-forwarded-host"] = sw.location.host;
   const bodyBuf =
     request.method === "GET" || request.method === "HEAD"
       ? undefined

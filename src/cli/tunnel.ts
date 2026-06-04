@@ -99,10 +99,20 @@ export class Tunnel {
 
     const { method, path, headers } = stream.head;
     const reqHeaders = new Headers();
+    let forwardedHost = "";
     for (const [k, v] of Object.entries(headers)) {
-      if (!HOP_BY_HOP.has(k.toLowerCase())) reqHeaders.set(k, v);
+      const lk = k.toLowerCase();
+      if (lk === "x-forwarded-host") {
+        forwardedHost = v;
+        continue;
+      }
+      if (!HOP_BY_HOP.has(lk)) reqHeaders.set(k, v);
     }
-    reqHeaders.set("host", `127.0.0.1:${this.vscodePort}`);
+    // Present the browser's public host to VS Code so its client-side
+    // remoteAuthority points at codehost.dev (routes resource URLs back through
+    // the tunnel), not the unreachable 127.0.0.1:<port>. Falls back to the local
+    // host if the SW didn't forward one.
+    reqHeaders.set("host", forwardedHost || `127.0.0.1:${this.vscodePort}`);
 
     const hasBody = method !== "GET" && method !== "HEAD" && stream.body.length > 0;
     const body = hasBody ? concat(stream.body) : undefined;
