@@ -4,16 +4,27 @@
 // MessageChannel, streaming the response back. WebSocket connections can't be
 // intercepted here, so we inject a bootstrap script into VS Code's HTML that
 // overrides window.WebSocket inside the iframe (see tunnel-websocket.ts).
+import { cdnProxyBase, isProxiableCdnHost } from "./config";
+
 const sw = self as unknown as ServiceWorkerGlobalScope;
 
 const VS_PREFIX = /^\/vs\/([^/]+)(\/.*)?$/;
+const CDN_CACHE = "codehost-cdn-v1";
 
 sw.addEventListener("install", () => sw.skipWaiting());
 sw.addEventListener("activate", (e) => e.waitUntil(sw.clients.claim()));
 
 sw.addEventListener("fetch", (event: FetchEvent) => {
   const url = new URL(event.request.url);
-  if (url.origin !== sw.location.origin) return;
+  if (url.origin !== sw.location.origin) {
+    // VS Code's product CDN (main.vscode-cdn.net, ...) sends no CORS headers, so
+    // its cross-origin fetches fail in our iframe. Route them through the
+    // signaling Worker, which re-serves them with permissive CORS.
+    if (event.request.method === "GET" && isProxiableCdnHost(url.hostname)) {
+      event.respondWith(proxyCdn(url));
+    }
+    return; // all other cross-origin requests pass through untouched
+  }
 
   // Serve the iframe bootstrap from the SW itself (same-origin, CSP 'self').
   if (url.pathname === "/__codehost/bootstrap.js") {
@@ -27,6 +38,25 @@ sw.addEventListener("fetch", (event: FetchEvent) => {
 
   event.respondWith(proxyOverTunnel(event.request, peerId));
 });
+
+/**
+ * Fetch an allow-listed VS Code CDN asset through the signaling Worker's /cdn
+ * route (which adds CORS), caching the result so each asset crosses to the
+ * Worker once per browser rather than on every request.
+ */
+async function proxyCdn(url: URL): Promise<Response> {
+  const target = `${cdnProxyBase(sw.location.hostname, sw.location.protocol)}/cdn/${url.hostname}${url.pathname}${url.search}`;
+  const cache = await caches.open(CDN_CACHE);
+  const hit = await cache.match(target);
+  if (hit) return hit;
+  try {
+    const res = await fetch(target);
+    if (res.ok) void cache.put(target, res.clone()).catch(() => {});
+    return res;
+  } catch (err) {
+    return new Response(`cdn proxy error: ${String(err)}`, { status: 502 });
+  }
+}
 
 async function proxyOverTunnel(request: Request, peerId: string): Promise<Response> {
   const client = await pickClient();
