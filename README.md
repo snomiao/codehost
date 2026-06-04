@@ -20,15 +20,32 @@ directly; a tiny Cloudflare Worker only brokers the handshake.
 
 ## Quickstart
 
-On the machine you want to edit (needs the `code` CLI and [Bun](https://bun.sh)):
+On the machine you want to edit, run the one-line installer — it installs
+[Bun](https://bun.sh) if needed, the `codehost` CLI, and then `codehost setup`
+(picks a token, installs VS Code, and starts a server):
 
 ```bash
-bunx codehost serve -d -t <token>
+# macOS / Linux
+curl -fsSL https://codehost.dev/install.sh | sh
+
+# Windows (PowerShell)
+powershell -c "irm codehost.dev/install.ps1 | iex"
 ```
 
-Then open **https://codehost.dev**, enter the same `<token>`, and your server
-appears in the list. Click **Connect** — VS Code loads in the page, served
-entirely over the peer-to-peer data channel.
+Already have Bun? `bun add -g codehost && codehost setup` does the same. Or, for
+a specific directory/token in one shot:
+
+```bash
+bunx codehost setup ~/my-project -t <token>
+```
+
+Then open **https://codehost.dev**, enter the token printed by `setup`, and your
+server appears in the list. Click **Connect** — VS Code loads in the page,
+served entirely over the peer-to-peer data channel.
+
+> Use `setup` (not `bunx codehost serve`) for the first run: `setup` installs
+> everything and self-heals the native WebRTC module that a bare `bunx` can't
+> fetch on its own.
 
 The `<token>` is a shared secret: anyone with it can see and connect to the
 servers in that room, so treat it like a password. It must be **at least 12
@@ -39,11 +56,17 @@ weaker tokens (e.g. `Str0ng-Token-99`).
 ## CLI
 
 ```bash
+codehost setup [dir] [-t <token>]           # token + VS Code + daemon, one shot
 codehost serve [dir] -t <token> [options]   # serve a directory (default: cwd)
 codehost list                                # list daemonized servers (oxmgr)
 codehost stop <name>                         # stop a daemonized server
 codehost update                              # fetch the latest VS Code CLI now
 ```
+
+**`codehost setup`** is the easy path: it reuses (or generates and saves to
+`~/.codehost/config.json`) a strong room token, ensures a working VS Code,
+starts the server under oxmgr, and prints the token + URL. Pass `-t` to set a
+token explicitly, or `--new-token` to rotate the saved one.
 
 **VS Code is auto-installed.** On first `serve`, codehost uses a `code` already
 on your `PATH` if present; otherwise it downloads Microsoft's standalone VS Code

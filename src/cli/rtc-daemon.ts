@@ -1,3 +1,5 @@
+import { spawnSync } from "node:child_process";
+import { dirname } from "node:path";
 import { createRequire } from "node:module";
 import type {
   DataChannel,
@@ -10,7 +12,61 @@ import { ICE_SERVERS, type RtcSignal } from "../shared/rtc";
 // resolves correctly from the project's node_modules. So load it via require;
 // the `import type` above is erased at build time and triggers no runtime load.
 const require = createRequire(import.meta.url);
-const ndc = require("node-datachannel") as typeof import("node-datachannel");
+const ndc = loadNodeDataChannel();
+
+/**
+ * Load the native node-datachannel addon, self-healing the common failure where
+ * its prebuilt `.node` was never fetched. That happens under `bunx codehost`:
+ * bunx skips install lifecycle scripts (and `trustedDependencies` only applies
+ * to `bun install`), so node-datachannel's `install` step — which downloads the
+ * binary via `prebuild-install` — never runs. On the first load failure we run
+ * that prebuild-install ourselves, then retry. A normal `bun add -g` install
+ * already has the binary, so this is a no-op there.
+ */
+function loadNodeDataChannel(): typeof import("node-datachannel") {
+  try {
+    return require("node-datachannel") as typeof import("node-datachannel");
+  } catch (firstErr) {
+    if (!fetchNodeDataChannelBinary()) throw nativeLoadError(firstErr);
+    try {
+      return require("node-datachannel") as typeof import("node-datachannel");
+    } catch (secondErr) {
+      throw nativeLoadError(secondErr);
+    }
+  }
+}
+
+/** Run node-datachannel's bundled `prebuild-install` to fetch the prebuilt
+ *  binary. Returns true if it exited cleanly. */
+function fetchNodeDataChannelBinary(): boolean {
+  let pkgDir: string;
+  let prebuildBin: string;
+  try {
+    pkgDir = dirname(require.resolve("node-datachannel/package.json"));
+    // prebuild-install is a dependency of node-datachannel; resolve its CLI
+    // entry from the package's own module scope.
+    prebuildBin = require.resolve("prebuild-install/bin.js", { paths: [pkgDir] });
+  } catch {
+    return false;
+  }
+  console.log("[codehost] fetching node-datachannel native binary (prebuild-install)…");
+  const r = spawnSync(process.execPath, [prebuildBin, "-r", "napi"], {
+    cwd: pkgDir,
+    stdio: "inherit",
+  });
+  return r.status === 0;
+}
+
+function nativeLoadError(cause: unknown): Error {
+  return new Error(
+    "Failed to load the native WebRTC module (node-datachannel). Its prebuilt " +
+      "binary could not be fetched automatically. Install codehost globally so " +
+      "install scripts run — `bun add -g codehost` (or `npm i -g codehost`) — " +
+      "and ensure network access. If your platform has no prebuilt, a C++ " +
+      "toolchain + cmake is needed to build from source. " +
+      `(cause: ${(cause as Error)?.message ?? cause})`,
+  );
+}
 
 export interface RtcDaemonOptions {
   /** Relay a signal to a viewer peer via the signaling channel. */

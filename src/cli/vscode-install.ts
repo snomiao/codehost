@@ -49,9 +49,10 @@ export async function resolveCodeBinary(opts: { force?: boolean } = {}): Promise
     return override;
   }
 
-  // Prefer a user-owned `code` on PATH; we don't manage its updates.
+  // Prefer a user-owned `code` on PATH — but only if it actually runs. A broken
+  // or stub `code` should fall through to a managed install/upgrade.
   const system = Bun.which("code");
-  if (system) return system;
+  if (system && runsOk(system)) return system;
 
   return ensureManagedBinary(opts.force ?? false);
 }
@@ -110,6 +111,12 @@ function platformKey(): string {
   if (arch === "arm64") return `cli-${os}-arm64`;
   if (arch === "arm") return `cli-${os}-armhf`;
   return `cli-${os}-x64`;
+}
+
+/** True if `<bin> --version` exits cleanly — i.e. the binary actually works. */
+function runsOk(bin: string): boolean {
+  const r = spawnSync(bin, ["--version"], { stdio: "ignore", timeout: 10_000 });
+  return r.status === 0;
 }
 
 function isMusl(): boolean {

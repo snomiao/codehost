@@ -7,7 +7,7 @@ import { SignalingClient } from "../../shared/signaling-client";
 import { RtcDaemon } from "../rtc-daemon";
 import { launchVscode } from "../vscode";
 import { Tunnel } from "../tunnel";
-import { daemonName, startDaemon } from "../oxmgr";
+import { launchServeDaemon } from "../daemonize";
 
 export const DEFAULT_SIGNAL_URL = "wss://signal.codehost.dev";
 
@@ -74,16 +74,15 @@ export const serveCommand: CommandModule<{}, ServeArgs> = {
 
     // `-d`: re-launch this same `serve` (without -d) under oxmgr, then exit.
     if (argv.daemon) {
-      const label = argv.name ?? dir.split("/").pop() ?? host;
-      const name = daemonName(label);
-      const command = buildForegroundCommand(dir, argv);
-      console.log(`[codehost] starting daemon "${name}" via oxmgr`);
-      const ok = startDaemon({ name, command, cwd: dir });
-      if (ok) {
-        console.log(`[codehost] daemon started. View: codehost list · Stop: codehost stop ${name}`);
-        process.exit(0);
-      }
-      process.exit(1);
+      const { ok } = launchServeDaemon({
+        dir,
+        token: argv.token,
+        signal: argv.signal,
+        name: argv.name,
+        port: argv.port,
+        host,
+      });
+      process.exit(ok ? 0 : 1);
     }
 
     // peerId is fixed up front so VS Code can be mounted under /vs/<peerId>,
@@ -135,19 +134,3 @@ export const serveCommand: CommandModule<{}, ServeArgs> = {
     await new Promise<never>(() => {});
   },
 };
-
-/**
- * Reconstruct the exact foreground `serve` invocation (without -d) for oxmgr to
- * run. Uses the same runtime + entry script that launched us, so it works both
- * for `bunx codehost` and local `bun src/cli/index.ts`.
- */
-function buildForegroundCommand(dir: string, argv: ServeArgs): string {
-  const parts = [process.execPath, process.argv[1], "serve", dir, "-t", argv.token, "--signal", argv.signal];
-  if (argv.name) parts.push("--name", argv.name);
-  if (argv.port) parts.push("--port", String(argv.port));
-  return parts.map(quote).join(" ");
-}
-
-function quote(s: string): string {
-  return /[^A-Za-z0-9_\/:=.-]/.test(s) ? `'${s.replace(/'/g, `'\\''`)}'` : s;
-}
