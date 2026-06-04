@@ -4,6 +4,7 @@ import { hideBin } from "yargs/helpers";
 import { serveCommand } from "./commands/serve";
 import { listCommand } from "./commands/list";
 import { stopCommand } from "./commands/stop";
+import { updateCommand } from "./commands/update";
 
 yargs(hideBin(process.argv))
   .scriptName("codehost")
@@ -11,6 +12,7 @@ yargs(hideBin(process.argv))
   .command(serveCommand)
   .command(listCommand)
   .command(stopCommand)
+  .command(updateCommand)
   .demandCommand(1, "Specify a command, e.g. `codehost serve`")
   .strict()
   .help()

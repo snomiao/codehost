@@ -31,7 +31,10 @@ appears in the list. Click **Connect** — VS Code loads in the page, served
 entirely over the peer-to-peer data channel.
 
 The `<token>` is a shared secret: anyone with it can see and connect to the
-servers in that room, so treat it like a password.
+servers in that room, so treat it like a password. It must be **at least 12
+characters, contain no whitespace, and mix at least 3 of {lowercase, uppercase,
+digits, symbols}** — the CLI, the web page, and the signaling Worker all reject
+weaker tokens (e.g. `Str0ng-Token-99`).
 
 ## CLI
 
@@ -39,7 +42,15 @@ servers in that room, so treat it like a password.
 codehost serve [dir] -t <token> [options]   # serve a directory (default: cwd)
 codehost list                                # list daemonized servers (oxmgr)
 codehost stop <name>                         # stop a daemonized server
+codehost update                              # fetch the latest VS Code CLI now
 ```
+
+**VS Code is auto-installed.** On first `serve`, codehost uses a `code` already
+on your `PATH` if present; otherwise it downloads Microsoft's standalone VS Code
+CLI for your OS/arch (verifying its sha256), caches it under `~/.codehost/vscode/`,
+and re-checks the stable channel at most once per day. Force a refresh with
+`codehost update`, or point at a specific binary with the `CODEHOST_CODE_BIN`
+environment variable.
 
 `serve` options:
 

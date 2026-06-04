@@ -1,4 +1,5 @@
 import { spawn, type Subprocess } from "bun";
+import { resolveCodeBinary } from "./vscode-install";
 
 export interface VscodeServer {
   port: number;
@@ -37,8 +38,9 @@ export async function launchVscode(opts: LaunchOptions): Promise<VscodeServer> {
     "--accept-server-license-terms",
   ];
 
-  console.log(`[codehost] launching: code ${args.join(" ")}`);
-  const proc = spawn(["code", ...args], {
+  const codeBin = await resolveCodeBinary();
+  console.log(`[codehost] launching: ${codeBin} ${args.join(" ")}`);
+  const proc = spawn([codeBin, ...args], {
     cwd: opts.dir,
     stdout: "inherit",
     stderr: "inherit",
