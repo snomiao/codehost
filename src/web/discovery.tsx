@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { PeerInfo } from "../shared/signaling";
+import { TOKEN_REQUIREMENTS, validateToken } from "../shared/token";
 import { SignalingClient } from "../shared/signaling-client";
 import type { RtcSignal } from "../shared/rtc";
 import { RtcClient } from "./rtc-client";
@@ -14,6 +15,7 @@ type ConnState = "idle" | "connecting" | "connected" | "failed";
 export function Discovery() {
   const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY) ?? "");
   const [draft, setDraft] = useState(token);
+  const [tokenError, setTokenError] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
   const [servers, setServers] = useState<PeerInfo[]>([]);
 
@@ -73,6 +75,12 @@ export function Discovery() {
   function applyToken(e: React.FormEvent) {
     e.preventDefault();
     const t = draft.trim();
+    const check = validateToken(t);
+    if (!check.ok) {
+      setTokenError(check.reason ?? "invalid token");
+      return;
+    }
+    setTokenError(null);
     localStorage.setItem(TOKEN_KEY, t);
     setToken(t);
   }
@@ -174,7 +182,10 @@ export function Discovery() {
           <label style={styles.label}>Token</label>
           <input
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              if (tokenError) setTokenError(null);
+            }}
             placeholder="your room token"
             style={styles.input}
           />
@@ -182,6 +193,11 @@ export function Discovery() {
             {token === draft.trim() ? "Reconnect" : "Connect"}
           </button>
         </form>
+        {tokenError ? (
+          <p style={styles.tokenError}>{tokenError}</p>
+        ) : (
+          <p style={styles.tokenHint}>Token requires {TOKEN_REQUIREMENTS}.</p>
+        )}
 
         <h2 style={styles.h2}>VS Code servers</h2>
         {!token && <p style={styles.dim}>Enter a token to see your servers.</p>}
@@ -232,7 +248,9 @@ const styles: Record<string, React.CSSProperties> = {
   dim: { color: "#888", fontSize: 12 },
   status: { fontSize: 12 },
   main: { flex: 1, overflow: "auto", padding: "20px 24px", maxWidth: 760, width: "100%", margin: "0 auto", boxSizing: "border-box" },
-  tokenForm: { display: "flex", alignItems: "center", gap: 8, marginBottom: 24 },
+  tokenForm: { display: "flex", alignItems: "center", gap: 8, marginBottom: 8 },
+  tokenHint: { margin: "0 0 20px", fontSize: 12, color: "#888" },
+  tokenError: { margin: "0 0 20px", fontSize: 12, color: "#f48771" },
   label: { fontSize: 12, color: "#888" },
   input: { flex: 1, background: "#252525", border: "1px solid #3d3d3d", color: "#eee", padding: "8px 10px", borderRadius: 6, fontSize: 13, outline: "none" },
   button: { background: "#0e639c", border: "none", color: "#fff", padding: "8px 16px", borderRadius: 6, cursor: "pointer", fontSize: 13 },

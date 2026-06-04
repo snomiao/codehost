@@ -1,3 +1,4 @@
+import { validateToken } from "../src/shared/token";
 import { Room } from "./room";
 
 export { Room };
@@ -24,6 +25,12 @@ export default {
     const match = url.pathname.match(/^\/room\/([^/]+)\/?$/);
     if (match) {
       const token = decodeURIComponent(match[1]);
+      // Authoritative gate: reject weak tokens here so a patched CLI/browser
+      // can't open a room with a guessable bearer secret.
+      const check = validateToken(token);
+      if (!check.ok) {
+        return new Response(`weak token: ${check.reason}`, { status: 400, headers: CORS });
+      }
       const id = env.ROOM.idFromName(token);
       const stub = env.ROOM.get(id);
       return stub.fetch(request);

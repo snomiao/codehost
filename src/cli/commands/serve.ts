@@ -2,6 +2,7 @@ import { hostname } from "node:os";
 import { resolve } from "node:path";
 import type { CommandModule } from "yargs";
 import { type PeerMeta, newPeerId } from "../../shared/signaling";
+import { TOKEN_REQUIREMENTS, validateToken } from "../../shared/token";
 import { SignalingClient } from "../../shared/signaling-client";
 import { RtcDaemon } from "../rtc-daemon";
 import { launchVscode } from "../vscode";
@@ -55,6 +56,14 @@ export const serveCommand: CommandModule<{}, ServeArgs> = {
         type: "number",
       }) as any,
   handler: async (argv) => {
+    argv.token = argv.token.trim();
+    const check = validateToken(argv.token);
+    if (!check.ok) {
+      console.error(`[codehost] ${check.reason}`);
+      console.error(`[codehost] room token requires: ${TOKEN_REQUIREMENTS}`);
+      process.exit(1);
+    }
+
     const dir = resolve(process.cwd(), argv.dir);
     const host = hostname();
     const meta: PeerMeta = {

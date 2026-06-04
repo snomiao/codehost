@@ -9,5 +9,5 @@
     "noEmit": true,
     "types": ["@cloudflare/workers-types"]
   },
-  "include": ["**/*.ts", "../src/shared/signaling.ts"]
+  "include": ["**/*.ts", "../src/shared/signaling.ts", "../src/shared/token.ts"]
 }
