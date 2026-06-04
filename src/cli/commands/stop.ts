@@ -14,7 +14,7 @@ export const stopCommand: CommandModule<{}, StopArgs> = {
       type: "string",
       demandOption: true,
     }) as any,
-  handler: (argv) => {
-    process.exit(stopDaemon(argv.name));
+  handler: async (argv) => {
+    process.exit(await stopDaemon(argv.name));
   },
 };

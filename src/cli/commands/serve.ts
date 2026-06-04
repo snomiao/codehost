@@ -74,7 +74,7 @@ export const serveCommand: CommandModule<{}, ServeArgs> = {
 
     // `-d`: re-launch this same `serve` (without -d) under oxmgr, then exit.
     if (argv.daemon) {
-      const { ok } = launchServeDaemon({
+      const { ok } = await launchServeDaemon({
         dir,
         token: argv.token,
         signal: argv.signal,

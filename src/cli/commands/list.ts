@@ -5,7 +5,7 @@ export const listCommand: CommandModule = {
   command: "list",
   aliases: ["ls"],
   describe: "List codehost servers running under oxmgr",
-  handler: () => {
-    process.exit(listDaemons());
+  handler: async () => {
+    process.exit(await listDaemons());
   },
 };

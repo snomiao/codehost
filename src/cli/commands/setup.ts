@@ -54,7 +54,7 @@ export const setupCommand: CommandModule<{}, SetupArgs> = {
     console.log(`[codehost] using VS Code: ${codeBin}`);
 
     // 3. Start the WebRTC + VS Code server under oxmgr.
-    const { ok, name } = launchServeDaemon({
+    const { ok, name } = await launchServeDaemon({
       dir,
       token,
       signal: argv.signal,
