@@ -20,7 +20,10 @@ concurrency:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    # Temporary: hosted runners aren't dispatching on this account, so the
+    # OIDC publish runs on a self-hosted runner. Revert to ubuntu-latest once
+    # GitHub Actions billing is sorted.
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
         with:
