@@ -1,32 +1,46 @@
 import { type PeerMeta, newPeerId } from "../shared/signaling";
 import { SignalingClient } from "../shared/signaling-client";
 import { RtcDaemon } from "./rtc-daemon";
-import { launchVscode } from "./vscode";
 import { Tunnel } from "./tunnel";
 
+export interface LaunchResult {
+  /** Local port to tunnel to. */
+  port: number;
+  /** Stop the launched process, if any. */
+  stop?: () => void;
+  /**
+   * Prefix the Tunnel should strip before forwarding (so an arbitrary server
+   * that doesn't know about /vs/<peerId> still gets clean paths). Left undefined
+   * for VS Code, which is launched with --server-base-path and wants the prefix.
+   */
+  stripBasePath?: string;
+}
+
 export interface RunServerOptions {
-  /** Folder serve-web roots at: the workspace root (serve) or the repo (dev). */
-  dir: string;
   token: string;
   signal: string;
   meta: PeerMeta;
-  port?: number;
+  /** One-line description for the startup log. */
+  label: string;
+  /** Prepare the local target to tunnel, given the /vs/<peerId> base path. */
+  launch: (basePath: string) => Promise<LaunchResult>;
 }
 
 /**
- * Foreground server loop shared by `serve` and `dev`: launch VS Code under
- * /vs/<peerId>, register in the signaling room with the given meta, and bridge
- * each viewer's data channel to the local VS Code server. Never resolves.
+ * Foreground server loop shared by `serve`, `dev`, and `expose`: register in the
+ * signaling room with the given meta and bridge each viewer's data channel to a
+ * local server (VS Code for serve/dev, an arbitrary port for expose). Never
+ * resolves.
  */
 export async function runServer(opts: RunServerOptions): Promise<never> {
   const peerId = newPeerId();
   const basePath = `/vs/${peerId}`;
 
-  console.log(`[codehost] serving ${opts.dir}`);
+  console.log(`[codehost] ${opts.label}`);
   console.log(`[codehost] room token: ${opts.token}`);
   console.log(`[codehost] signaling:  ${opts.signal}`);
 
-  const vscode = await launchVscode({ dir: opts.dir, basePath, port: opts.port });
+  const target = await opts.launch(basePath);
 
   let rtc: RtcDaemon;
   const client = new SignalingClient({
@@ -43,8 +57,8 @@ export async function runServer(opts: RunServerOptions): Promise<never> {
   rtc = new RtcDaemon({
     sendSignal: (to, data) => client.sendSignal(to, data),
     onChannel: (viewerId, channel) => {
-      console.log(`[codehost] viewer ${viewerId.slice(0, 8)} connected; bridging to VS Code`);
-      new Tunnel(channel, vscode.port);
+      console.log(`[codehost] viewer ${viewerId.slice(0, 8)} connected; bridging to :${target.port}`);
+      new Tunnel(channel, target.port, target.stripBasePath);
     },
   });
 
@@ -54,7 +68,7 @@ export async function runServer(opts: RunServerOptions): Promise<never> {
     console.log("\n[codehost] shutting down");
     rtc.closeAll();
     client.close();
-    vscode.stop();
+    target.stop?.();
     process.exit(0);
   };
   process.on("SIGINT", shutdown);

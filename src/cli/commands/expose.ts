@@ -1,34 +1,29 @@
 import { hostname } from "node:os";
-import { resolve } from "node:path";
 import type { CommandModule } from "yargs";
 import type { PeerMeta } from "../../shared/signaling";
-import { DEFAULT_LAYOUT } from "../../shared/repo";
 import { TOKEN_REQUIREMENTS, validateToken } from "../../shared/token";
 import { launchServeDaemon } from "../daemonize";
 import { runServer } from "../run-server";
-import { launchVscode } from "../vscode";
+import { DEFAULT_SIGNAL_URL } from "./serve";
 
-export const DEFAULT_SIGNAL_URL = "wss://signal.codehost.dev";
-
-interface ServeArgs {
-  dir: string;
+interface ExposeArgs {
+  port: number;
   token: string;
   name?: string;
   signal: string;
   daemon: boolean;
-  port?: number;
 }
 
-export const serveCommand: CommandModule<{}, ServeArgs> = {
-  command: "serve [dir]",
+export const exposeCommand: CommandModule<{}, ExposeArgs> = {
+  command: "expose <port>",
   describe:
-    "Serve a workspace root over WebRTC; repos under it open via codehost.dev/gh/<owner>/<repo>",
+    "Tunnel an existing local HTTP/WS server (any port) over WebRTC — reachable at codehost.dev/vs/<peerId>/",
   builder: (y) =>
     y
-      .positional("dir", {
-        describe: "Directory to serve (defaults to cwd)",
-        type: "string",
-        default: ".",
+      .positional("port", {
+        describe: "Local port to expose (e.g. 7432)",
+        type: "number",
+        demandOption: true,
       })
       .option("token", {
         alias: "t",
@@ -37,7 +32,7 @@ export const serveCommand: CommandModule<{}, ServeArgs> = {
         demandOption: true,
       })
       .option("name", {
-        describe: "Display name for this server (defaults to hostname)",
+        describe: "Display name for this server (defaults to localhost:<port>)",
         type: "string",
       })
       .option("signal", {
@@ -50,10 +45,6 @@ export const serveCommand: CommandModule<{}, ServeArgs> = {
         describe: "Run in the background under oxmgr (auto-starts on login)",
         type: "boolean",
         default: false,
-      })
-      .option("port", {
-        describe: "Fixed port for the local VS Code server (default: ephemeral)",
-        type: "number",
       }) as any,
   handler: async (argv) => {
     argv.token = argv.token.trim();
@@ -63,43 +54,40 @@ export const serveCommand: CommandModule<{}, ServeArgs> = {
       console.error(`[codehost] room token requires: ${TOKEN_REQUIREMENTS}`);
       process.exit(1);
     }
+    if (!Number.isInteger(argv.port) || argv.port <= 0 || argv.port > 65535) {
+      console.error(`[codehost] invalid port: ${argv.port}`);
+      process.exit(1);
+    }
 
-    const dir = resolve(process.cwd(), argv.dir);
     const host = hostname();
 
-    // `-d`: re-launch this same `serve` (without -d) under oxmgr, then exit.
     if (argv.daemon) {
       const { ok } = await launchServeDaemon({
-        command: "serve",
-        dir,
+        command: "expose",
+        dir: process.cwd(),
+        arg: String(argv.port),
         token: argv.token,
         signal: argv.signal,
         name: argv.name,
-        port: argv.port,
         host,
       });
       process.exit(ok ? 0 : 1);
     }
 
-    // A workspace root: repos under it open by GitHub-shaped deep link, mapped
-    // onto subfolders via VS Code's ?folder= using this layout.
     const meta: PeerMeta = {
-      name: argv.name ?? host,
-      cwd: dir,
+      name: argv.name ?? `localhost:${argv.port}`,
+      cwd: `localhost:${argv.port}`,
       host,
-      kind: "root",
-      layout: DEFAULT_LAYOUT,
     };
 
+    // No VS Code: tunnel directly to the given port, stripping the /vs/<peerId>
+    // prefix the server doesn't know about.
     await runServer({
       token: argv.token,
       signal: argv.signal,
       meta,
-      label: `serving workspace root ${dir}`,
-      launch: async (basePath) => {
-        const v = await launchVscode({ dir, basePath, port: argv.port });
-        return { port: v.port, stop: v.stop };
-      },
+      label: `exposing localhost:${argv.port}`,
+      launch: async (basePath) => ({ port: argv.port, stripBasePath: basePath }),
     });
   },
 };

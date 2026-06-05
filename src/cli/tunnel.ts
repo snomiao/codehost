@@ -47,6 +47,13 @@ export class Tunnel {
   constructor(
     private channel: DataChannel,
     private vscodePort: number,
+    /**
+     * Prefix to strip from incoming paths before forwarding to the local server.
+     * VS Code is launched with --server-base-path /vs/<peerId> so it WANTS the
+     * prefix (left undefined). An arbitrary exposed server (`codehost expose`)
+     * doesn't know it, so we strip `/vs/<peerId>` before proxying.
+     */
+    private stripPrefix?: string,
   ) {
     this.origin = `http://127.0.0.1:${vscodePort}`;
     this.wsOrigin = `ws://127.0.0.1:${vscodePort}`;
@@ -56,6 +63,15 @@ export class Tunnel {
       void this.onFrame(new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength));
     });
     this.channel.onClosed(() => this.closeAll());
+  }
+
+  /** Map a tunneled path to the local server's path, stripping the base prefix. */
+  private localPath(path: string): string {
+    if (this.stripPrefix && path.startsWith(this.stripPrefix)) {
+      const rest = path.slice(this.stripPrefix.length);
+      return rest.startsWith("/") ? rest : `/${rest}`;
+    }
+    return path;
   }
 
   private async onFrame(data: Uint8Array): Promise<void> {
@@ -118,7 +134,7 @@ export class Tunnel {
     const body = hasBody ? concat(stream.body) : undefined;
 
     try {
-      const res = await fetch(this.origin + path, {
+      const res = await fetch(this.origin + this.localPath(path), {
         method,
         headers: reqHeaders,
         body: body as BodyInit | undefined,
@@ -161,7 +177,7 @@ export class Tunnel {
   private openWs(streamId: number, info: { path: string; protocols?: string[] }): void {
     let ws: WebSocket;
     try {
-      ws = new WebSocket(this.wsOrigin + info.path, info.protocols);
+      ws = new WebSocket(this.wsOrigin + this.localPath(info.path), info.protocols);
     } catch (err) {
       void this.send(encodeJson(Op.WsOpenAck, streamId, { ok: false, error: String(err) }));
       return;

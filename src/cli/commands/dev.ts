@@ -5,6 +5,7 @@ import type { PeerMeta } from "../../shared/signaling";
 import { TOKEN_REQUIREMENTS, validateToken } from "../../shared/token";
 import { launchServeDaemon } from "../daemonize";
 import { runServer } from "../run-server";
+import { launchVscode } from "../vscode";
 import { repoIdentity } from "../git";
 import { DEFAULT_SIGNAL_URL } from "./serve";
 
@@ -89,6 +90,15 @@ export const devCommand: CommandModule<{}, DevArgs> = {
       branch: id.branch,
     };
 
-    await runServer({ dir, token: argv.token, signal: argv.signal, meta, port: argv.port });
+    await runServer({
+      token: argv.token,
+      signal: argv.signal,
+      meta,
+      label: `serving ${dir}`,
+      launch: async (basePath) => {
+        const v = await launchVscode({ dir, basePath, port: argv.port });
+        return { port: v.port, stop: v.stop };
+      },
+    });
   },
 };

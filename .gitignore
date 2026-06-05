@@ -7,3 +7,4 @@ bun.lock
 .playwright-cli-multi-tab/
 tmp/
 .wrangler/
+lib/
