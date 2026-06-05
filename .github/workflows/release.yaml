@@ -1,0 +1,39 @@
+name: Release
+
+# Publishes to npm via semantic-release using npm trusted publishing (OIDC) —
+# no NPM_TOKEN. Requires: a trusted publisher configured on npm for this repo +
+# this workflow file (release.yaml), id-token: write, semantic-release v25 /
+# @semantic-release/npm v13, and npm >= 11.5.1.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write # semantic-release commits the version bump + tag
+  issues: write
+  pull-requests: write
+  id-token: write # OIDC token for npm trusted publishing
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # Provides node + npm; do NOT set registry-url (it writes an .npmrc that
+      # breaks semantic-release's auth). Upgrade npm for OIDC support.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install -g npm@latest
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install
+      - run: bunx semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
