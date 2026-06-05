@@ -1,21 +1,44 @@
-import { spawnSync } from "node:child_process";
+import { type SpawnSyncOptions, spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
 import { healOxmgr } from "./oxmgr-heal";
 
-// Thin wrapper around the `oxmgr` process manager (https://npmjs.com/package/oxmgr).
-// `codehost serve -d` re-launches the foreground `serve` under oxmgr so it
-// survives the shell and restarts on failure.
+// Wrapper around the `oxmgr` process manager (https://npmjs.com/package/oxmgr),
+// used by `serve|dev|expose -d` to run the foreground command as a managed,
+// restart-on-failure daemon.
+//
+// oxmgr is a *dependency* of codehost, and we invoke it via the current runtime
+// (bun) using its resolved JS entry — never the bare `oxmgr` command. That
+// avoids the Windows failure where `spawnSync("oxmgr")` can't resolve a PATH
+// shim without the .exe/.cmd extension, and needs no Node and no global install.
+
+const require = createRequire(import.meta.url);
+
+/** Resolve oxmgr's JS CLI entry from codehost's own node_modules. */
+function oxmgrEntry(): string | null {
+  try {
+    return require.resolve("oxmgr/bin/oxmgr.js");
+  } catch {
+    return null;
+  }
+}
+
+/** Run the oxmgr CLI via bun. Returns the exit status (1 if unresolvable). */
+function ox(args: string[], opts: SpawnSyncOptions = {}): number {
+  const entry = oxmgrEntry();
+  if (!entry) return 1;
+  const r = spawnSync(process.execPath, [entry, ...args], opts);
+  return r.status ?? 1;
+}
 
 type OxmgrState = "ok" | "broken" | "missing";
 
-/** Probe the oxmgr binary, distinguishing "won't run" from "not installed". */
+/** Probe oxmgr: "missing" = not installed; "broken" = installed but its binary
+ *  won't run (no vendored prebuilt yet, or a glibc/platform mismatch). */
 function probeOxmgr(): OxmgrState {
-  const r = spawnSync("oxmgr", ["--version"], { encoding: "utf8" });
-  if (r.status === 0) return "ok";
-  // ENOENT from the spawn itself => the command isn't on PATH at all.
-  if ((r.error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") return "missing";
-  // Installed, but the prebuilt won't execute — typically `GLIBC_x.y not found`
-  // on older distros. Repairable by swapping in oxmgr's static musl build.
-  return "broken";
+  const entry = oxmgrEntry();
+  if (!entry) return "missing";
+  const r = spawnSync(process.execPath, [entry, "--version"], { encoding: "utf8" });
+  return r.status === 0 ? "ok" : "broken";
 }
 
 /** Quick non-repairing probe (used where we only need a yes/no). */
@@ -24,9 +47,10 @@ export function hasOxmgr(): boolean {
 }
 
 /**
- * Ensure a runnable oxmgr, self-healing a broken prebuilt by swapping in the
- * portable musl static build (see oxmgr-heal.ts). Returns true if oxmgr is
- * usable afterwards; otherwise prints an actionable message.
+ * Ensure a runnable oxmgr, self-healing a broken/missing prebuilt (see
+ * oxmgr-heal.ts) — the common case under bunx/bun where install lifecycle
+ * scripts are skipped so oxmgr's binary was never downloaded. Returns true if
+ * oxmgr is usable afterwards.
  */
 export async function ensureOxmgr(): Promise<boolean> {
   const state = probeOxmgr();
@@ -35,19 +59,18 @@ export async function ensureOxmgr(): Promise<boolean> {
     console.error(MISSING_MSG);
     return false;
   }
-  // "broken": attempt the musl repair, then re-probe.
   if (await healOxmgr()) return probeOxmgr() === "ok";
   console.error(BROKEN_MSG);
   return false;
 }
 
 const MISSING_MSG =
-  "[codehost] oxmgr not found. Install it with `npm i -g oxmgr` (or `bun add -g oxmgr`), then retry with -d.";
+  "[codehost] oxmgr is not available. Reinstall codehost so its dependency is present " +
+  "(`bun add -g codehost` or `npm i -g codehost`), then retry with -d.";
 
 const BROKEN_MSG =
-  "[codehost] oxmgr is installed but its prebuilt binary won't run on this system " +
-  "(often an old glibc), and automatic repair failed. Reinstall oxmgr, or run on a " +
-  "host whose glibc matches its prebuilt. Foreground `codehost serve` (without -d) still works.";
+  "[codehost] oxmgr is installed but its native binary couldn't be fetched/repaired " +
+  "automatically (check network access). Foreground `codehost serve` (without -d) still works.";
 
 /** Process name oxmgr will track this server under. */
 export function daemonName(label: string): string {
@@ -65,15 +88,15 @@ export interface DaemonizeOptions {
 export async function startDaemon(opts: DaemonizeOptions): Promise<boolean> {
   if (!(await ensureOxmgr())) return false;
   // Replace any previous instance with the same name.
-  spawnSync("oxmgr", ["delete", opts.name], { stdio: "ignore" });
+  ox(["delete", opts.name], { stdio: "ignore" });
 
-  const r = spawnSync(
-    "oxmgr",
-    ["start", opts.command, "--name", opts.name, "--cwd", opts.cwd, "--restart", "on-failure"],
-    { stdio: "inherit" },
-  );
-  if (r.status === 0) enableStartup();
-  return r.status === 0;
+  const ok =
+    ox(
+      ["start", opts.command, "--name", opts.name, "--cwd", opts.cwd, "--restart", "on-failure"],
+      { stdio: "inherit" },
+    ) === 0;
+  if (ok) enableStartup();
+  return ok;
 }
 
 /**
@@ -83,16 +106,13 @@ export async function startDaemon(opts: DaemonizeOptions): Promise<boolean> {
  * and non-fatal: hosts without an init system just get a hint.
  */
 function enableStartup(): void {
-  const r = spawnSync("oxmgr", ["service", "--system", "auto", "install"], {
-    stdio: "pipe",
-    encoding: "utf8",
-  });
-  if (r.status === 0) {
+  const ok = ox(["service", "--system", "auto", "install"], { stdio: "pipe" }) === 0;
+  if (ok) {
     console.log("[codehost] login auto-start enabled (oxmgr service installed)");
   } else {
     console.log(
-      "[codehost] note: couldn't auto-enable login startup here; run `oxmgr startup` " +
-        "on a systemd/launchd host to make it persist across logins.",
+      "[codehost] note: couldn't auto-enable login startup here; run oxmgr's `startup` " +
+        "integration on a systemd/launchd host to make it persist across logins.",
     );
   }
 }
@@ -100,15 +120,13 @@ function enableStartup(): void {
 /** `codehost list` -> oxmgr's process table. */
 export async function listDaemons(): Promise<number> {
   if (!(await ensureOxmgr())) return 1;
-  const r = spawnSync("oxmgr", ["list"], { stdio: "inherit" });
-  return r.status ?? 0;
+  return ox(["list"], { stdio: "inherit" });
 }
 
 /** `codehost stop <name>` -> stop + delete the oxmgr process. */
 export async function stopDaemon(name: string): Promise<number> {
   if (!(await ensureOxmgr())) return 1;
   const full = name.startsWith("codehost-") ? name : daemonName(name);
-  spawnSync("oxmgr", ["stop", full], { stdio: "inherit" });
-  const r = spawnSync("oxmgr", ["delete", full], { stdio: "inherit" });
-  return r.status ?? 0;
+  ox(["stop", full], { stdio: "inherit" });
+  return ox(["delete", full], { stdio: "inherit" });
 }

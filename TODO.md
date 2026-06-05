@@ -51,6 +51,20 @@ style).
 - Open questions: base image (preinstalled `code`+bun vs. self-heal on first run), volume
   mount perf, how the container daemon gets the token/identity, resource limits.
 
+## agent-yes web terminal UI (over `codehost expose`)
+
+Make `codehost.dev/vs/<peerId>/` actually usable for an exposed agent-yes, not just the raw API.
+
+- Add an HTML/JS terminal UI served by agent-yes's `ts/serve.ts` at `GET /`: xterm in the
+  browser, output via `EventSource('./api/tail/<kw>')` (SSE), input via `POST ./api/send`.
+- **Use relative paths** (`./api/...`) so it works under the tunnel's `/vs/<peerId>/` prefix
+  (the prefix is stripped for the server, but the page's own URLs must stay relative).
+- Reference: **snomiao/wtx** (cloned to lib/wtx) — a Bun PTY WebSocket server with replay
+  buffer + xterm client. Note wtx uses **WebSocket**; agent-yes uses **SSE + POST** — reuse
+  wtx's xterm/client setup but keep agent-yes's transport (or align them).
+- Belongs in the agent-yes repo (it's served by agent-yes), enabled once `codehost expose
+  7432` is running.
+
 ## Real-time collaboration / presence (multiplayer cursors)
 
 Multiple people open the same workspace (different Chrome profiles / accounts) and see each

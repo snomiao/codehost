@@ -27,6 +27,7 @@
     "bun-pty": "^0.4.8",
     "hono": "^4.12.16",
     "node-datachannel": "^0.32.3",
+    "oxmgr": "^0.4.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "yargs": "^17.7.2"

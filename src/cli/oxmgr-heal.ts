@@ -7,50 +7,69 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
-  realpathSync,
   rmSync,
   statSync,
 } from "node:fs";
 import https from "node:https";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join } from "node:path";
 
-// Self-heal for the most common oxmgr failure on real-world machines: its
-// installer downloads the `*-linux-gnu` prebuilt whenever it detects glibc, but
-// that binary is built against a recent glibc (e.g. GLIBC_2.39 from Ubuntu
-// 24.04 CI). On older distros (Debian <=12, Ubuntu <=22.04, RHEL/Alma 8-9,
-// Amazon Linux 2, ...) it dies at startup with `GLIBC_x.y not found`.
-//
-// oxmgr also ships a fully static `*-linux-musl` build with no libc dependency
-// at all. When the prebuilt won't run we fetch that musl build from oxmgr's own
-// GitHub release and swap it into oxmgr's vendor/ dir, then let the caller retry.
-// Mirrors the node-datachannel self-heal in rtc-daemon.ts (try -> repair -> retry).
+// Self-heal oxmgr's native binary. Two real-world gaps:
+//   1. Under bunx/bun (and `bun i -g`), install lifecycle scripts are skipped,
+//      so oxmgr's postinstall never downloads its prebuilt — the vendored
+//      binary is simply absent.
+//   2. On older Linux distros, the downloaded `*-linux-gnu` prebuilt needs a
+//      newer glibc than the host has (GLIBC_x.y not found).
+// Linux is healed by swapping in oxmgr's fully static `*-linux-musl` build (no
+// libc dependency, also covers the missing case). Other platforms are healed by
+// running oxmgr's own installer via the current runtime (bun) to fetch the
+// right binary — no Node required. Mirrors the node-datachannel self-heal.
 
+const require = createRequire(import.meta.url);
 let healAttempted = false;
 
 interface OxmgrInstall {
-  /** Path to oxmgr's vendored native binary (the thing that won't run). */
+  /** oxmgr package root. */
+  root: string;
+  /** Platform-correct vendored binary path. */
   vendorBin: string;
-  /** Installed oxmgr version, e.g. "0.4.0". */
   version: string;
   /** GitHub "owner/repo" the release assets live under. */
   slug: string;
 }
 
-/**
- * Repair a broken oxmgr by replacing its prebuilt with the portable musl static
- * build. Returns true if the swap succeeded. Idempotent within a process and a
- * no-op off Linux (the gnu/musl split only exists there).
- */
+/** Repair oxmgr's binary. Idempotent within a process. */
 export async function healOxmgr(): Promise<boolean> {
   if (healAttempted) return false;
   healAttempted = true;
 
-  if (process.platform !== "linux") return false;
-  const target = muslTarget();
-  if (!target) return false;
   const install = locateOxmgr();
   if (!install) return false;
+
+  // Linux: portable musl static build covers both the glibc mismatch and a
+  // missing binary in one download.
+  if (process.platform === "linux") return swapMusl(install);
+
+  // Windows / macOS: run oxmgr's own installer to fetch the platform binary the
+  // skipped postinstall never downloaded.
+  return runInstaller(install);
+}
+
+/** Run oxmgr's bundled installer via the current runtime (bun) to fetch its
+ *  native binary. Cross-platform; no Node needed. */
+function runInstaller(install: OxmgrInstall): boolean {
+  const script = join(install.root, "scripts", "install.js");
+  if (!existsSync(script)) return false;
+  console.log("[codehost] fetching oxmgr's native binary…");
+  const r = spawnSync(process.execPath, [script], { cwd: install.root, stdio: "inherit" });
+  return r.status === 0 && existsSync(install.vendorBin);
+}
+
+/** Download + install oxmgr's static musl binary (Linux). */
+async function swapMusl(install: OxmgrInstall): Promise<boolean> {
+  const target = process.arch === "x64" ? "x86_64-unknown-linux-musl" : process.arch === "arm64" ? "aarch64-unknown-linux-musl" : null;
+  if (!target) return false;
 
   const archive = `oxmgr-v${install.version}-${target}.tar.gz`;
   const base =
@@ -60,21 +79,14 @@ export async function healOxmgr(): Promise<boolean> {
 
   const tmp = mkdtempSync(join(tmpdir(), "oxmgr-heal-"));
   const archivePath = join(tmp, archive);
-  console.log(
-    "[codehost] oxmgr's prebuilt needs a newer glibc than this system has; " +
-      "fetching the portable musl build…",
-  );
+  console.log("[codehost] fetching oxmgr's portable (musl) binary…");
   try {
     await download(url, archivePath);
     const untar = spawnSync("tar", ["xzf", archivePath, "-C", tmp], { stdio: "ignore" });
-    if (untar.status !== 0) {
-      throw new Error("could not extract the archive (is `tar` installed?)");
-    }
+    if (untar.status !== 0) throw new Error("could not extract the archive (is `tar` installed?)");
     const binary = findFile(tmp, "oxmgr");
     if (!binary) throw new Error("musl archive did not contain an oxmgr binary");
-    // Unlink first: replacing a binary that's currently executing fails with
-    // ETXTBSY, but removing the directory entry and writing a fresh file is
-    // fine (the running process keeps the old inode until it exits).
+    // Unlink first so we can replace a binary that's currently executing (ETXTBSY).
     rmSync(install.vendorBin, { force: true });
     copyFileSync(binary, install.vendorBin);
     chmodSync(install.vendorBin, 0o755);
@@ -88,22 +100,16 @@ export async function healOxmgr(): Promise<boolean> {
   }
 }
 
-/** Resolve the on-disk oxmgr install from the `oxmgr` command on PATH. */
+/** Resolve oxmgr's on-disk install from codehost's own node_modules. */
 function locateOxmgr(): OxmgrInstall | null {
-  const which = spawnSync("sh", ["-c", "command -v oxmgr"], { encoding: "utf8" });
-  const onPath = which.status === 0 ? which.stdout.trim() : "";
-  if (!onPath) return null;
-
-  let real: string;
+  let pkgPath: string;
   try {
-    real = realpathSync(onPath); // .../node_modules/oxmgr/bin/oxmgr.js
+    pkgPath = require.resolve("oxmgr/package.json");
   } catch {
     return null;
   }
-  const root = resolve(dirname(real), ".."); // package root
-  const vendorBin = join(root, "vendor", "oxmgr");
-  const pkgPath = join(root, "package.json");
-  if (!existsSync(pkgPath)) return null;
+  const root = dirname(pkgPath);
+  const vendorBin = join(root, "vendor", process.platform === "win32" ? "oxmgr.exe" : "oxmgr");
 
   let pkg: { version?: string; repository?: { url?: string } };
   try {
@@ -112,7 +118,7 @@ function locateOxmgr(): OxmgrInstall | null {
     return null;
   }
   if (!pkg.version) return null;
-  return { vendorBin, version: pkg.version, slug: oxmgrSlug(pkg) };
+  return { root, vendorBin, version: pkg.version, slug: oxmgrSlug(pkg) };
 }
 
 /** GitHub slug for oxmgr's releases, matching its own installer's resolution. */
@@ -121,12 +127,6 @@ function oxmgrSlug(pkg: { repository?: { url?: string } }): string {
   const url = pkg.repository?.url ?? "";
   const m = url.match(/github\.com[/:]([^/]+\/[^/.]+)(?:\.git)?$/i);
   return m ? m[1] : "Vladimir-Urik/OxMgr";
-}
-
-function muslTarget(): string | null {
-  if (process.arch === "x64") return "x86_64-unknown-linux-musl";
-  if (process.arch === "arm64") return "aarch64-unknown-linux-musl";
-  return null;
 }
 
 /** Download a URL to a file, following GitHub's redirect to release-assets. */
