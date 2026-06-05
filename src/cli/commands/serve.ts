@@ -46,7 +46,7 @@ export const serveCommand: CommandModule<{}, ServeArgs> = {
       })
       .option("daemon", {
         alias: "d",
-        describe: "Run in the background under oxmgr",
+        describe: "Run in the background under oxmgr (auto-starts on login)",
         type: "boolean",
         default: false,
       })

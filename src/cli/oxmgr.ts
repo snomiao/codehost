@@ -72,7 +72,29 @@ export async function startDaemon(opts: DaemonizeOptions): Promise<boolean> {
     ["start", opts.command, "--name", opts.name, "--cwd", opts.cwd, "--restart", "on-failure"],
     { stdio: "inherit" },
   );
+  if (r.status === 0) enableStartup();
   return r.status === 0;
+}
+
+/**
+ * Best-effort: install oxmgr's platform service (systemd `--user` / launchd /
+ * Task Scheduler) so the daemon — and the codehost process it manages, whose
+ * metadata oxmgr persists — comes back when the user logs in again. Idempotent
+ * and non-fatal: hosts without an init system just get a hint.
+ */
+function enableStartup(): void {
+  const r = spawnSync("oxmgr", ["service", "--system", "auto", "install"], {
+    stdio: "pipe",
+    encoding: "utf8",
+  });
+  if (r.status === 0) {
+    console.log("[codehost] login auto-start enabled (oxmgr service installed)");
+  } else {
+    console.log(
+      "[codehost] note: couldn't auto-enable login startup here; run `oxmgr startup` " +
+        "on a systemd/launchd host to make it persist across logins.",
+    );
+  }
 }
 
 /** `codehost list` -> oxmgr's process table. */
