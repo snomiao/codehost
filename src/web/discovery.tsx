@@ -7,10 +7,28 @@ import { RtcClient } from "./rtc-client";
 import { getSignalUrl } from "./config";
 import { registerTunnelHost } from "./tunnel-host";
 import { connBroker } from "./conn-broker";
+import {
+  type DeepLink,
+  parseDeepLink,
+  repoKey,
+  resolveDevTarget,
+  resolveRepoTarget,
+} from "../shared/repo";
+import { addRoom, historyFor, recordConnection } from "./history";
 
 const TOKEN_KEY = "codehost.token";
 
 type ConnState = "idle" | "connecting" | "connected" | "failed";
+
+/** Short label for the "looking for…" state from a deep link. */
+function deepLinkLabel(dl: DeepLink): string | null {
+  if (!dl) return null;
+  return dl.type === "repo" ? `${dl.target.owner}/${dl.target.name}` : dl.target.path;
+}
+
+function folderQuery(folder?: string): string {
+  return folder ? `?folder=${encodeURIComponent(folder)}` : "";
+}
 
 export function Discovery() {
   const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY) ?? "");
@@ -30,6 +48,13 @@ export function Discovery() {
   const rtcRef = useRef<RtcClient | null>(null);
   const activePeerRef = useRef<string | null>(null);
 
+  // Deep-link resolution (/gh/<owner>/<repo>/... or /dev/<path>): parse once,
+  // auto-connect when a matching server appears, remember the opened folder.
+  const deepLinkRef = useRef<DeepLink>(parseDeepLink(window.location.pathname));
+  const resolvedRef = useRef(false);
+  const activeFolderRef = useRef<string | undefined>(undefined);
+  const [resolving, setResolving] = useState<string | null>(() => deepLinkLabel(deepLinkRef.current));
+
   // Register the Service Worker + connection broker once. The broker shares one
   // WebRTC connection per server across tabs; on owner failover it asks us to
   // reload the iframe so it reconnects through the new owner.
@@ -38,8 +63,16 @@ export function Discovery() {
     connBroker.onLost((peerId) => {
       if (peerId !== activePeerRef.current) return;
       setIframeSrc(null);
-      setTimeout(() => setIframeSrc(`/vs/${peerId}/`), 400);
+      const folder = activeFolderRef.current;
+      setTimeout(() => setIframeSrc(`/vs/${peerId}/${folderQuery(folder)}`), 400);
     });
+    // For a repo deep link, adopt the room that last served it so it resolves
+    // without re-entering a token.
+    const dl = deepLinkRef.current;
+    if (dl?.type === "repo") {
+      const h = historyFor(repoKey(dl.target));
+      if (h?.token) setToken(h.token);
+    }
   }, []);
 
   useEffect(() => {
@@ -48,9 +81,16 @@ export function Discovery() {
       url: getSignalUrl(),
       token,
       role: "viewer",
-      onOpen: () => setConnected(true),
+      onOpen: () => {
+        setConnected(true);
+        addRoom(token);
+      },
       onClose: () => setConnected(false),
-      onPeers: (peers) => setServers(peers.filter((p) => p.role === "server")),
+      onPeers: (peers) => {
+        const list = peers.filter((p) => p.role === "server");
+        setServers(list);
+        void tryAutoConnect(list);
+      },
       onSignal: (from, data) => {
         if (from === activePeerRef.current) void rtcRef.current?.handleSignal(data);
       },
@@ -85,7 +125,7 @@ export function Discovery() {
     setToken(t);
   }
 
-  async function connectTo(server: PeerInfo) {
+  async function connectTo(server: PeerInfo, folder?: string) {
     const client = clientRef.current;
     if (!client) return;
 
@@ -128,10 +168,40 @@ export function Discovery() {
     try {
       await connBroker.connect(server.peerId, establish);
       setConnState("connected");
-      setIframeSrc(`/vs/${server.peerId}/`);
+      activeFolderRef.current = folder;
+      setIframeSrc(`/vs/${server.peerId}/${folderQuery(folder)}`);
+      setResolving(null);
+      recordConnect(server, folder);
     } catch {
       setConnState("failed");
     }
+  }
+
+  // Deep-link auto-connect: when servers arrive, pick the best match (exact repo
+  // daemon, else a root daemon's subfolder) and open it once.
+  async function tryAutoConnect(list: PeerInfo[]) {
+    const dl = deepLinkRef.current;
+    if (!dl || resolvedRef.current) return;
+    const res = dl.type === "repo" ? resolveRepoTarget(list, dl.target) : resolveDevTarget(list, dl.target);
+    if (!res) return;
+    const server = list.find((s) => s.peerId === res.peerId);
+    if (!server) return;
+    resolvedRef.current = true;
+    await connectTo(server, res.folder);
+  }
+
+  function recordConnect(server: PeerInfo, folder?: string) {
+    const base = {
+      token,
+      peerId: server.peerId,
+      kind: server.meta?.kind,
+      name: server.meta?.name,
+      host: server.meta?.host,
+      lastConnected: Date.now(),
+    };
+    if (server.meta?.repo) recordConnection(server.meta.repo, { ...base, folder });
+    const dl = deepLinkRef.current;
+    if (dl?.type === "repo") recordConnection(repoKey(dl.target), { ...base, folder });
   }
 
   function disconnect() {
@@ -178,6 +248,12 @@ export function Discovery() {
       </header>
 
       <main style={styles.main}>
+        {resolving && (
+          <p style={{ color: "#dcb67a", marginBottom: 12 }}>
+            Looking for <code style={styles.code}>{resolving}</code> in your rooms…{" "}
+            {token ? "waiting for a live server" : "enter the room's token below"}.
+          </p>
+        )}
         <form onSubmit={applyToken} style={styles.tokenForm}>
           <label style={styles.label}>Token</label>
           <input

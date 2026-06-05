@@ -4,6 +4,7 @@ import type { CommandModule } from "yargs";
 import { generateToken, validateToken, TOKEN_REQUIREMENTS } from "../../shared/token";
 import { readConfig, writeConfig } from "../config";
 import { launchServeDaemon } from "../daemonize";
+import { isGitRepo } from "../git";
 import { resolveCodeBinary } from "../vscode-install";
 import { DEFAULT_SIGNAL_URL } from "./serve";
 
@@ -53,8 +54,10 @@ export const setupCommand: CommandModule<{}, SetupArgs> = {
     const codeBin = await resolveCodeBinary();
     console.log(`[codehost] using VS Code: ${codeBin}`);
 
-    // 3. Start the WebRTC + VS Code server under oxmgr.
+    // 3. Start the WebRTC + VS Code server under oxmgr. A git repo is a single
+    //    workspace (`dev`); anything else is treated as a root (`serve`).
     const { ok, name } = await launchServeDaemon({
+      command: isGitRepo(dir) ? "dev" : "serve",
       dir,
       token,
       signal: argv.signal,

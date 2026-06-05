@@ -1,0 +1,5 @@
+# SPA fallback: deep links like /gh/<owner>/<repo>/tree/<branch> and /dev/<path>
+# have no static file, so serve the app and let it route client-side. Cloudflare
+# Pages serves existing files first (/assets/*, /sw.js, /install.*), so only
+# unmatched paths hit this rule. /vs/* is handled by the Service Worker at runtime.
+/*  /index.html  200

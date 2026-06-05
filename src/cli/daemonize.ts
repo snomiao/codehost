@@ -1,6 +1,8 @@
 import { daemonName, startDaemon } from "./oxmgr";
 
 export interface ServeDaemonOptions {
+  /** Subcommand to re-launch under oxmgr ("serve" = root, "dev" = single repo). */
+  command?: "serve" | "dev";
   /** Absolute directory to serve. */
   dir: string;
   /** Room token (already validated). */
@@ -43,7 +45,7 @@ export async function launchServeDaemon(opts: ServeDaemonOptions): Promise<Serve
  * for `bunx codehost` and local `bun src/cli/index.ts`.
  */
 function buildForegroundCommand(opts: ServeDaemonOptions): string {
-  const parts = [process.execPath, process.argv[1], "serve", opts.dir, "-t", opts.token, "--signal", opts.signal];
+  const parts = [process.execPath, process.argv[1], opts.command ?? "serve", opts.dir, "-t", opts.token, "--signal", opts.signal];
   if (opts.name) parts.push("--name", opts.name);
   if (opts.port) parts.push("--port", String(opts.port));
   return parts.map(quote).join(" ");

@@ -3,6 +3,7 @@ import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import { setupCommand } from "./commands/setup";
 import { serveCommand } from "./commands/serve";
+import { devCommand } from "./commands/dev";
 import { listCommand } from "./commands/list";
 import { stopCommand } from "./commands/stop";
 import { updateCommand } from "./commands/update";
@@ -12,6 +13,7 @@ yargs(hideBin(process.argv))
   .usage("$0 <command> [options]")
   .command(setupCommand)
   .command(serveCommand)
+  .command(devCommand)
   .command(listCommand)
   .command(stopCommand)
   .command(updateCommand)

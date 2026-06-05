@@ -4,14 +4,30 @@
 
 export type Role = "server" | "viewer";
 
-/** Metadata a `codehost serve` daemon advertises about itself. */
+/** Metadata a `codehost serve`/`dev` daemon advertises about itself. */
 export interface PeerMeta {
   /** Human label, defaults to hostname. */
   name: string;
-  /** Directory the VS Code instance is serving. */
+  /** Directory the VS Code instance is serving (the repo dir, or the root). */
   cwd: string;
   /** Hostname of the machine running the daemon. */
   host: string;
+  /**
+   * "repo": serves a single folder (`codehost dev`), git-identified when possible.
+   * "root": serves a workspace root (`codehost serve`) whose repos live under it.
+   * Absent is treated as "repo" for backward compatibility.
+   */
+  kind?: "repo" | "root";
+  /** repo kind: normalized identity, e.g. "gh/snomiao/codehost". */
+  repo?: string;
+  /** repo kind: current branch, e.g. "main". */
+  branch?: string;
+  /**
+   * root kind: on-disk layout of repos under `cwd`, as a template filled from a
+   * deep link — default "{owner}/{repo}/tree/{branch}". The opened folder is
+   * `cwd + "/" + fill(layout, target)`.
+   */
+  layout?: string;
 }
 
 export interface PeerInfo {

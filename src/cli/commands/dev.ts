@@ -2,14 +2,13 @@ import { hostname } from "node:os";
 import { resolve } from "node:path";
 import type { CommandModule } from "yargs";
 import type { PeerMeta } from "../../shared/signaling";
-import { DEFAULT_LAYOUT } from "../../shared/repo";
 import { TOKEN_REQUIREMENTS, validateToken } from "../../shared/token";
 import { launchServeDaemon } from "../daemonize";
 import { runServer } from "../run-server";
+import { repoIdentity } from "../git";
+import { DEFAULT_SIGNAL_URL } from "./serve";
 
-export const DEFAULT_SIGNAL_URL = "wss://signal.codehost.dev";
-
-interface ServeArgs {
+interface DevArgs {
   dir: string;
   token: string;
   name?: string;
@@ -18,10 +17,10 @@ interface ServeArgs {
   port?: number;
 }
 
-export const serveCommand: CommandModule<{}, ServeArgs> = {
-  command: "serve [dir]",
+export const devCommand: CommandModule<{}, DevArgs> = {
+  command: "dev [dir]",
   describe:
-    "Serve a workspace root over WebRTC; repos under it open via codehost.dev/gh/<owner>/<repo>",
+    "Serve a single folder over WebRTC; open it at codehost.dev/dev/<path> (or /gh/<owner>/<repo> when it's a GitHub repo)",
   builder: (y) =>
     y
       .positional("dir", {
@@ -46,7 +45,7 @@ export const serveCommand: CommandModule<{}, ServeArgs> = {
       })
       .option("daemon", {
         alias: "d",
-        describe: "Run in the background under oxmgr",
+        describe: "Run in the background under oxmgr (auto-starts on login)",
         type: "boolean",
         default: false,
       })
@@ -66,10 +65,9 @@ export const serveCommand: CommandModule<{}, ServeArgs> = {
     const dir = resolve(process.cwd(), argv.dir);
     const host = hostname();
 
-    // `-d`: re-launch this same `serve` (without -d) under oxmgr, then exit.
     if (argv.daemon) {
       const { ok } = await launchServeDaemon({
-        command: "serve",
+        command: "dev",
         dir,
         token: argv.token,
         signal: argv.signal,
@@ -80,14 +78,15 @@ export const serveCommand: CommandModule<{}, ServeArgs> = {
       process.exit(ok ? 0 : 1);
     }
 
-    // A workspace root: repos under it open by GitHub-shaped deep link, mapped
-    // onto subfolders via VS Code's ?folder= using this layout.
+    // A single folder: git-identified so GitHub deep links resolve to it.
+    const id = repoIdentity(dir);
     const meta: PeerMeta = {
       name: argv.name ?? host,
       cwd: dir,
       host,
-      kind: "root",
-      layout: DEFAULT_LAYOUT,
+      kind: "repo",
+      repo: id.repo,
+      branch: id.branch,
     };
 
     await runServer({ dir, token: argv.token, signal: argv.signal, meta, port: argv.port });
