@@ -1,3 +1,10 @@
+# [0.3.0](https://github.com/snomiao/codehost/compare/v0.2.0...v0.3.0) (2026-06-07)
+
+
+### Features
+
+* open token URL after setup/serve and auto-connect a single server ([b6183a2](https://github.com/snomiao/codehost/commit/b6183a2dc35e3e2ce1b4dffa8d4228fab377f4e3))
+
 # [0.2.0](https://github.com/snomiao/codehost/compare/v0.1.1...v0.2.0) (2026-06-05)
 
 
