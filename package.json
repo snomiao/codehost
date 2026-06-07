@@ -2,6 +2,12 @@
   "name": "codehost",
   "version": "0.3.0",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/snomiao/codehost.git"
+  },
+  "homepage": "https://codehost.dev",
+  "bugs": "https://github.com/snomiao/codehost/issues",
   "bin": {
     "codehost": "./src/cli/index.ts"
   },
