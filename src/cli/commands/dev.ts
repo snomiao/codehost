@@ -4,6 +4,7 @@ import type { CommandModule } from "yargs";
 import type { PeerMeta } from "../../shared/signaling";
 import { TOKEN_REQUIREMENTS, validateToken } from "../../shared/token";
 import { launchServeDaemon } from "../daemonize";
+import { announceConnect } from "../open-url";
 import { runServer } from "../run-server";
 import { launchVscode } from "../vscode";
 import { repoIdentity } from "../git";
@@ -76,6 +77,7 @@ export const devCommand: CommandModule<{}, DevArgs> = {
         port: argv.port,
         host,
       });
+      if (ok) announceConnect(argv.token);
       process.exit(ok ? 0 : 1);
     }
 
@@ -90,6 +92,7 @@ export const devCommand: CommandModule<{}, DevArgs> = {
       branch: id.branch,
     };
 
+    announceConnect(argv.token);
     await runServer({
       token: argv.token,
       signal: argv.signal,

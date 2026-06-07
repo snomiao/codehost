@@ -20,6 +20,22 @@ const TOKEN_KEY = "codehost.token";
 
 type ConnState = "idle" | "connecting" | "connected" | "failed";
 
+/**
+ * Read a room token handed in the URL fragment as `#t=<token>` (what the CLI
+ * prints/opens after `setup`/`serve`). The page is static, so the fragment
+ * never reaches the server — a safe place for the shared secret. Everything
+ * after `#t=` is the token (URL-encoded by the CLI); returns "" if absent.
+ */
+function tokenFromHash(): string {
+  const m = window.location.hash.match(/^#t=(.+)$/);
+  if (!m) return "";
+  try {
+    return decodeURIComponent(m[1]).trim();
+  } catch {
+    return m[1].trim();
+  }
+}
+
 /** Short label for the "looking for…" state from a deep link. */
 function deepLinkLabel(dl: DeepLink): string | null {
   if (!dl) return null;
@@ -31,7 +47,14 @@ function folderQuery(folder?: string): string {
 }
 
 export function Discovery() {
-  const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY) ?? "");
+  const [token, setToken] = useState(() => {
+    const fromHash = tokenFromHash();
+    if (fromHash && validateToken(fromHash).ok) {
+      localStorage.setItem(TOKEN_KEY, fromHash);
+      return fromHash;
+    }
+    return localStorage.getItem(TOKEN_KEY) ?? "";
+  });
   const [draft, setDraft] = useState(token);
   const [tokenError, setTokenError] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
@@ -52,6 +75,8 @@ export function Discovery() {
   // auto-connect when a matching server appears, remember the opened folder.
   const deepLinkRef = useRef<DeepLink>(parseDeepLink(window.location.pathname));
   const resolvedRef = useRef(false);
+  // A valid token in the URL fragment enables single-server auto-connect.
+  const autoConnectRef = useRef(false);
   const activeFolderRef = useRef<string | undefined>(undefined);
   const [resolving, setResolving] = useState<string | null>(() => deepLinkLabel(deepLinkRef.current));
 
@@ -66,6 +91,17 @@ export function Discovery() {
       const folder = activeFolderRef.current;
       setTimeout(() => setIframeSrc(`/vs/${peerId}/${folderQuery(folder)}`), 400);
     });
+    // A valid token in the URL fragment (#t=<token>) seeds the room and turns on
+    // single-server auto-connect; consume it from the address bar afterwards so
+    // the secret isn't left visible or re-applied on a manual reload.
+    const urlToken = tokenFromHash();
+    if (urlToken && validateToken(urlToken).ok) {
+      autoConnectRef.current = true;
+      if (window.location.hash) {
+        history.replaceState(null, "", window.location.pathname + window.location.search);
+      }
+    }
+
     // For a repo deep link, adopt the room that last served it so it resolves
     // without re-entering a token.
     const dl = deepLinkRef.current;
@@ -168,10 +204,14 @@ export function Discovery() {
     try {
       await connBroker.connect(server.peerId, establish);
       setConnState("connected");
-      activeFolderRef.current = folder;
-      setIframeSrc(`/vs/${server.peerId}/${folderQuery(folder)}`);
+      // The daemon no longer sets a default folder (current VS Code serve-web
+      // dropped that flag), so open the served workspace from here: an explicit
+      // deep-link folder if we have one, else the server's reported cwd.
+      const openFolder = folder ?? server.meta?.cwd;
+      activeFolderRef.current = openFolder;
+      setIframeSrc(`/vs/${server.peerId}/${folderQuery(openFolder)}`);
       setResolving(null);
-      recordConnect(server, folder);
+      recordConnect(server, openFolder);
     } catch {
       setConnState("failed");
     }
@@ -180,14 +220,23 @@ export function Discovery() {
   // Deep-link auto-connect: when servers arrive, pick the best match (exact repo
   // daemon, else a root daemon's subfolder) and open it once.
   async function tryAutoConnect(list: PeerInfo[]) {
+    if (resolvedRef.current) return;
     const dl = deepLinkRef.current;
-    if (!dl || resolvedRef.current) return;
-    const res = dl.type === "repo" ? resolveRepoTarget(list, dl.target) : resolveDevTarget(list, dl.target);
-    if (!res) return;
-    const server = list.find((s) => s.peerId === res.peerId);
-    if (!server) return;
-    resolvedRef.current = true;
-    await connectTo(server, res.folder);
+    if (dl) {
+      const res = dl.type === "repo" ? resolveRepoTarget(list, dl.target) : resolveDevTarget(list, dl.target);
+      if (!res) return;
+      const server = list.find((s) => s.peerId === res.peerId);
+      if (!server) return;
+      resolvedRef.current = true;
+      await connectTo(server, res.folder);
+      return;
+    }
+    // No deep link, but a token arrived via the URL: open the room's server
+    // straight away when there's exactly one; with several, leave the picker.
+    if (autoConnectRef.current && list.length === 1) {
+      resolvedRef.current = true;
+      await connectTo(list[0]);
+    }
   }
 
   function recordConnect(server: PeerInfo, folder?: string) {

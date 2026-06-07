@@ -24,6 +24,10 @@ export interface LaunchOptions {
  */
 export async function launchVscode(opts: LaunchOptions): Promise<VscodeServer> {
   const port = opts.port && opts.port > 0 ? opts.port : await freePort();
+  // NB: no `--default-folder` — current VS Code `serve-web` (≥1.x) doesn't
+  // accept it and exits with "unexpected argument". The workspace is opened by
+  // the browser instead, via the `?folder=` query the page appends to the
+  // iframe URL (see src/web/discovery.tsx). `cwd` below still roots the server.
   const args = [
     "serve-web",
     "--host",
@@ -32,8 +36,6 @@ export async function launchVscode(opts: LaunchOptions): Promise<VscodeServer> {
     String(port),
     "--server-base-path",
     opts.basePath,
-    "--default-folder",
-    opts.dir,
     "--without-connection-token",
     "--accept-server-license-terms",
   ];

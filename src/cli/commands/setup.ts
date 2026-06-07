@@ -6,9 +6,8 @@ import { readConfig, writeConfig } from "../config";
 import { launchServeDaemon } from "../daemonize";
 import { isGitRepo } from "../git";
 import { resolveCodeBinary } from "../vscode-install";
+import { announceConnect } from "../open-url";
 import { DEFAULT_SIGNAL_URL } from "./serve";
-
-const PAGE_URL = "https://codehost.dev";
 
 interface SetupArgs {
   dir: string;
@@ -67,10 +66,11 @@ export const setupCommand: CommandModule<{}, SetupArgs> = {
     });
     if (!ok) process.exit(1);
 
-    // 4. Tell the user how to connect.
+    // 4. Tell the user how to connect, and open the browser straight at the
+    //    token-carrying URL so VS Code loads without typing the token in.
     console.log("");
     console.log(`[codehost] ✓ server "${name}" is live, serving ${dir}`);
-    console.log(`[codehost] open ${PAGE_URL} and enter your token to connect.`);
+    announceConnect(token);
     console.log(`[codehost] manage it with: codehost list · codehost stop ${name}`);
   },
 };

@@ -5,6 +5,7 @@ import type { PeerMeta } from "../../shared/signaling";
 import { DEFAULT_LAYOUT } from "../../shared/repo";
 import { TOKEN_REQUIREMENTS, validateToken } from "../../shared/token";
 import { launchServeDaemon } from "../daemonize";
+import { announceConnect } from "../open-url";
 import { runServer } from "../run-server";
 import { launchVscode } from "../vscode";
 
@@ -78,6 +79,7 @@ export const serveCommand: CommandModule<{}, ServeArgs> = {
         port: argv.port,
         host,
       });
+      if (ok) announceConnect(argv.token);
       process.exit(ok ? 0 : 1);
     }
 
@@ -91,6 +93,7 @@ export const serveCommand: CommandModule<{}, ServeArgs> = {
       layout: DEFAULT_LAYOUT,
     };
 
+    announceConnect(argv.token);
     await runServer({
       token: argv.token,
       signal: argv.signal,
