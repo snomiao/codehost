@@ -1,3 +1,10 @@
+# [0.8.0](https://github.com/snomiao/codehost/compare/v0.7.1...v0.8.0) (2026-06-08)
+
+
+### Features
+
+* **web:** filterable workspace list with fake-tags (ay-ls style) ([83dff4f](https://github.com/snomiao/codehost/commit/83dff4ffb813ac93afddf6bb4118b5ffb5278c3b))
+
 ## [0.7.1](https://github.com/snomiao/codehost/compare/v0.7.0...v0.7.1) (2026-06-08)
 
 
