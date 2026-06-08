@@ -117,10 +117,43 @@ function enableStartup(): void {
   }
 }
 
-/** `codehost list` -> oxmgr's process table. */
+/**
+ * `codehost list` -> oxmgr's process table, filtered to codehost-owned daemons.
+ *
+ * oxmgr is a shared process manager (other tools register their own services
+ * with it), so a raw `oxmgr list` leaks unrelated processes. oxmgr has no JSON
+ * or name-filter flag, so we capture its ASCII table and drop data rows whose
+ * NAME column isn't one of ours (the `codehost-` prefix from `daemonName`).
+ * Returns the number of codehost daemons shown (-1 if oxmgr is unusable).
+ */
 export async function listDaemons(): Promise<number> {
-  if (!(await ensureOxmgr())) return 1;
-  return ox(["list"], { stdio: "inherit" });
+  if (!(await ensureOxmgr())) return -1;
+  const entry = oxmgrEntry();
+  if (!entry) return -1;
+  const r = spawnSync(process.execPath, [entry, "list"], { encoding: "utf8" });
+  if (r.status !== 0) {
+    if (r.stderr) process.stderr.write(r.stderr);
+    return -1;
+  }
+  const lines = (r.stdout ?? "").split("\n");
+  let shown = 0;
+  const kept = lines.filter((line) => {
+    // Border lines (+----+) and blank lines pass through unchanged.
+    if (!line.startsWith("|")) return true;
+    const name = line.split("|")[2]?.trim() ?? "";
+    if (name === "NAME") return true; // header row
+    if (name.startsWith("codehost-")) {
+      shown++;
+      return true;
+    }
+    return false;
+  });
+  if (shown === 0) {
+    console.log("No codehost daemons running.");
+    return 0;
+  }
+  process.stdout.write(kept.join("\n"));
+  return shown;
 }
 
 /** `codehost stop <name>` -> stop + delete the oxmgr process. */
