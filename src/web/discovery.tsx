@@ -103,7 +103,11 @@ export function Discovery() {
     }
     return localStorage.getItem(TOKEN_KEY) ?? "";
   });
-  const [draft, setDraft] = useState(token);
+  // The token is a bearer secret — never pre-fill the input with it (it would be
+  // left in plaintext in the DOM on every load). Start blank; once a token is
+  // saved we show a masked label instead, and only reveal the input on "Change".
+  const [draft, setDraft] = useState("");
+  const [editingToken, setEditingToken] = useState(false);
   const [tokenError, setTokenError] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
   const [servers, setServers] = useState<PeerInfo[]>([]);
@@ -227,6 +231,8 @@ export function Discovery() {
     setTokenError(null);
     localStorage.setItem(TOKEN_KEY, t);
     setToken(t);
+    setDraft("");
+    setEditingToken(false);
   }
 
   async function connectTo(server: PeerInfo, folder?: string) {
@@ -428,25 +434,46 @@ export function Discovery() {
             {token ? "waiting for a live server" : "enter the room's token below"}.
           </p>
         )}
-        <form onSubmit={applyToken} style={styles.tokenForm}>
-          <label style={styles.label}>Token</label>
-          <input
-            value={draft}
-            onChange={(e) => {
-              setDraft(e.target.value);
-              if (tokenError) setTokenError(null);
-            }}
-            placeholder="your room token"
-            style={styles.input}
-          />
-          <button type="submit" style={styles.button}>
-            {token === draft.trim() ? "Reconnect" : "Connect"}
-          </button>
-        </form>
-        {tokenError ? (
-          <p style={styles.tokenError}>{tokenError}</p>
+        {token && !editingToken ? (
+          <div style={styles.tokenForm}>
+            <label style={styles.label}>Token</label>
+            <span style={styles.tokenSaved}>saved · {roomLabel}</span>
+            <button
+              type="button"
+              style={styles.shareBtn}
+              onClick={() => {
+                setDraft("");
+                setTokenError(null);
+                setEditingToken(true);
+              }}
+            >
+              Change
+            </button>
+          </div>
         ) : (
-          <p style={styles.tokenHint}>Token requires {TOKEN_REQUIREMENTS}.</p>
+          <>
+            <form onSubmit={applyToken} style={styles.tokenForm}>
+              <label style={styles.label}>Token</label>
+              <input
+                value={draft}
+                onChange={(e) => {
+                  setDraft(e.target.value);
+                  if (tokenError) setTokenError(null);
+                }}
+                placeholder="your room token"
+                style={styles.input}
+                autoFocus={editingToken}
+              />
+              <button type="submit" style={styles.button}>
+                Connect
+              </button>
+            </form>
+            {tokenError ? (
+              <p style={styles.tokenError}>{tokenError}</p>
+            ) : (
+              <p style={styles.tokenHint}>Token requires {TOKEN_REQUIREMENTS}.</p>
+            )}
+          </>
         )}
 
         <div style={styles.listHead}>
@@ -544,6 +571,7 @@ const styles: Record<string, React.CSSProperties> = {
   tokenHint: { margin: "0 0 20px", fontSize: 12, color: "#888" },
   tokenError: { margin: "0 0 20px", fontSize: 12, color: "#f48771" },
   label: { fontSize: 12, color: "#888" },
+  tokenSaved: { flex: 1, fontFamily: "monospace", fontSize: 13, color: "#4ec9b0" },
   input: { flex: 1, background: "#252525", border: "1px solid #3d3d3d", color: "#eee", padding: "8px 10px", borderRadius: 6, fontSize: 13, outline: "none" },
   button: { background: "#0e639c", border: "none", color: "#fff", padding: "8px 16px", borderRadius: 6, cursor: "pointer", fontSize: 13 },
   listHead: { display: "flex", alignItems: "baseline", gap: 10, margin: "0 0 12px" },
