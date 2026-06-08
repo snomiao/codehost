@@ -1,3 +1,15 @@
+# [0.4.0](https://github.com/snomiao/codehost/compare/v0.3.1...v0.4.0) (2026-06-08)
+
+
+### Bug Fixes
+
+* normalize Windows serve path to POSIX-drive form for VS Code web ([8add2d6](https://github.com/snomiao/codehost/commit/8add2d66a6b5ae765f91386f738ad38abcb90057))
+
+
+### Features
+
+* setup.sh/ps1 installer aliases + self-update to latest on serve/setup ([93a5d64](https://github.com/snomiao/codehost/commit/93a5d64170c5851ca0f488348975dae46f467b5e))
+
 ## [0.3.1](https://github.com/snomiao/codehost/compare/v0.3.0...v0.3.1) (2026-06-07)
 
 
