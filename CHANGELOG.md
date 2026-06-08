@@ -1,3 +1,11 @@
+## [0.5.1](https://github.com/snomiao/codehost/compare/v0.5.0...v0.5.1) (2026-06-08)
+
+
+### Bug Fixes
+
+* don't time out (and oxmgr-restart-loop) on first-run VS Code server download ([5ad1b06](https://github.com/snomiao/codehost/commit/5ad1b068668afda4d19f403286240827a0a4b9c4))
+* Windows ?folder= path must be /C:/ws (file-URI form), not git-bash /c/ws ([f6d2485](https://github.com/snomiao/codehost/commit/f6d24858c943dd2b7b5f1d5a96f71468e9552140))
+
 # [0.5.0](https://github.com/snomiao/codehost/compare/v0.4.0...v0.5.0) (2026-06-08)
 
 
