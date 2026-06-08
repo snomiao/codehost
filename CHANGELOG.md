@@ -1,3 +1,11 @@
+## [0.7.1](https://github.com/snomiao/codehost/compare/v0.7.0...v0.7.1) (2026-06-08)
+
+
+### Bug Fixes
+
+* ch list shows only codehost daemons, not all oxmgr processes ([e9cf4fc](https://github.com/snomiao/codehost/commit/e9cf4fca40b653c430c26eb29ba47ef9a154f089))
+* kill the VS Code serve-web process tree on stop (no orphans) ([d6337f6](https://github.com/snomiao/codehost/commit/d6337f6d45bf41fb57f2d0cd28c60a70f55f62d0))
+
 # [0.7.0](https://github.com/snomiao/codehost/compare/v0.6.0...v0.7.0) (2026-06-08)
 
 
