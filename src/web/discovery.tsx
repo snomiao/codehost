@@ -18,6 +18,7 @@ import {
   shareableDeepLink,
 } from "../shared/repo";
 import { addRoom, getRooms, historyFor, recordConnection } from "./history";
+import { deriveTags, matchQuery, shortRoomLabel, tagKey } from "../shared/tags";
 
 const TOKEN_KEY = "codehost.token";
 
@@ -106,6 +107,11 @@ export function Discovery() {
   const [tokenError, setTokenError] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
   const [servers, setServers] = useState<PeerInfo[]>([]);
+
+  // Fake-tag filter over the workspace list: a free-text box plus a set of
+  // pinned tag tokens (chips). Both feed the same `ay ls`-style AND matcher.
+  const [filter, setFilter] = useState("");
+  const [activeTags, setActiveTags] = useState<string[]>([]);
 
   // Active WebRTC connection to one server (Phase 2: echo test).
   const [activePeerId, setActivePeerId] = useState<string | null>(null);
@@ -355,6 +361,28 @@ export function Discovery() {
 
   const activeServer = servers.find((s) => s.peerId === activePeerId);
 
+  // Annotate each server with its mnemonic fake-tags, then filter. The room
+  // token is hashed to a short label — never rendered raw (it's a bearer secret).
+  const roomLabel = token ? shortRoomLabel(token) : "";
+  const tagged = servers.map((s) => ({
+    server: s,
+    name: s.meta?.name ?? s.peerId.slice(0, 8),
+    tags: deriveTags(s.meta, { roomLabel }),
+  }));
+  const query = [...activeTags, filter].join(" ");
+  const filtered = tagged.filter((t) => matchQuery({ name: t.name, tags: t.tags }, query));
+  const toggleTag = (t: string) =>
+    setActiveTags((a) => (a.includes(t) ? a.filter((x) => x !== t) : [...a, t]));
+  const addTag = (t: string) => setActiveTags((a) => (a.includes(t) ? a : [...a, t]));
+  // Suggested chips: the most common identity/location tags across the list.
+  const tagFreq = new Map<string, number>();
+  for (const t of tagged) for (const tag of t.tags) tagFreq.set(tag, (tagFreq.get(tag) ?? 0) + 1);
+  const suggestedTags = [...tagFreq.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([t]) => t)
+    .filter((t) => ["host", "repo", "wt", "kind", "room"].includes(tagKey(t)))
+    .slice(0, 12);
+
   // Connected view: VS Code in an iframe, served over the tunnel.
   if (iframeSrc && connState === "connected") {
     return (
@@ -421,25 +449,64 @@ export function Discovery() {
           <p style={styles.tokenHint}>Token requires {TOKEN_REQUIREMENTS}.</p>
         )}
 
-        <h2 style={styles.h2}>VS Code servers</h2>
-        {!token && <p style={styles.dim}>Enter a token to see your servers.</p>}
+        <div style={styles.listHead}>
+          <h2 style={styles.h2}>Workspaces</h2>
+          {token && servers.length > 0 && (
+            <span style={styles.count}>
+              {filtered.length === tagged.length
+                ? `${tagged.length}`
+                : `${filtered.length} / ${tagged.length}`}
+            </span>
+          )}
+        </div>
+        {!token && <p style={styles.dim}>Enter a token to see your workspaces.</p>}
         {token && servers.length === 0 && (
           <p style={styles.dim}>
             No servers online. Run{" "}
             <code style={styles.code}>bunx codehost serve -t {token || "<token>"}</code> on a machine.
           </p>
         )}
+        {token && servers.length > 0 && (
+          <>
+            <input
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              placeholder="filter…  e.g.  repo:codehost  host:mbp  (space = AND)"
+              style={styles.search}
+            />
+            {(activeTags.length > 0 || suggestedTags.length > 0) && (
+              <div style={styles.chipRow}>
+                {activeTags.map((t) => (
+                  <button key={t} style={{ ...styles.chip, ...styles.chipActive }} onClick={() => toggleTag(t)}>
+                    {t} ✕
+                  </button>
+                ))}
+                {suggestedTags
+                  .filter((t) => !activeTags.includes(t))
+                  .map((t) => (
+                    <button key={t} style={styles.chip} onClick={() => toggleTag(t)}>
+                      {t}
+                    </button>
+                  ))}
+              </div>
+            )}
+          </>
+        )}
         <ul style={styles.list}>
-          {servers.map((s) => {
+          {filtered.map(({ server: s, name, tags }) => {
             const isActive = s.peerId === activePeerId;
             return (
               <li key={s.peerId} style={styles.card}>
                 <div style={styles.cardMain}>
-                  <div style={styles.cardName}>{s.meta?.name ?? s.peerId.slice(0, 8)}</div>
-                  <div style={styles.cardSub}>
-                    {s.meta?.host && <span>{s.meta.host}</span>}
-                    {s.meta?.cwd && <span style={styles.cwd}>{s.meta.cwd}</span>}
+                  <div style={styles.cardName}>{name}</div>
+                  <div style={styles.tagRow}>
+                    {tags.map((tag) => (
+                      <button key={tag} style={styles.tag} onClick={() => addTag(tag)} title={`filter by ${tag}`}>
+                        {tag}
+                      </button>
+                    ))}
                   </div>
+                  <div style={styles.idLine}>peer {s.peerId.slice(0, 8)}</div>
                   {isActive && (
                     <div style={styles.echo}>
                       {connState === "connecting" && "negotiating WebRTC…"}
@@ -457,6 +524,9 @@ export function Discovery() {
               </li>
             );
           })}
+          {token && servers.length > 0 && filtered.length === 0 && (
+            <p style={styles.dim}>No workspace matches your filter.</p>
+          )}
         </ul>
       </main>
     </div>
@@ -476,7 +546,26 @@ const styles: Record<string, React.CSSProperties> = {
   label: { fontSize: 12, color: "#888" },
   input: { flex: 1, background: "#252525", border: "1px solid #3d3d3d", color: "#eee", padding: "8px 10px", borderRadius: 6, fontSize: 13, outline: "none" },
   button: { background: "#0e639c", border: "none", color: "#fff", padding: "8px 16px", borderRadius: 6, cursor: "pointer", fontSize: 13 },
-  h2: { fontSize: 14, color: "#aaa", fontWeight: 600, margin: "0 0 12px" },
+  listHead: { display: "flex", alignItems: "baseline", gap: 10, margin: "0 0 12px" },
+  h2: { fontSize: 14, color: "#aaa", fontWeight: 600, margin: 0 },
+  count: { fontSize: 12, color: "#888", fontFamily: "monospace" },
+  search: {
+    width: "100%", boxSizing: "border-box", background: "#252525", border: "1px solid #3d3d3d",
+    color: "#eee", padding: "8px 10px", borderRadius: 6, fontSize: 13, outline: "none",
+    fontFamily: "monospace", marginBottom: 10,
+  },
+  chipRow: { display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 },
+  chip: {
+    fontFamily: "monospace", fontSize: 11.5, padding: "2px 8px", borderRadius: 999,
+    border: "1px solid #3d3d3d", background: "transparent", color: "#9aa4af", cursor: "pointer",
+  },
+  chipActive: { background: "#0e639c", borderColor: "#0e639c", color: "#fff" },
+  tagRow: { display: "flex", flexWrap: "wrap", gap: 5, marginTop: 6 },
+  tag: {
+    fontFamily: "monospace", fontSize: 11, padding: "1px 7px", borderRadius: 999,
+    border: "1px solid #3d3d3d", background: "transparent", color: "#9aa4af", cursor: "pointer",
+  },
+  idLine: { fontFamily: "monospace", fontSize: 11, color: "#666", marginTop: 6 },
   code: { background: "#252525", padding: "2px 6px", borderRadius: 4, fontFamily: "monospace", fontSize: 12 },
   list: { listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 },
   card: { display: "flex", alignItems: "center", gap: 12, background: "#252525", border: "1px solid #3d3d3d", borderRadius: 8, padding: "12px 14px" },
