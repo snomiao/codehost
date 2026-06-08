@@ -86,8 +86,8 @@ export const devCommand: CommandModule<{}, DevArgs> = {
     const id = repoIdentity(dir);
     const meta: PeerMeta = {
       name: argv.name ?? host,
-      // POSIX-drive form for the browser (C:\ws -> /c/ws); `dir` stays the real
-      // OS path for the local VS Code working dir.
+      // VS Code-web ?folder= form for the browser (C:\ws -> /C:/ws); `dir` stays
+      // the real OS path for the local VS Code working dir.
       cwd: toPosixPath(dir),
       host,
       kind: "repo",

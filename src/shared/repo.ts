@@ -63,19 +63,22 @@ export function repoKey(t: Pick<RepoTarget, "host" | "owner" | "name">): string 
 }
 
 /**
- * Normalize a served workspace path to the POSIX-drive form the browser side
- * and VS Code web expect. A Windows drive path becomes a `/c/...` style path
- * (lowercased drive, backslashes -> slashes): `C:\ws` -> `/c/ws`,
- * `C:\Users\x` -> `/c/Users/x`, `D:\` -> `/d`. POSIX absolute paths (mac/linux)
- * are returned unchanged. Used for `PeerMeta.cwd`, which feeds the `?folder=`
- * URI — the real OS path is still used for the local VS Code working dir.
+ * Normalize a served workspace path to the form VS Code web's `?folder=` query
+ * expects. On Windows that's the file-URI authority form: a leading slash, the
+ * drive letter and colon preserved, backslashes -> slashes —
+ * `C:\ws` -> `/C:/ws`, `C:\Users\x` -> `/C:/Users/x`, `D:\` -> `/D:`. (The
+ * git-bash `/c/ws` form does NOT resolve — serve-web reports "workspace does not
+ * exist".) POSIX absolute paths (mac/linux) are returned unchanged, and the
+ * result is idempotent. Used for `PeerMeta.cwd`, which feeds the `?folder=` URI
+ * (URL-encoded in transit, decoded back to this by VS Code) and the `/dev/<path>`
+ * deep link — the real OS path is still used for the local VS Code working dir.
  */
 export function toPosixPath(p: string): string {
   const drive = /^([A-Za-z]):(?:[\\/](.*))?$/.exec(p);
   if (drive) {
-    const letter = drive[1].toLowerCase();
+    const letter = drive[1]; // preserve drive-letter case
     const rest = (drive[2] ?? "").replace(/\\/g, "/").replace(/\/+$/, "");
-    return rest ? `/${letter}/${rest}` : `/${letter}`;
+    return rest ? `/${letter}:/${rest}` : `/${letter}:`;
   }
   // Already POSIX (or a relative path): just unify any stray backslashes.
   return p.replace(/\\/g, "/");

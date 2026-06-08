@@ -3,23 +3,25 @@ import { parseDeepLink, pickRoomMatch, repoKey, shareableDeepLink, toPosixPath }
 import { parseGitRemote } from "../cli/git";
 
 describe("toPosixPath", () => {
-  test("Windows drive path -> POSIX drive form", () => {
-    expect(toPosixPath("C:\\ws")).toBe("/c/ws");
-    expect(toPosixPath("C:\\Users\\x")).toBe("/c/Users/x");
+  // VS Code web's ?folder= on Windows wants the file-URI authority form
+  // (/C:/ws), NOT git-bash /c/ws — the latter reports "workspace does not exist".
+  test("Windows drive path -> /<Drive>:/... (file-URI form)", () => {
+    expect(toPosixPath("C:\\ws")).toBe("/C:/ws");
+    expect(toPosixPath("C:\\Users\\taku")).toBe("/C:/Users/taku");
   });
 
-  test("lowercases the drive letter", () => {
-    expect(toPosixPath("D:\\foo")).toBe("/d/foo");
-    expect(toPosixPath("c:\\ws")).toBe("/c/ws");
+  test("preserves drive-letter case (drive is case-insensitive on Windows)", () => {
+    expect(toPosixPath("D:\\foo")).toBe("/D:/foo");
+    expect(toPosixPath("c:\\ws")).toBe("/c:/ws");
   });
 
-  test("drive root collapses to /<letter> (no trailing slash)", () => {
-    expect(toPosixPath("C:\\")).toBe("/c");
-    expect(toPosixPath("C:")).toBe("/c");
+  test("drive root collapses to /<Drive>: (no trailing slash)", () => {
+    expect(toPosixPath("C:\\")).toBe("/C:");
+    expect(toPosixPath("C:")).toBe("/C:");
   });
 
   test("forward-slash Windows paths normalize too", () => {
-    expect(toPosixPath("C:/ws")).toBe("/c/ws");
+    expect(toPosixPath("C:/ws")).toBe("/C:/ws");
   });
 
   test("POSIX absolute paths are unchanged (mac/linux not broken)", () => {
@@ -28,12 +30,20 @@ describe("toPosixPath", () => {
     expect(toPosixPath("/")).toBe("/");
   });
 
-  test("already-normalized POSIX-drive path is a no-op", () => {
-    expect(toPosixPath("/c/ws")).toBe("/c/ws");
+  test("already-normalized path is idempotent", () => {
+    expect(toPosixPath("/C:/ws")).toBe("/C:/ws");
   });
 
   test("trims trailing backslashes/slashes on a drive path", () => {
-    expect(toPosixPath("C:\\ws\\")).toBe("/c/ws");
+    expect(toPosixPath("C:\\ws\\")).toBe("/C:/ws");
+  });
+
+  // Regression: the value VS Code web receives via ?folder= (URL-decoded) must
+  // be exactly /C:/ws so serve-web resolves it to the real C:\ws on disk.
+  test("?folder= round-trip: encode(toPosixPath) decodes back to /C:/ws", () => {
+    const folderParam = encodeURIComponent(toPosixPath("C:\\ws"));
+    expect(folderParam).toBe("%2FC%3A%2Fws");
+    expect(decodeURIComponent(folderParam)).toBe("/C:/ws");
   });
 });
 
@@ -87,8 +97,16 @@ describe("parseDeepLink + repoKey round-trip", () => {
   });
 
   test("/dev/<path> -> dev target with leading slash", () => {
-    const dl = parseDeepLink("/dev/c/ws");
-    expect(dl?.type === "dev" && dl.target.path).toBe("/c/ws");
+    const dl = parseDeepLink("/dev/Users/sno/ws");
+    expect(dl?.type === "dev" && dl.target.path).toBe("/Users/sno/ws");
+  });
+
+  test("/dev/<Windows drive path> round-trips (colon in a non-leading segment)", () => {
+    // shareableDeepLink -> address bar -> parseDeepLink must preserve /C:/ws.
+    const path = shareableDeepLink({ folder: toPosixPath("C:\\ws") })!;
+    expect(path).toBe("/dev/C:/ws");
+    const dl = parseDeepLink(path);
+    expect(dl?.type === "dev" && dl.target.path).toBe("/C:/ws");
   });
 
   test("non-deep-link -> null", () => {
@@ -111,8 +129,9 @@ describe("shareableDeepLink", () => {
     );
   });
 
-  test("no repo -> /dev/<folder>", () => {
-    expect(shareableDeepLink({ folder: "/c/ws" })).toBe("/dev/c/ws");
+  test("no repo -> /dev/<folder> (Windows drive path preserved)", () => {
+    expect(shareableDeepLink({ folder: "/C:/ws" })).toBe("/dev/C:/ws");
+    expect(shareableDeepLink({ folder: "/Users/sno/ws" })).toBe("/dev/Users/sno/ws");
   });
 
   test("nothing addressable -> null", () => {

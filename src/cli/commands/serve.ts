@@ -87,7 +87,7 @@ export const serveCommand: CommandModule<{}, ServeArgs> = {
     // onto subfolders via VS Code's ?folder= using this layout.
     const meta: PeerMeta = {
       name: argv.name ?? host,
-      // POSIX-drive form for the browser ?folder= URI (C:\ws -> /c/ws); the real
+      // VS Code-web ?folder= form for the browser (C:\ws -> /C:/ws); the real
       // OS path `dir` is still what we spawn VS Code in.
       cwd: toPosixPath(dir),
       host,
