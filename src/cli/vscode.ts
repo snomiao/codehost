@@ -1,5 +1,6 @@
 import { spawn, type Subprocess } from "bun";
 import { resolveCodeBinary } from "./vscode-install";
+import { killProcessTree } from "./proc";
 
 // How long to wait for `code serve-web` to answer. The default is generous
 // because the FIRST run downloads the server component, which can take minutes
@@ -61,7 +62,10 @@ export async function launchVscode(opts: LaunchOptions): Promise<VscodeServer> {
 
   const stop = () => {
     try {
-      proc.kill();
+      // serve-web double-forks; kill the whole tree so the real VS Code server
+      // doesn't linger as an orphan after the daemon stops.
+      if (proc.pid) killProcessTree(proc.pid);
+      else proc.kill();
     } catch {
       // ignore
     }
