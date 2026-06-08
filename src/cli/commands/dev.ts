@@ -8,6 +8,7 @@ import { announceConnect } from "../open-url";
 import { runServer } from "../run-server";
 import { launchVscode } from "../vscode";
 import { repoIdentity } from "../git";
+import { toPosixPath } from "../../shared/repo";
 import { DEFAULT_SIGNAL_URL } from "./serve";
 
 interface DevArgs {
@@ -85,7 +86,9 @@ export const devCommand: CommandModule<{}, DevArgs> = {
     const id = repoIdentity(dir);
     const meta: PeerMeta = {
       name: argv.name ?? host,
-      cwd: dir,
+      // POSIX-drive form for the browser (C:\ws -> /c/ws); `dir` stays the real
+      // OS path for the local VS Code working dir.
+      cwd: toPosixPath(dir),
       host,
       kind: "repo",
       repo: id.repo,

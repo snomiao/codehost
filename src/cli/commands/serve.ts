@@ -2,7 +2,7 @@ import { hostname } from "node:os";
 import { resolve } from "node:path";
 import type { CommandModule } from "yargs";
 import type { PeerMeta } from "../../shared/signaling";
-import { DEFAULT_LAYOUT } from "../../shared/repo";
+import { DEFAULT_LAYOUT, toPosixPath } from "../../shared/repo";
 import { TOKEN_REQUIREMENTS, validateToken } from "../../shared/token";
 import { launchServeDaemon } from "../daemonize";
 import { announceConnect } from "../open-url";
@@ -87,7 +87,9 @@ export const serveCommand: CommandModule<{}, ServeArgs> = {
     // onto subfolders via VS Code's ?folder= using this layout.
     const meta: PeerMeta = {
       name: argv.name ?? host,
-      cwd: dir,
+      // POSIX-drive form for the browser ?folder= URI (C:\ws -> /c/ws); the real
+      // OS path `dir` is still what we spawn VS Code in.
+      cwd: toPosixPath(dir),
       host,
       kind: "root",
       layout: DEFAULT_LAYOUT,

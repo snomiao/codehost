@@ -52,6 +52,25 @@ export function repoKey(t: Pick<RepoTarget, "owner" | "name">): string {
   return `gh/${t.owner}/${t.name}`;
 }
 
+/**
+ * Normalize a served workspace path to the POSIX-drive form the browser side
+ * and VS Code web expect. A Windows drive path becomes a `/c/...` style path
+ * (lowercased drive, backslashes -> slashes): `C:\ws` -> `/c/ws`,
+ * `C:\Users\x` -> `/c/Users/x`, `D:\` -> `/d`. POSIX absolute paths (mac/linux)
+ * are returned unchanged. Used for `PeerMeta.cwd`, which feeds the `?folder=`
+ * URI — the real OS path is still used for the local VS Code working dir.
+ */
+export function toPosixPath(p: string): string {
+  const drive = /^([A-Za-z]):(?:[\\/](.*))?$/.exec(p);
+  if (drive) {
+    const letter = drive[1].toLowerCase();
+    const rest = (drive[2] ?? "").replace(/\\/g, "/").replace(/\/+$/, "");
+    return rest ? `/${letter}/${rest}` : `/${letter}`;
+  }
+  // Already POSIX (or a relative path): just unify any stray backslashes.
+  return p.replace(/\\/g, "/");
+}
+
 /** Fill a layout template from a repo target (default branch -> "main"). */
 export function fillLayout(layout: string, t: RepoTarget): string {
   return layout

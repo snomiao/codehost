@@ -20,6 +20,7 @@
     "deploy:signal": "cd worker && wrangler deploy",
     "deploy:pages": "vite build && wrangler pages deploy dist/public --project-name codehost",
     "start": "bun src/server.ts",
+    "test": "bun test",
     "typecheck": "tsc --noEmit && tsc --noEmit -p src/web/tsconfig.sw.json && tsc --noEmit -p worker/tsconfig.json"
   },
   "dependencies": {
