@@ -9,7 +9,8 @@
   "homepage": "https://codehost.dev",
   "bugs": "https://github.com/snomiao/codehost/issues",
   "bin": {
-    "codehost": "./src/cli/index.ts"
+    "codehost": "./src/cli/index.ts",
+    "ch": "./src/cli/index.ts"
   },
   "scripts": {
     "dev": "concurrently \"bun run dev:server\" \"vite --port 5173\"",
