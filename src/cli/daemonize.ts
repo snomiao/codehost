@@ -1,4 +1,5 @@
 import { daemonName, startDaemon } from "./oxmgr";
+import { selfUpdate } from "./self-update";
 
 export interface ServeDaemonOptions {
   /** Subcommand to re-launch under oxmgr. */
@@ -31,6 +32,11 @@ export interface ServeDaemonResult {
  * the shell and restarts on failure. Shared by `serve -d` and `setup`.
  */
 export async function launchServeDaemon(opts: ServeDaemonOptions): Promise<ServeDaemonResult> {
+  // Upgrade the global install (if that's how we're running) before spawning, so
+  // the fresh daemon runs the latest code. startDaemon does delete+start, so a
+  // re-launch replaces any live daemon with the updated one. Non-fatal.
+  await selfUpdate();
+
   const label = opts.name ?? opts.dir.split("/").pop() ?? opts.host;
   const name = daemonName(label);
   const command = buildForegroundCommand(opts);

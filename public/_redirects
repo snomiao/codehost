@@ -1,3 +1,8 @@
+# Friendly aliases for the installer: /setup.sh and /setup.ps1 serve the same
+# scripts as /install.*. Must precede the SPA catch-all below (first match wins).
+/setup.sh   /install.sh   200
+/setup.ps1  /install.ps1  200
+
 # SPA fallback: deep links like /gh/<owner>/<repo>/tree/<branch> and /dev/<path>
 # have no static file, so serve the app and let it route client-side. Cloudflare
 # Pages serves existing files first (/assets/*, /sw.js, /install.*), so only

@@ -32,6 +32,11 @@ curl -fsSL https://codehost.dev/install.sh | sh
 powershell -c "irm codehost.dev/install.ps1 | iex"
 ```
 
+`/setup.sh` and `/setup.ps1` are aliases of the same script. Re-running it any
+time **upgrades you to the latest codehost** (`bun add -g codehost@latest`), so
+it doubles as the updater — and it bootstraps Bun by absolute path, so it won't
+bail just because your shell hasn't picked Bun up on `PATH` yet.
+
 Already have Bun? `bun add -g codehost && codehost setup` does the same. Or, for
 a specific directory/token in one shot:
 
