@@ -8,6 +8,7 @@ import { exposeCommand } from "./commands/expose";
 import { listCommand } from "./commands/list";
 import { stopCommand } from "./commands/stop";
 import { updateCommand } from "./commands/update";
+import { superviseCommand } from "./commands/supervise";
 
 yargs(hideBin(process.argv))
   .scriptName("codehost")
@@ -19,6 +20,7 @@ yargs(hideBin(process.argv))
   .command(listCommand)
   .command(stopCommand)
   .command(updateCommand)
+  .command(superviseCommand)
   .demandCommand(1, "Specify a command, e.g. `codehost serve`")
   .strict()
   .help()

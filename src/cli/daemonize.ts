@@ -1,5 +1,6 @@
 import { daemonName, startDaemon } from "./oxmgr";
 import { selfUpdate } from "./self-update";
+import { startFallbackDaemon } from "./fallback-daemon";
 
 export interface ServeDaemonOptions {
   /** Subcommand to re-launch under oxmgr. */
@@ -28,8 +29,11 @@ export interface ServeDaemonResult {
 }
 
 /**
- * Launch a foreground `codehost serve` (without -d) under oxmgr so it survives
- * the shell and restarts on failure. Shared by `serve -d` and `setup`.
+ * Launch a foreground `codehost serve` (without -d) so it survives the shell and
+ * restarts on failure. Prefers oxmgr (which also adds login auto-start); when
+ * oxmgr can't run here (e.g. broken native binary on Windows) it falls back to a
+ * detached, self-restarting child instead of failing. `CODEHOST_NO_OXMGR=1`
+ * forces the fallback. Shared by `serve -d` and `setup`.
  */
 export async function launchServeDaemon(opts: ServeDaemonOptions): Promise<ServeDaemonResult> {
   // Upgrade the global install (if that's how we're running) before spawning, so
@@ -39,25 +43,39 @@ export async function launchServeDaemon(opts: ServeDaemonOptions): Promise<Serve
 
   const label = opts.name ?? opts.dir.split("/").pop() ?? opts.host;
   const name = daemonName(label);
-  const command = buildForegroundCommand(opts);
-  console.log(`[codehost] starting daemon "${name}" via oxmgr`);
-  const ok = await startDaemon({ name, command, cwd: opts.dir });
+  const argv = buildForegroundArgv(opts);
+
+  if (process.env.CODEHOST_NO_OXMGR !== "1") {
+    console.log(`[codehost] starting daemon "${name}" via oxmgr`);
+    // startDaemon attempts to self-heal oxmgr once; false means it's unusable here.
+    const ok = await startDaemon({ name, command: argv.map(quote).join(" "), cwd: opts.dir });
+    if (ok) {
+      console.log(`[codehost] daemon started. View: codehost list · Stop: codehost stop ${name}`);
+      return { ok: true, name };
+    }
+    console.warn("[codehost] oxmgr unavailable — falling back to a detached daemon (no login auto-start).");
+  }
+
+  const ok = startFallbackDaemon({ name, argv, cwd: opts.dir });
   if (ok) {
-    console.log(`[codehost] daemon started. View: codehost list · Stop: codehost stop ${name}`);
+    console.log(`[codehost] detached daemon "${name}" started. View: codehost list · Stop: codehost stop ${name}`);
+  } else {
+    console.error("[codehost] failed to start a detached daemon.");
   }
   return { ok, name };
 }
 
 /**
- * Reconstruct the exact foreground `serve` invocation (without -d) for oxmgr to
- * run. Uses the same runtime + entry script that launched us, so it works both
- * for `bunx codehost` and local `bun src/cli/index.ts`.
+ * Reconstruct the exact foreground `serve` invocation (without -d) as an argv
+ * array. Uses the same runtime + entry script that launched us, so it works both
+ * for `bunx codehost` and local `bun src/cli/index.ts`. oxmgr takes a shell
+ * string (we quote+join); the fallback spawns the argv directly.
  */
-function buildForegroundCommand(opts: ServeDaemonOptions): string {
+function buildForegroundArgv(opts: ServeDaemonOptions): string[] {
   const parts = [process.execPath, process.argv[1], opts.command ?? "serve", opts.arg ?? opts.dir, "-t", opts.token, "--signal", opts.signal];
   if (opts.name) parts.push("--name", opts.name);
   if (opts.port) parts.push("--port", String(opts.port));
-  return parts.map(quote).join(" ");
+  return parts;
 }
 
 function quote(s: string): string {
