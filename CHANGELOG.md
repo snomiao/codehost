@@ -1,3 +1,10 @@
+# [0.6.0](https://github.com/snomiao/codehost/compare/v0.5.1...v0.6.0) (2026-06-08)
+
+
+### Features
+
+* detached fallback daemon when oxmgr is unavailable ([3aeddad](https://github.com/snomiao/codehost/commit/3aeddad595a2fc65f8a65050a5cc6171f41bca8f))
+
 ## [0.5.1](https://github.com/snomiao/codehost/compare/v0.5.0...v0.5.1) (2026-06-08)
 
 
