@@ -1,3 +1,10 @@
+# [0.7.0](https://github.com/snomiao/codehost/compare/v0.6.0...v0.7.0) (2026-06-08)
+
+
+### Features
+
+* add 'ch' bin alias for codehost CLI ([b66983d](https://github.com/snomiao/codehost/commit/b66983dd4d56073a9b1e8257eaf858440249968a))
+
 # [0.6.0](https://github.com/snomiao/codehost/compare/v0.5.1...v0.6.0) (2026-06-08)
 
 
