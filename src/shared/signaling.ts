@@ -18,7 +18,7 @@ export interface PeerMeta {
    * Absent is treated as "repo" for backward compatibility.
    */
   kind?: "repo" | "root";
-  /** repo kind: normalized identity, e.g. "gh/snomiao/codehost". */
+  /** repo kind: host-agnostic identity, e.g. "github.com/snomiao/codehost". */
   repo?: string;
   /** repo kind: current branch, e.g. "main". */
   branch?: string;

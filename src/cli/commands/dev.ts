@@ -23,7 +23,7 @@ interface DevArgs {
 export const devCommand: CommandModule<{}, DevArgs> = {
   command: "dev [dir]",
   describe:
-    "Serve a single folder over WebRTC; open it at codehost.dev/dev/<path> (or /gh/<owner>/<repo> when it's a GitHub repo)",
+    "Serve a single folder over WebRTC; open it at codehost.dev/dev/<path> (or /gh/<owner>/<repo>, /git/<host>/<owner>/<repo> for a git repo)",
   builder: (y) =>
     y
       .positional("dir", {

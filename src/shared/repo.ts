@@ -1,13 +1,16 @@
-// Shared helpers for GitHub-shaped deep links and matching them to a daemon.
-// Used by the web resolver (src/web) and conceptually mirrors the daemon's
-// repo identity (src/cli/git.ts).
+// Shared helpers for git-shaped deep links and matching them to a daemon. Used
+// by the web resolver (src/web) and conceptually mirrors the daemon's repo
+// identity (src/cli/git.ts). Host-agnostic: GitHub gets the short `/gh/...`
+// form, any other host uses `/git/<host>/...`.
 
 import type { PeerInfo, PeerMeta } from "./signaling";
 
 export const DEFAULT_LAYOUT = "{owner}/{repo}/tree/{branch}";
+export const GITHUB_HOST = "github.com";
 
 export interface RepoTarget {
-  provider: "gh";
+  /** Git host, e.g. "github.com" or "gitlab.com". */
+  host: string;
   owner: string;
   name: string;
   /** Branch from the deep link, if present. */
@@ -26,10 +29,10 @@ export type DeepLink =
 
 /**
  * Parse a deep-link pathname:
- *   /gh/<owner>/<repo>                  -> repo target (default branch)
- *   /gh/<owner>/<repo>/tree/<branch>    -> repo target (branch; may contain slashes)
- *   /dev/<fs-path>                      -> direct folder mount
- * Anything else -> null (normal app).
+ *   /gh/<owner>/<repo>(/tree/<branch>)            -> GitHub repo target
+ *   /git/<host>/<owner>/<repo>(/tree/<branch>)    -> any-host repo target
+ *   /dev/<fs-path>                                -> direct folder mount
+ * Branch may contain slashes. Anything else -> null (normal app).
  */
 export function parseDeepLink(pathname: string): DeepLink {
   const clean = pathname.replace(/\/+$/, "");
@@ -37,7 +40,14 @@ export function parseDeepLink(pathname: string): DeepLink {
   if (gh) {
     return {
       type: "repo",
-      target: { provider: "gh", owner: gh[1], name: gh[2], branch: gh[3] },
+      target: { host: GITHUB_HOST, owner: gh[1], name: gh[2], branch: gh[3] },
+    };
+  }
+  const git = clean.match(/^\/git\/([^/]+)\/([^/]+)\/([^/]+)(?:\/tree\/(.+))?$/);
+  if (git) {
+    return {
+      type: "repo",
+      target: { host: git[1].toLowerCase(), owner: git[2], name: git[3], branch: git[4] },
     };
   }
   const dev = clean.match(/^\/dev\/(.+)$/);
@@ -47,9 +57,9 @@ export function parseDeepLink(pathname: string): DeepLink {
   return null;
 }
 
-/** Normalized repo key, e.g. "gh/owner/repo". */
-export function repoKey(t: Pick<RepoTarget, "owner" | "name">): string {
-  return `gh/${t.owner}/${t.name}`;
+/** Normalized repo key, e.g. "github.com/owner/repo" — matches PeerMeta.repo. */
+export function repoKey(t: Pick<RepoTarget, "host" | "owner" | "name">): string {
+  return `${t.host}/${t.owner}/${t.name}`;
 }
 
 /**
@@ -77,6 +87,26 @@ export function fillLayout(layout: string, t: RepoTarget): string {
     .replace(/\{owner\}/g, t.owner)
     .replace(/\{repo\}/g, t.name)
     .replace(/\{branch\}/g, t.branch || "main");
+}
+
+/**
+ * Shareable deep-link pathname for a connected workspace. A git-identified
+ * server renders `/gh/<owner>/<repo>` for GitHub or `/git/<host>/<owner>/<repo>`
+ * for any other host (with `/tree/<branch>` when known); a non-git workspace is
+ * addressed by its opened folder as a `/dev/<path>` mount. Round-trips through
+ * parseDeepLink + resolve{Repo,Dev}Target so another room member opening it
+ * lands here. Returns null when there's nothing addressable.
+ */
+export function shareableDeepLink(opts: { repo?: string; branch?: string; folder?: string }): string | null {
+  if (opts.repo) {
+    const [host, owner, name] = opts.repo.split("/");
+    if (host && owner && name) {
+      const base = host === GITHUB_HOST ? `/gh/${owner}/${name}` : `/git/${host}/${owner}/${name}`;
+      return opts.branch ? `${base}/tree/${opts.branch}` : base;
+    }
+  }
+  if (opts.folder) return `/dev/${opts.folder.replace(/^\/+/, "")}`;
+  return null;
 }
 
 export interface Resolution {
@@ -110,6 +140,24 @@ export function resolveDevTarget(servers: PeerInfo[], target: DevTarget): Resolu
   const want = trimSlash(target.path);
   const hit = servers.find((s) => s.meta && trimSlash(s.meta.cwd) === want);
   return hit ? { peerId: hit.peerId } : null;
+}
+
+/** A candidate room (its token) plus how the deep link resolved within it. */
+export interface RoomMatch {
+  token: string;
+  resolution: Resolution;
+}
+
+/**
+ * Rank matches found while searching multiple rooms for a token-less deep link.
+ * An *exact* match (a server that genuinely serves this repo/folder — no
+ * synthesized `folder`) beats a *root fallback* (a root daemon that would open
+ * the repo as a subfolder, which `resolveRepoTarget` returns for ANY repo link).
+ * Without this preference, first-responder-wins could pick an unrelated room
+ * that merely has a root server. Returns null when there are no matches.
+ */
+export function pickRoomMatch(matches: RoomMatch[]): RoomMatch | null {
+  return matches.find((m) => !m.resolution.folder) ?? matches[0] ?? null;
 }
 
 function branchOk(meta: PeerMeta, target: RepoTarget): boolean {

@@ -9,12 +9,15 @@ import { registerTunnelHost } from "./tunnel-host";
 import { connBroker } from "./conn-broker";
 import {
   type DeepLink,
+  type RoomMatch,
   parseDeepLink,
+  pickRoomMatch,
   repoKey,
   resolveDevTarget,
   resolveRepoTarget,
+  shareableDeepLink,
 } from "../shared/repo";
-import { addRoom, historyFor, recordConnection } from "./history";
+import { addRoom, getRooms, historyFor, recordConnection } from "./history";
 
 const TOKEN_KEY = "codehost.token";
 
@@ -44,6 +47,50 @@ function deepLinkLabel(dl: DeepLink): string | null {
 
 function folderQuery(folder?: string): string {
   return folder ? `?folder=${encodeURIComponent(folder)}` : "";
+}
+
+/**
+ * Find which of the user's saved rooms hosts a server matching a token-less deep
+ * link. Opens a short-lived viewer connection to each candidate room in
+ * parallel. An *exact* match (a server that truly serves this workspace) wins
+ * immediately; *root-fallback* matches (any room with a root daemon, which
+ * `resolveRepoTarget` returns for ANY repo link) are only chosen at the timeout,
+ * via `pickRoomMatch`, so an unrelated room with a root server can't steal the
+ * link. Resolves to the winning room's token (or null on no match). All temp
+ * clients are closed.
+ */
+function findRoomForDeepLink(dl: DeepLink, tokens: string[], timeoutMs = 6000): Promise<string | null> {
+  if (!dl || tokens.length === 0) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    const clients: SignalingClient[] = [];
+    const fallbacks: RoomMatch[] = [];
+    let done = false;
+    const finish = (tok: string | null) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      clients.forEach((c) => c.close());
+      resolve(tok);
+    };
+    const timer = setTimeout(() => finish(pickRoomMatch(fallbacks)?.token ?? null), timeoutMs);
+    for (const tok of tokens) {
+      const client = new SignalingClient({
+        url: getSignalUrl(),
+        token: tok,
+        role: "viewer",
+        onPeers: (peers) => {
+          const servers = peers.filter((p) => p.role === "server");
+          const res =
+            dl.type === "repo" ? resolveRepoTarget(servers, dl.target) : resolveDevTarget(servers, dl.target);
+          if (!res) return;
+          if (!res.folder) finish(tok); // exact match — take it now
+          else if (!fallbacks.some((f) => f.token === tok)) fallbacks.push({ token: tok, resolution: res });
+        },
+      });
+      clients.push(client);
+      client.connect();
+    }
+  });
 }
 
 export function Discovery() {
@@ -80,6 +127,11 @@ export function Discovery() {
   const activeFolderRef = useRef<string | undefined>(undefined);
   const [resolving, setResolving] = useState<string | null>(() => deepLinkLabel(deepLinkRef.current));
 
+  // Shareable deep-link pathname for the live connection (drives the address bar
+  // and the Share button); transient "copied" flag for the button.
+  const sharePathRef = useRef<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
   // Register the Service Worker + connection broker once. The broker shares one
   // WebRTC connection per server across tabs; on owner failover it asks us to
   // reload the iframe so it reconnects through the new owner.
@@ -102,12 +154,22 @@ export function Discovery() {
       }
     }
 
-    // For a repo deep link, adopt the room that last served it so it resolves
-    // without re-entering a token.
+    // Resolve a token-less deep link to a room: first the room that last served
+    // this repo, otherwise search all saved rooms for a live server that hosts
+    // this workspace and adopt it. Skipped when the link already carries a token.
     const dl = deepLinkRef.current;
-    if (dl?.type === "repo") {
-      const h = historyFor(repoKey(dl.target));
-      if (h?.token) setToken(h.token);
+    if (dl && !(urlToken && validateToken(urlToken).ok)) {
+      const histToken = dl.type === "repo" ? historyFor(repoKey(dl.target))?.token : undefined;
+      if (histToken) {
+        setToken(histToken);
+      } else {
+        const rooms = getRooms();
+        if (rooms.length) {
+          void findRoomForDeepLink(dl, rooms).then((tok) => {
+            if (tok) setToken(tok);
+          });
+        }
+      }
     }
   }, []);
 
@@ -212,9 +274,35 @@ export function Discovery() {
       setIframeSrc(`/vs/${server.peerId}/${folderQuery(openFolder)}`);
       setResolving(null);
       recordConnect(server, openFolder);
+      updateAddressBar(server, openFolder);
     } catch {
       setConnState("failed");
     }
+  }
+
+  // Reflect the live connection in the address bar as a clean, shareable deep
+  // link (no token — Share adds that). If we arrived via a deep link, keep its
+  // pathname; otherwise derive one from the server's repo identity or folder.
+  function updateAddressBar(server: PeerInfo, folder?: string) {
+    const path = deepLinkRef.current
+      ? window.location.pathname
+      : shareableDeepLink({ repo: server.meta?.repo, branch: server.meta?.branch, folder });
+    if (!path) return;
+    sharePathRef.current = path;
+    if (path !== window.location.pathname) history.replaceState(null, "", path);
+  }
+
+  async function shareLink() {
+    const path = sharePathRef.current ?? window.location.pathname;
+    const url = `${window.location.origin}${path}#t=${encodeURIComponent(token)}`;
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      // clipboard blocked (insecure context / permission) — fall back to prompt
+      window.prompt("Copy this share link:", url);
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
   }
 
   // Deep-link auto-connect: when servers arrive, pick the best match (exact repo
@@ -261,6 +349,8 @@ export function Discovery() {
     setActivePeerId(null);
     activePeerRef.current = null;
     setConnState("idle");
+    sharePathRef.current = null;
+    if (window.location.pathname !== "/") history.replaceState(null, "", "/");
   }
 
   const activeServer = servers.find((s) => s.peerId === activePeerId);
@@ -275,6 +365,13 @@ export function Discovery() {
           <span style={styles.dim}>{activeServer?.meta?.name ?? activePeerId?.slice(0, 8)}</span>
           {activeServer?.meta?.cwd && <span style={styles.cwd}>{activeServer.meta.cwd}</span>}
           <span style={{ flex: 1 }} />
+          <button
+            style={styles.shareBtn}
+            onClick={shareLink}
+            title="Copy a link that opens this workspace (includes the room token)"
+          >
+            {copied ? "Copied!" : "Share"}
+          </button>
           <button style={styles.connectBtn} onClick={disconnect}>
             Disconnect
           </button>
@@ -389,4 +486,5 @@ const styles: Record<string, React.CSSProperties> = {
   cwd: { fontFamily: "monospace" },
   echo: { marginTop: 6, fontSize: 12, color: "#4ec9b0", fontFamily: "monospace" },
   connectBtn: { background: "#0e639c", border: "none", color: "#fff", padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13 },
+  shareBtn: { background: "transparent", border: "1px solid #3d3d3d", color: "#ccc", padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13 },
 };

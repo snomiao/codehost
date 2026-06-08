@@ -23,7 +23,7 @@ interface ServeArgs {
 export const serveCommand: CommandModule<{}, ServeArgs> = {
   command: "serve [dir]",
   describe:
-    "Serve a workspace root over WebRTC; repos under it open via codehost.dev/gh/<owner>/<repo>",
+    "Serve a workspace root over WebRTC; repos under it open via codehost.dev/gh/<owner>/<repo> (or /git/<host>/<owner>/<repo>)",
   builder: (y) =>
     y
       .positional("dir", {
