@@ -1,3 +1,10 @@
+# [0.5.0](https://github.com/snomiao/codehost/compare/v0.4.0...v0.5.0) (2026-06-08)
+
+
+### Features
+
+* shareable workspace URLs (host-agnostic) + Share button + cross-room search ([f1db806](https://github.com/snomiao/codehost/commit/f1db806a1ec86cdc369b17ccca82057eb9526385))
+
 # [0.4.0](https://github.com/snomiao/codehost/compare/v0.3.1...v0.4.0) (2026-06-08)
 
 
