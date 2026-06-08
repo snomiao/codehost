@@ -1,6 +1,13 @@
 import { spawn, type Subprocess } from "bun";
 import { resolveCodeBinary } from "./vscode-install";
 
+// How long to wait for `code serve-web` to answer. The default is generous
+// because the FIRST run downloads the server component, which can take minutes
+// on a slow link or a fresh Windows box — and under the oxmgr daemon
+// (`--restart on-failure`) a too-short timeout makes us exit mid-download, get
+// restarted, and re-download forever. Override with CODEHOST_VSCODE_READY_TIMEOUT_MS.
+const READY_TIMEOUT_MS = Number(process.env.CODEHOST_VSCODE_READY_TIMEOUT_MS) || 10 * 60_000;
+
 export interface VscodeServer {
   port: number;
   basePath: string;
@@ -49,7 +56,7 @@ export async function launchVscode(opts: LaunchOptions): Promise<VscodeServer> {
   });
 
   const base = `http://127.0.0.1:${port}${opts.basePath}/`;
-  await waitForHttp(base, 30_000);
+  await waitForHttp(base, READY_TIMEOUT_MS, proc);
   console.log(`[codehost] VS Code ready at ${base}`);
 
   const stop = () => {
@@ -62,18 +69,33 @@ export async function launchVscode(opts: LaunchOptions): Promise<VscodeServer> {
   return { port, basePath: opts.basePath, proc, stop };
 }
 
-async function waitForHttp(url: string, timeoutMs: number): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
+async function waitForHttp(url: string, timeoutMs: number, proc?: Subprocess): Promise<void> {
+  const started = Date.now();
+  const deadline = started + timeoutMs;
+  let nextHeartbeat = started + 15_000;
   while (Date.now() < deadline) {
+    // If the server process died (bad flag, crash), fail now instead of waiting
+    // out the whole timeout — and surface that it exited rather than hung.
+    if (proc && proc.exitCode !== null) {
+      throw new Error(`VS Code server exited (code ${proc.exitCode}) before becoming ready at ${url}`);
+    }
     try {
       const res = await fetch(url, { redirect: "manual" });
       if (res.status > 0) return;
     } catch {
       // not up yet
     }
+    if (Date.now() >= nextHeartbeat) {
+      const secs = Math.round((Date.now() - started) / 1000);
+      console.log(`[codehost] waiting for VS Code server to start… (${secs}s; first run downloads the server component)`);
+      nextHeartbeat += 15_000;
+    }
     await Bun.sleep(300);
   }
-  throw new Error(`VS Code did not become ready at ${url} within ${timeoutMs}ms`);
+  throw new Error(
+    `VS Code did not become ready at ${url} within ${timeoutMs}ms ` +
+      `(first-run server download can be slow — raise CODEHOST_VSCODE_READY_TIMEOUT_MS)`,
+  );
 }
 
 async function freePort(): Promise<number> {
