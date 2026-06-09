@@ -1,3 +1,10 @@
+# [0.11.0](https://github.com/snomiao/codehost/compare/v0.10.0...v0.11.0) (2026-06-09)
+
+
+### Features
+
+* **web:** update URL on Connect + Back returns to the list ([7258a16](https://github.com/snomiao/codehost/commit/7258a168a0bcc1d476aab8a7f3fcd81f35ccfcb5))
+
 # [0.10.0](https://github.com/snomiao/codehost/compare/v0.9.1...v0.10.0) (2026-06-09)
 
 
