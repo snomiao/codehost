@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { parseDeepLink, pickRoomMatch, repoKey, shareableDeepLink, toPosixPath } from "./repo";
+import { parseDeepLink, pickRoomMatch, repoKey, resolveDevTarget, shareableDeepLink, toPosixPath } from "./repo";
+import type { PeerInfo } from "./signaling";
 import { parseGitRemote } from "../cli/git";
 
 describe("toPosixPath", () => {
@@ -109,9 +110,57 @@ describe("parseDeepLink + repoKey round-trip", () => {
     expect(dl?.type === "dev" && dl.target.path).toBe("/C:/ws");
   });
 
+  test("/host/<hostname>/<path> -> host-scoped dev target", () => {
+    const dl = parseDeepLink("/host/Mac/Users/taku");
+    expect(dl?.type === "dev" && dl.target.host).toBe("Mac");
+    expect(dl?.type === "dev" && dl.target.path).toBe("/Users/taku");
+  });
+
+  test("/host/<hostname>/<Windows drive path> round-trips", () => {
+    const path = shareableDeepLink({ folder: "/C:/ws", host: "EC2AMAZ-PH8C4K1" })!;
+    expect(path).toBe("/host/EC2AMAZ-PH8C4K1/C:/ws");
+    const dl = parseDeepLink(path);
+    expect(dl?.type === "dev" && dl.target.host).toBe("EC2AMAZ-PH8C4K1");
+    expect(dl?.type === "dev" && dl.target.path).toBe("/C:/ws");
+  });
+
+  test("legacy /dev/<path> still parses host-agnostic (no host)", () => {
+    const dl = parseDeepLink("/dev/C:/ws");
+    expect(dl?.type === "dev" && dl.target.host).toBeUndefined();
+    expect(dl?.type === "dev" && dl.target.path).toBe("/C:/ws");
+  });
+
   test("non-deep-link -> null", () => {
     expect(parseDeepLink("/")).toBeNull();
     expect(parseDeepLink("/settings")).toBeNull();
+  });
+});
+
+describe("resolveDevTarget host scoping", () => {
+  const mk = (peerId: string, host: string, cwd: string): PeerInfo => ({
+    peerId,
+    role: "server",
+    meta: { name: host, host, cwd },
+  });
+  // Same served path on two different machines — the ambiguity host scoping fixes.
+  const servers = [mk("pA", "boxA", "/C:/ws"), mk("pB", "boxB", "/C:/ws")];
+
+  test("host-scoped target picks the matching host", () => {
+    expect(resolveDevTarget(servers, { host: "boxB", path: "/C:/ws" })?.peerId).toBe("pB");
+    expect(resolveDevTarget(servers, { host: "boxA", path: "/C:/ws" })?.peerId).toBe("pA");
+  });
+
+  test("host-scoped target with no matching host -> null (won't cross machines)", () => {
+    expect(resolveDevTarget(servers, { host: "boxC", path: "/C:/ws" })).toBeNull();
+  });
+
+  test("legacy host-agnostic target matches by path alone", () => {
+    expect(resolveDevTarget(servers, { path: "/C:/ws" })?.peerId).toBe("pA");
+  });
+
+  test("leading/trailing slash differences still match (e.g. expose cwd)", () => {
+    const ex = [mk("pE", "boxE", "localhost:8090")];
+    expect(resolveDevTarget(ex, { host: "boxE", path: "/localhost:8090" })?.peerId).toBe("pE");
   });
 });
 

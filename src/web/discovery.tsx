@@ -46,7 +46,8 @@ function tokenFromHash(): string {
 /** Short label for the "looking for…" state from a deep link. */
 function deepLinkLabel(dl: DeepLink): string | null {
   if (!dl) return null;
-  return dl.type === "repo" ? `${dl.target.owner}/${dl.target.name}` : dl.target.path;
+  if (dl.type === "repo") return `${dl.target.owner}/${dl.target.name}`;
+  return dl.target.host ? `${dl.target.host}:${dl.target.path}` : dl.target.path;
 }
 
 function folderQuery(folder?: string): string {
@@ -418,7 +419,12 @@ export function Discovery() {
   function shareablePathFor(server: PeerInfo, folder?: string): string | null {
     return deepLinkRef.current
       ? window.location.pathname
-      : shareableDeepLink({ repo: server.meta?.repo, branch: server.meta?.branch, folder });
+      : shareableDeepLink({
+          repo: server.meta?.repo,
+          branch: server.meta?.branch,
+          folder,
+          host: server.meta?.host,
+        });
   }
 
   async function shareLink() {

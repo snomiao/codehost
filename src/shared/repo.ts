@@ -17,8 +17,12 @@ export interface RepoTarget {
   branch?: string;
 }
 
-/** A direct folder mount address: `/dev/<absolute-fs-path>`. */
+/** A direct folder mount address: host-scoped `/host/<hostname>/<path>`, or the
+ *  legacy host-agnostic `/dev/<path>` (a bare path collides across machines, so
+ *  new links carry the host). */
 export interface DevTarget {
+  /** Hostname the workspace lives on; undefined for a legacy host-agnostic link. */
+  host?: string;
   path: string;
 }
 
@@ -31,7 +35,8 @@ export type DeepLink =
  * Parse a deep-link pathname:
  *   /gh/<owner>/<repo>(/tree/<branch>)            -> GitHub repo target
  *   /git/<host>/<owner>/<repo>(/tree/<branch>)    -> any-host repo target
- *   /dev/<fs-path>                                -> direct folder mount
+ *   /host/<hostname>/<fs-path>                    -> host-scoped folder mount
+ *   /dev/<fs-path>                                -> legacy host-agnostic folder mount
  * Branch may contain slashes. Anything else -> null (normal app).
  */
 export function parseDeepLink(pathname: string): DeepLink {
@@ -50,6 +55,13 @@ export function parseDeepLink(pathname: string): DeepLink {
       target: { host: git[1].toLowerCase(), owner: git[2], name: git[3], branch: git[4] },
     };
   }
+  // Host-scoped folder mount: first segment is the hostname, the rest is the
+  // served path (which itself may contain slashes and a Windows drive colon).
+  const host = clean.match(/^\/host\/([^/]+)\/(.+)$/);
+  if (host) {
+    return { type: "dev", target: { host: host[1], path: `/${host[2].replace(/^\/+/, "")}` } };
+  }
+  // Legacy host-agnostic folder mount.
   const dev = clean.match(/^\/dev\/(.+)$/);
   if (dev) {
     return { type: "dev", target: { path: `/${dev[1].replace(/^\/+/, "")}` } };
@@ -96,11 +108,17 @@ export function fillLayout(layout: string, t: RepoTarget): string {
  * Shareable deep-link pathname for a connected workspace. A git-identified
  * server renders `/gh/<owner>/<repo>` for GitHub or `/git/<host>/<owner>/<repo>`
  * for any other host (with `/tree/<branch>` when known); a non-git workspace is
- * addressed by its opened folder as a `/dev/<path>` mount. Round-trips through
+ * addressed by its opened folder, scoped to its hostname as `/host/<host>/<path>`
+ * (or the legacy `/dev/<path>` when no host is known). Round-trips through
  * parseDeepLink + resolve{Repo,Dev}Target so another room member opening it
  * lands here. Returns null when there's nothing addressable.
  */
-export function shareableDeepLink(opts: { repo?: string; branch?: string; folder?: string }): string | null {
+export function shareableDeepLink(opts: {
+  repo?: string;
+  branch?: string;
+  folder?: string;
+  host?: string;
+}): string | null {
   if (opts.repo) {
     const [host, owner, name] = opts.repo.split("/");
     if (host && owner && name) {
@@ -108,7 +126,10 @@ export function shareableDeepLink(opts: { repo?: string; branch?: string; folder
       return opts.branch ? `${base}/tree/${opts.branch}` : base;
     }
   }
-  if (opts.folder) return `/dev/${opts.folder.replace(/^\/+/, "")}`;
+  if (opts.folder) {
+    const path = opts.folder.replace(/^\/+/, "");
+    return opts.host ? `/host/${opts.host}/${path}` : `/dev/${path}`;
+  }
   return null;
 }
 
@@ -138,13 +159,16 @@ export function resolveRepoTarget(servers: PeerInfo[], target: RepoTarget): Reso
   return null;
 }
 
-/** Pick a `dev`/repo server whose served cwd matches a /dev/<path> target.
- *  Compares with leading + trailing slashes stripped: `parseDeepLink` forces a
- *  leading "/" on the path, but a served cwd may lack one (e.g. an `expose`
- *  server's `localhost:<port>`), so a trailing-only trim would never match it. */
+/** Pick a folder-mount server whose served cwd matches the target path, scoped
+ *  to `target.host` when the link carries one (a bare path is ambiguous across
+ *  machines). Compares with leading + trailing slashes stripped: `parseDeepLink`
+ *  forces a leading "/" on the path, but a served cwd may lack one (e.g. an
+ *  `expose` server's `localhost:<port>`), so a trailing-only trim never matches. */
 export function resolveDevTarget(servers: PeerInfo[], target: DevTarget): Resolution | null {
   const want = stripEnds(target.path);
-  const hit = servers.find((s) => s.meta && stripEnds(s.meta.cwd) === want);
+  const hit = servers.find(
+    (s) => s.meta && stripEnds(s.meta.cwd) === want && (!target.host || s.meta.host === target.host),
+  );
   return hit ? { peerId: hit.peerId } : null;
 }
 
