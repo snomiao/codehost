@@ -177,10 +177,19 @@ export function Discovery() {
   const activeRoomRef = useRef<string | null>(null);
   const sendersRef = useRef<Map<string, (to: string, data: unknown) => void>>(new Map());
   // Whether the live connection pushed a history entry (so Disconnect/Back can
-  // pop it), and whether we're currently *viewing* a workspace (so popstate only
-  // tears down from the iframe view, not during a mid-connect URL revert).
+  // pop it back to the list).
   const pushedRef = useRef(false);
-  const viewingRef = useRef(false);
+  // A dial is in flight — a synchronous guard so the several reconnect triggers
+  // (popstate, server-list change, retry timer, deep-link auto-connect) never
+  // double-dial (connState updates a render too late to gate them).
+  const dialingRef = useRef(false);
+  // Set just before a failed-dial history.back() so the resulting popstate is
+  // treated as a URL revert, not a user navigation — the reconciler skips it once.
+  const revertingRef = useRef(false);
+  // Latest merged server list + connection state, read by the URL reconciler
+  // (invoked from the once-at-mount popstate handler) without a stale closure.
+  const allServersRef = useRef<RoomedServer[]>([]);
+  const connStateRef = useRef<ConnState>("idle");
 
   // Deep-link resolution (/gh/<owner>/<repo>/... or /dev/<path>): parse once,
   // auto-connect when a matching server appears, remember the opened folder.
@@ -218,11 +227,16 @@ export function Discovery() {
       const folder = activeFolderRef.current;
       setTimeout(() => setIframeSrc(`/vs/${peerId}/${folderQuery(folder)}`), 400);
     });
-    // Back / Cmd+Left from a workspace returns to the list: the browser restores
-    // the previous URL and we drop the connection. Only when actually viewing —
-    // a mid-connect URL revert (failed dial) must leave the list state untouched.
+    // Back/Forward (Cmd+Left / Cmd+Right) reconcile the connection to the URL: a
+    // workspace deep link (re)connects to its server, the list URL drops the
+    // connection. The browser already changed the URL; we follow it. A failed
+    // dial's revert-back is skipped once (revertingRef) so it keeps the list.
     const onPopState = () => {
-      if (viewingRef.current) teardownConn();
+      if (revertingRef.current) {
+        revertingRef.current = false;
+        return;
+      }
+      syncToUrl();
     };
     window.addEventListener("popstate", onPopState);
     // A valid token in the URL fragment (#t=<token>) joins the room and turns on
@@ -265,6 +279,23 @@ export function Discovery() {
     tryAutoConnect();
   }, [serversByRoom, tokens]);
 
+  // Keep the connection in sync with the URL as servers come and go: reconnect
+  // when the workspace named by the address bar (re)appears in a room — covers a
+  // daemon restart or a dropped channel while the tab stays open.
+  useEffect(() => {
+    syncToUrl();
+  }, [serversByRoom]);
+
+  // Safety-net retry: while the URL names a workspace we're not connected to and
+  // no dial is in flight, retry every few seconds — covers a dropped channel
+  // whose server never left the room (so no list change fires the effect above).
+  useEffect(() => {
+    if (!parseDeepLink(window.location.pathname)) return;
+    if (connState === "connected" || connState === "connecting") return;
+    const id = setInterval(() => syncToUrl(), 5000);
+    return () => clearInterval(id);
+  }, [connState, serversByRoom]);
+
   function joinFromInput(e: React.FormEvent) {
     e.preventDefault();
     const t = draft.trim();
@@ -295,59 +326,70 @@ export function Discovery() {
     sendersRef.current.delete(t);
   }
 
-  async function connectTo(server: PeerInfo, room: string, folder?: string) {
+  async function connectTo(server: PeerInfo, room: string, folder?: string, fromHistory = false) {
     const send = sendersRef.current.get(room);
     if (!send) return;
-
-    rtcRef.current?.close();
-    rtcRef.current = null;
-    setIframeSrc(null);
-    setActivePeerId(server.peerId);
-    activePeerRef.current = server.peerId;
-    activeRoomRef.current = room;
-    viewingRef.current = false;
-    setConnState("connecting");
-
-    // Update the address bar the instant Connect is clicked (don't wait for the
-    // WebRTC handshake) and push a history entry, so Back / Cmd+Left returns to
-    // the list. Reverted if the connection fails.
-    const openFolder = folder ?? server.meta?.cwd;
-    const targetPath = shareablePathFor(server, openFolder);
-    const pushed = !!targetPath && targetPath !== window.location.pathname;
-    if (pushed) history.pushState(null, "", targetPath);
-    pushedRef.current = pushed;
-    sharePathRef.current = targetPath ?? window.location.pathname;
-
-    // The broker decides whether this tab owns the connection. `establish` is
-    // only invoked when we're the owner (or get promoted on failover); other
-    // tabs reuse the owner's channel via a proxy, so they never open WebRTC.
-    const establish = () =>
-      new Promise<RTCDataChannel>((resolve, reject) => {
-        const rtc = new RtcClient({
-          sendSignal: (data: RtcSignal) => send(server.peerId, data),
-          onState: (state) => {
-            if (state === "failed" || state === "disconnected") setConnState("failed");
-          },
-          onOpen: (channel) => {
-            clearTimeout(timer);
-            resolve(channel);
-          },
-          onClose: () => setConnState((s) => (s === "connected" ? "idle" : s)),
-        });
-        rtcRef.current = rtc;
-        // Don't hang forever dialing a peer that never answers (e.g. a stale
-        // server still listed in the room): fail the attempt after 15s.
-        const timer = setTimeout(() => {
-          rtc.close();
-          reject(new Error("connection timed out"));
-        }, 15000);
-        rtc.start().catch((err) => {
-          clearTimeout(timer);
-          reject(err);
-        });
-      });
-
+    dialingRef.current = true; // synchronous gate against concurrent triggers
+    let didPush = false;
     try {
+      // Clear any prior connection's broker state first: after an RTC drop the
+      // broker still holds the dead channel in `locals`, so re-dialing the same
+      // peer would otherwise resolve straight to it. Also covers switching peers.
+      if (activePeerRef.current) connBroker.disconnect(activePeerRef.current);
+
+      rtcRef.current?.close();
+      rtcRef.current = null;
+      setIframeSrc(null);
+      setActivePeerId(server.peerId);
+      activePeerRef.current = server.peerId;
+      activeRoomRef.current = room;
+      setConnState("connecting");
+
+      // Update the address bar the instant Connect is clicked (don't wait for the
+      // handshake) and push a history entry, so Back returns to the list and
+      // Forward returns here. When `fromHistory`, the browser already set the URL
+      // (back/forward/reconnect) — don't push again, but a prior entry exists.
+      const openFolder = folder ?? server.meta?.cwd;
+      if (fromHistory) {
+        pushedRef.current = true;
+        sharePathRef.current = window.location.pathname;
+      } else {
+        const targetPath = shareablePathFor(server, openFolder);
+        didPush = !!targetPath && targetPath !== window.location.pathname;
+        if (didPush) history.pushState(null, "", targetPath);
+        pushedRef.current = didPush;
+        sharePathRef.current = targetPath ?? window.location.pathname;
+      }
+
+      // The broker decides whether this tab owns the connection. `establish` is
+      // only invoked when we're the owner (or get promoted on failover); other
+      // tabs reuse the owner's channel via a proxy, so they never open WebRTC.
+      const establish = () =>
+        new Promise<RTCDataChannel>((resolve, reject) => {
+          const rtc = new RtcClient({
+            sendSignal: (data: RtcSignal) => send(server.peerId, data),
+            onState: (state) => {
+              if (state === "failed" || state === "disconnected") setConnState("failed");
+            },
+            onOpen: (channel) => {
+              clearTimeout(timer);
+              resolve(channel);
+            },
+            onClose: () => setConnState((s) => (s === "connected" ? "idle" : s)),
+          });
+          rtcRef.current = rtc;
+          // Don't hang forever dialing a peer that never answers (e.g. a stale
+          // server still listed in the room): fail the attempt after 15s.
+          const timer = setTimeout(() => {
+            rtc.close();
+            reject(new Error("connection timed out"));
+          }, 15000);
+          rtc.start().catch((err) => {
+            clearTimeout(timer);
+            reject(err);
+          });
+        });
+
       await connBroker.connect(server.peerId, establish);
       setConnState("connected");
       // The daemon no longer sets a default folder (current VS Code serve-web
@@ -357,15 +399,16 @@ export function Discovery() {
       setIframeSrc(`/vs/${server.peerId}/${folderQuery(openFolder)}`);
       setResolving(null);
       recordConnect(server, room, openFolder);
-      viewingRef.current = true;
     } catch {
       setConnState("failed");
-      // Undo the optimistic history entry / URL change. We never started
-      // viewing, so the popstate handler leaves the "failed" card in place.
-      if (pushed) {
-        pushedRef.current = false;
+      // Undo the optimistic history entry we pushed. revertingRef makes the
+      // resulting popstate a no-op so the "failed" card stays on the list.
+      if (didPush) {
+        revertingRef.current = true;
         history.back();
       }
+    } finally {
+      dialingRef.current = false;
     }
   }
 
@@ -449,7 +492,33 @@ export function Discovery() {
     setConnState("idle");
     sharePathRef.current = null;
     pushedRef.current = false;
-    viewingRef.current = false;
+  }
+
+  // Resolve a workspace deep-link path to a live server across all joined rooms.
+  function findServerForDeepLink(dl: DeepLink): (RoomedServer & { folder?: string }) | null {
+    if (!dl) return null;
+    const peers = allServersRef.current.map((x) => x.server);
+    const res = dl.type === "repo" ? resolveRepoTarget(peers, dl.target) : resolveDevTarget(peers, dl.target);
+    if (!res) return null;
+    const match = allServersRef.current.find((x) => x.server.peerId === res.peerId);
+    return match ? { ...match, folder: res.folder } : null;
+  }
+
+  // Reconcile the live connection to the current URL. Drives Back/Forward nav and
+  // auto-reconnect: a workspace deep link connects to (or reconnects to) the
+  // server it resolves to; the list URL ("/") drops the connection. Reads only
+  // refs/window, so it's safe to call from the once-at-mount popstate handler.
+  function syncToUrl() {
+    const dl = parseDeepLink(window.location.pathname);
+    if (!dl) {
+      if (activePeerRef.current) teardownConn();
+      return;
+    }
+    if (dialingRef.current) return; // a dial is already in flight
+    const target = findServerForDeepLink(dl);
+    if (!target) return; // its server isn't present (yet) — wait for it to appear
+    if (activePeerRef.current === target.server.peerId && connStateRef.current === "connected") return;
+    void connectTo(target.server, target.room, target.folder, true);
   }
 
   function disconnect() {
@@ -468,6 +537,10 @@ export function Discovery() {
   const allServers: RoomedServer[] = tokens.flatMap((t) =>
     (serversByRoom[t] ?? []).map((server) => ({ server, room: t })),
   );
+  // Mirror the latest merged servers + connection state into refs so the URL
+  // reconciler (called from event handlers/timers) never reads a stale closure.
+  allServersRef.current = allServers;
+  connStateRef.current = connState;
   const serverCount = allServers.length;
   const onlineRooms = tokens.filter((t) => roomOpen[t]).length;
   const activeServer = allServers.find((x) => x.server.peerId === activePeerId)?.server;

@@ -138,10 +138,13 @@ export function resolveRepoTarget(servers: PeerInfo[], target: RepoTarget): Reso
   return null;
 }
 
-/** Pick a `dev`/repo server whose served cwd matches a /dev/<path> target. */
+/** Pick a `dev`/repo server whose served cwd matches a /dev/<path> target.
+ *  Compares with leading + trailing slashes stripped: `parseDeepLink` forces a
+ *  leading "/" on the path, but a served cwd may lack one (e.g. an `expose`
+ *  server's `localhost:<port>`), so a trailing-only trim would never match it. */
 export function resolveDevTarget(servers: PeerInfo[], target: DevTarget): Resolution | null {
-  const want = trimSlash(target.path);
-  const hit = servers.find((s) => s.meta && trimSlash(s.meta.cwd) === want);
+  const want = stripEnds(target.path);
+  const hit = servers.find((s) => s.meta && stripEnds(s.meta.cwd) === want);
   return hit ? { peerId: hit.peerId } : null;
 }
 
@@ -171,4 +174,10 @@ function branchOk(meta: PeerMeta, target: RepoTarget): boolean {
 
 function trimSlash(p: string): string {
   return p.replace(/\/+$/, "");
+}
+
+/** Strip leading and trailing slashes — for comparing a `/dev/<path>` target to
+ *  a served cwd that may or may not carry a leading slash. */
+function stripEnds(p: string): string {
+  return p.replace(/^\/+|\/+$/g, "");
 }
