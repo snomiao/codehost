@@ -1,3 +1,10 @@
+## [0.11.1](https://github.com/snomiao/codehost/compare/v0.11.0...v0.11.1) (2026-06-09)
+
+
+### Bug Fixes
+
+* **signaling:** harden reconnect backoff + log close code/duration ([a0aa1ce](https://github.com/snomiao/codehost/commit/a0aa1ce7aeae49815fc51dd272a8e08852ed55b2))
+
 # [0.11.0](https://github.com/snomiao/codehost/compare/v0.10.0...v0.11.0) (2026-06-09)
 
 
