@@ -43,6 +43,11 @@ export function addRoom(token: string): void {
   if (!rooms.includes(token)) write(ROOMS_KEY, [...rooms, token]);
 }
 
+/** Replace the persisted joined-room set (deduped, empties dropped). */
+export function setRooms(tokens: string[]): void {
+  write(ROOMS_KEY, [...new Set(tokens.filter(Boolean))]);
+}
+
 export function getHistory(): Record<string, HistoryEntry> {
   return read<Record<string, HistoryEntry>>(HISTORY_KEY, {});
 }

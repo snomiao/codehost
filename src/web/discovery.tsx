@@ -17,12 +17,15 @@ import {
   resolveRepoTarget,
   shareableDeepLink,
 } from "../shared/repo";
-import { addRoom, getRooms, historyFor, recordConnection } from "./history";
+import { getRooms, historyFor, recordConnection, setRooms } from "./history";
 import { deriveTags, matchQuery, shortRoomLabel, tagKey } from "../shared/tags";
 
 const TOKEN_KEY = "codehost.token";
 
 type ConnState = "idle" | "connecting" | "connected" | "failed";
+
+/** A server discovered in a specific room (its token routes the signaling). */
+type RoomedServer = { server: PeerInfo; room: string };
 
 /**
  * Read a room token handed in the URL fragment as `#t=<token>` (what the CLI
@@ -94,46 +97,94 @@ function findRoomForDeepLink(dl: DeepLink, tokens: string[], timeoutMs = 6000): 
   });
 }
 
+/**
+ * Headless per-room signaling client — one instance per joined room. React's
+ * keyed reconciliation (`key={token}`) adds/removes these as the joined set
+ * changes, so joining or leaving a room never tears down the other rooms' live
+ * discovery (or the active WebRTC session). Renders nothing: it pushes its
+ * room's servers/open-state up to the parent and registers a signal sender so
+ * the parent can dial peers found in this room.
+ */
+function RoomClient(props: {
+  token: string;
+  onPeers: (peers: PeerInfo[]) => void;
+  onStatus: (open: boolean) => void;
+  onSignal: (from: string, data: unknown) => void;
+  registerSender: (send: ((to: string, data: unknown) => void) | null) => void;
+}) {
+  // Keep the latest callbacks in a ref so the socket effect runs once per token,
+  // not on every parent re-render (which would needlessly churn the WebSocket).
+  const cb = useRef(props);
+  cb.current = props;
+  const { token } = props;
+  useEffect(() => {
+    const client = new SignalingClient({
+      url: getSignalUrl(),
+      token,
+      role: "viewer",
+      onOpen: () => cb.current.onStatus(true),
+      onClose: () => cb.current.onStatus(false),
+      onPeers: (peers) => cb.current.onPeers(peers.filter((p) => p.role === "server")),
+      onSignal: (from, data) => cb.current.onSignal(from, data),
+    });
+    cb.current.registerSender((to, data) => client.sendSignal(to, data));
+    client.connect();
+    return () => {
+      client.close();
+      cb.current.registerSender(null);
+    };
+  }, [token]);
+  return null;
+}
+
 export function Discovery() {
-  const [token, setToken] = useState(() => {
+  // Joined rooms — each token *is* a room id, and we keep one live signaling
+  // client per room (see RoomClient). Seeded from the persisted room list plus
+  // any legacy single-token / URL-fragment token, then format-validated.
+  const [tokens, setTokens] = useState<string[]>(() => {
+    const seed = new Set<string>(getRooms());
+    const legacy = localStorage.getItem(TOKEN_KEY);
+    if (legacy) seed.add(legacy);
     const fromHash = tokenFromHash();
-    if (fromHash && validateToken(fromHash).ok) {
-      localStorage.setItem(TOKEN_KEY, fromHash);
-      return fromHash;
-    }
-    return localStorage.getItem(TOKEN_KEY) ?? "";
+    if (fromHash) seed.add(fromHash);
+    return [...seed].filter((t) => validateToken(t).ok);
   });
-  // The token is a bearer secret — never pre-fill the input with it (it would be
-  // left in plaintext in the DOM on every load). Start blank; once a token is
-  // saved we show a masked label instead, and only reveal the input on "Change".
+
+  // Per-room discovery state, merged into one workspace list below.
+  const [serversByRoom, setServersByRoom] = useState<Record<string, PeerInfo[]>>({});
+  const [roomOpen, setRoomOpen] = useState<Record<string, boolean>>({});
+
+  // Token input = "join another room": validated, then appended to the set.
+  // Never pre-filled with a saved token — it's a bearer secret.
   const [draft, setDraft] = useState("");
   const [editingToken, setEditingToken] = useState(false);
   const [tokenError, setTokenError] = useState<string | null>(null);
-  const [connected, setConnected] = useState(false);
-  const [servers, setServers] = useState<PeerInfo[]>([]);
 
-  // Fake-tag filter over the workspace list: a free-text box plus a set of
-  // pinned tag tokens (chips). Both feed the same `ay ls`-style AND matcher.
+  // Fake-tag filter over the merged workspace list: a free-text box plus a set
+  // of pinned tag tokens (chips). Both feed the same `ay ls`-style AND matcher.
   const [filter, setFilter] = useState("");
   const [activeTags, setActiveTags] = useState<string[]>([]);
 
-  // Active WebRTC connection to one server (Phase 2: echo test).
+  // One WebRTC session at a time (you view a single VS Code), discovered across
+  // many rooms. `activeRoomRef` is the room the active peer was found in: its
+  // client carries the peer's signaling and it's the token Share/history record.
   const [activePeerId, setActivePeerId] = useState<string | null>(null);
   const [connState, setConnState] = useState<ConnState>("idle");
-
-  // Once a server's data channel is open we mount its VS Code in an iframe.
   const [iframeSrc, setIframeSrc] = useState<string | null>(null);
 
-  const clientRef = useRef<SignalingClient | null>(null);
   const rtcRef = useRef<RtcClient | null>(null);
   const activePeerRef = useRef<string | null>(null);
+  const activeRoomRef = useRef<string | null>(null);
+  const sendersRef = useRef<Map<string, (to: string, data: unknown) => void>>(new Map());
 
   // Deep-link resolution (/gh/<owner>/<repo>/... or /dev/<path>): parse once,
   // auto-connect when a matching server appears, remember the opened folder.
   const deepLinkRef = useRef<DeepLink>(parseDeepLink(window.location.pathname));
   const resolvedRef = useRef(false);
-  // A valid token in the URL fragment enables single-server auto-connect.
+  // A valid token in the URL fragment enables single-server auto-connect, scoped
+  // to *that* room so unrelated joined rooms don't block it.
   const autoConnectRef = useRef(false);
+  const hashRoomRef = useRef<string | null>(null);
   const activeFolderRef = useRef<string | undefined>(undefined);
   const [resolving, setResolving] = useState<string | null>(() => deepLinkLabel(deepLinkRef.current));
 
@@ -141,6 +192,15 @@ export function Discovery() {
   // and the Share button); transient "copied" flag for the button.
   const sharePathRef = useRef<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  function adoptRoom(t: string) {
+    setTokens((prev) => (prev.includes(t) ? prev : [...prev, t]));
+  }
+
+  // Persist the joined set so rooms survive reloads.
+  useEffect(() => {
+    setRooms(tokens);
+  }, [tokens]);
 
   // Register the Service Worker + connection broker once. The broker shares one
   // WebRTC connection per server across tabs; on owner failover it asks us to
@@ -153,12 +213,13 @@ export function Discovery() {
       const folder = activeFolderRef.current;
       setTimeout(() => setIframeSrc(`/vs/${peerId}/${folderQuery(folder)}`), 400);
     });
-    // A valid token in the URL fragment (#t=<token>) seeds the room and turns on
-    // single-server auto-connect; consume it from the address bar afterwards so
-    // the secret isn't left visible or re-applied on a manual reload.
+    // A valid token in the URL fragment (#t=<token>) joins the room and turns on
+    // single-server auto-connect for it; consume it from the address bar after,
+    // so the secret isn't left visible or re-applied on a manual reload.
     const urlToken = tokenFromHash();
     if (urlToken && validateToken(urlToken).ok) {
       autoConnectRef.current = true;
+      hashRoomRef.current = urlToken;
       if (window.location.hash) {
         history.replaceState(null, "", window.location.pathname + window.location.search);
       }
@@ -171,56 +232,26 @@ export function Discovery() {
     if (dl && !(urlToken && validateToken(urlToken).ok)) {
       const histToken = dl.type === "repo" ? historyFor(repoKey(dl.target))?.token : undefined;
       if (histToken) {
-        setToken(histToken);
+        adoptRoom(histToken);
       } else {
         const rooms = getRooms();
         if (rooms.length) {
           void findRoomForDeepLink(dl, rooms).then((tok) => {
-            if (tok) setToken(tok);
+            if (tok) adoptRoom(tok);
           });
         }
       }
     }
   }, []);
 
+  // Auto-connect once discovery turns up a match: a deep-link target across any
+  // room, or the lone server of a room joined via #t=.
   useEffect(() => {
-    if (!token) return;
-    const client = new SignalingClient({
-      url: getSignalUrl(),
-      token,
-      role: "viewer",
-      onOpen: () => {
-        setConnected(true);
-        addRoom(token);
-      },
-      onClose: () => setConnected(false),
-      onPeers: (peers) => {
-        const list = peers.filter((p) => p.role === "server");
-        setServers(list);
-        void tryAutoConnect(list);
-      },
-      onSignal: (from, data) => {
-        if (from === activePeerRef.current) void rtcRef.current?.handleSignal(data);
-      },
-    });
-    clientRef.current = client;
-    client.connect();
-    return () => {
-      rtcRef.current?.close();
-      rtcRef.current = null;
-      if (activePeerRef.current) connBroker.disconnect(activePeerRef.current);
-      client.close();
-      clientRef.current = null;
-      setConnected(false);
-      setServers([]);
-      setActivePeerId(null);
-      activePeerRef.current = null;
-      setConnState("idle");
-      setIframeSrc(null);
-    };
-  }, [token]);
+    if (resolvedRef.current) return;
+    tryAutoConnect();
+  }, [serversByRoom, tokens]);
 
-  function applyToken(e: React.FormEvent) {
+  function joinFromInput(e: React.FormEvent) {
     e.preventDefault();
     const t = draft.trim();
     const check = validateToken(t);
@@ -229,21 +260,37 @@ export function Discovery() {
       return;
     }
     setTokenError(null);
-    localStorage.setItem(TOKEN_KEY, t);
-    setToken(t);
+    adoptRoom(t);
     setDraft("");
     setEditingToken(false);
   }
 
-  async function connectTo(server: PeerInfo, folder?: string) {
-    const client = clientRef.current;
-    if (!client) return;
+  function leaveRoom(t: string) {
+    if (activeRoomRef.current === t) disconnect();
+    setTokens((prev) => prev.filter((x) => x !== t));
+    setServersByRoom((m) => {
+      const n = { ...m };
+      delete n[t];
+      return n;
+    });
+    setRoomOpen((m) => {
+      const n = { ...m };
+      delete n[t];
+      return n;
+    });
+    sendersRef.current.delete(t);
+  }
+
+  async function connectTo(server: PeerInfo, room: string, folder?: string) {
+    const send = sendersRef.current.get(room);
+    if (!send) return;
 
     rtcRef.current?.close();
     rtcRef.current = null;
     setIframeSrc(null);
     setActivePeerId(server.peerId);
     activePeerRef.current = server.peerId;
+    activeRoomRef.current = room;
     setConnState("connecting");
 
     // The broker decides whether this tab owns the connection. `establish` is
@@ -252,7 +299,7 @@ export function Discovery() {
     const establish = () =>
       new Promise<RTCDataChannel>((resolve, reject) => {
         const rtc = new RtcClient({
-          sendSignal: (data: RtcSignal) => client.sendSignal(server.peerId, data),
+          sendSignal: (data: RtcSignal) => send(server.peerId, data),
           onState: (state) => {
             if (state === "failed" || state === "disconnected") setConnState("failed");
           },
@@ -285,7 +332,7 @@ export function Discovery() {
       activeFolderRef.current = openFolder;
       setIframeSrc(`/vs/${server.peerId}/${folderQuery(openFolder)}`);
       setResolving(null);
-      recordConnect(server, openFolder);
+      recordConnect(server, room, openFolder);
       updateAddressBar(server, openFolder);
     } catch {
       setConnState("failed");
@@ -305,8 +352,10 @@ export function Discovery() {
   }
 
   async function shareLink() {
+    const room = activeRoomRef.current;
+    if (!room) return;
     const path = sharePathRef.current ?? window.location.pathname;
-    const url = `${window.location.origin}${path}#t=${encodeURIComponent(token)}`;
+    const url = `${window.location.origin}${path}#t=${encodeURIComponent(room)}`;
     try {
       await navigator.clipboard.writeText(url);
     } catch {
@@ -318,30 +367,36 @@ export function Discovery() {
   }
 
   // Deep-link auto-connect: when servers arrive, pick the best match (exact repo
-  // daemon, else a root daemon's subfolder) and open it once.
-  async function tryAutoConnect(list: PeerInfo[]) {
+  // daemon, else a root daemon's subfolder) across all rooms and open it once.
+  function tryAutoConnect() {
     if (resolvedRef.current) return;
     const dl = deepLinkRef.current;
     if (dl) {
-      const res = dl.type === "repo" ? resolveRepoTarget(list, dl.target) : resolveDevTarget(list, dl.target);
+      const peers = allServers.map((x) => x.server);
+      const res = dl.type === "repo" ? resolveRepoTarget(peers, dl.target) : resolveDevTarget(peers, dl.target);
       if (!res) return;
-      const server = list.find((s) => s.peerId === res.peerId);
-      if (!server) return;
+      const match = allServers.find((x) => x.server.peerId === res.peerId);
+      if (!match) return;
       resolvedRef.current = true;
-      await connectTo(server, res.folder);
+      void connectTo(match.server, match.room, res.folder);
       return;
     }
-    // No deep link, but a token arrived via the URL: open the room's server
-    // straight away when there's exactly one; with several, leave the picker.
-    if (autoConnectRef.current && list.length === 1) {
-      resolvedRef.current = true;
-      await connectTo(list[0]);
+    // No deep link, but a token arrived via the URL: open that room's server
+    // straight away when it has exactly one. Scoped to the hash room so servers
+    // in other joined rooms can't push the count past one and block it.
+    const hashRoom = hashRoomRef.current;
+    if (autoConnectRef.current && hashRoom) {
+      const inRoom = allServers.filter((x) => x.room === hashRoom);
+      if (inRoom.length === 1) {
+        resolvedRef.current = true;
+        void connectTo(inRoom[0].server, inRoom[0].room);
+      }
     }
   }
 
-  function recordConnect(server: PeerInfo, folder?: string) {
+  function recordConnect(server: PeerInfo, room: string, folder?: string) {
     const base = {
-      token,
+      token: room,
       peerId: server.peerId,
       kind: server.meta?.kind,
       name: server.meta?.name,
@@ -360,20 +415,28 @@ export function Discovery() {
     setIframeSrc(null);
     setActivePeerId(null);
     activePeerRef.current = null;
+    activeRoomRef.current = null;
     setConnState("idle");
     sharePathRef.current = null;
     if (window.location.pathname !== "/") history.replaceState(null, "", "/");
   }
 
-  const activeServer = servers.find((s) => s.peerId === activePeerId);
+  // Merge every room's servers into one list, each tagged with its room so the
+  // Connect button knows which client to signal through.
+  const allServers: RoomedServer[] = tokens.flatMap((t) =>
+    (serversByRoom[t] ?? []).map((server) => ({ server, room: t })),
+  );
+  const serverCount = allServers.length;
+  const onlineRooms = tokens.filter((t) => roomOpen[t]).length;
+  const activeServer = allServers.find((x) => x.server.peerId === activePeerId)?.server;
 
-  // Annotate each server with its mnemonic fake-tags, then filter. The room
-  // token is hashed to a short label — never rendered raw (it's a bearer secret).
-  const roomLabel = token ? shortRoomLabel(token) : "";
-  const tagged = servers.map((s) => ({
+  // Annotate each server with its mnemonic fake-tags (incl. its room label), then
+  // filter. The room token is hashed to a short label — never rendered raw.
+  const tagged = allServers.map(({ server: s, room }) => ({
     server: s,
+    room,
     name: s.meta?.name ?? s.peerId.slice(0, 8),
-    tags: deriveTags(s.meta, { roomLabel }),
+    tags: deriveTags(s.meta, { roomLabel: shortRoomLabel(room) }),
   }));
   const query = [...activeTags, filter].join(" ");
   const filtered = tagged.filter((t) => matchQuery({ name: t.name, tags: t.tags }, query));
@@ -389,174 +452,233 @@ export function Discovery() {
     .filter((t) => ["host", "repo", "wt", "kind", "room"].includes(tagKey(t)))
     .slice(0, 12);
 
+  // Headless signaling clients, one per joined room. Kept mounted across BOTH
+  // views so switching into the iframe never tears down discovery/session.
+  const roomClients = tokens.map((t) => (
+    <RoomClient
+      key={t}
+      token={t}
+      onPeers={(peers) => setServersByRoom((m) => ({ ...m, [t]: peers }))}
+      onStatus={(open) => setRoomOpen((m) => ({ ...m, [t]: open }))}
+      onSignal={(from, data) => {
+        if (from === activePeerRef.current) void rtcRef.current?.handleSignal(data);
+      }}
+      registerSender={(send) => {
+        if (send) sendersRef.current.set(t, send);
+        else sendersRef.current.delete(t);
+      }}
+    />
+  ));
+
   // Connected view: VS Code in an iframe, served over the tunnel.
   if (iframeSrc && connState === "connected") {
     return (
-      <div style={styles.page}>
-        <header style={styles.header}>
-          <span style={styles.brand}>codehost</span>
-          <span style={styles.dim}>·</span>
-          <span style={styles.dim}>{activeServer?.meta?.name ?? activePeerId?.slice(0, 8)}</span>
-          {activeServer?.meta?.cwd && <span style={styles.cwd}>{activeServer.meta.cwd}</span>}
-          <span style={{ flex: 1 }} />
-          <button
-            style={styles.shareBtn}
-            onClick={shareLink}
-            title="Copy a link that opens this workspace (includes the room token)"
-          >
-            {copied ? "Copied!" : "Share"}
-          </button>
-          <button style={styles.connectBtn} onClick={disconnect}>
-            Disconnect
-          </button>
-        </header>
-        <iframe title="VS Code" src={iframeSrc} style={{ flex: 1, border: "none", width: "100%", background: "#1e1e1e" }} />
-      </div>
+      <>
+        {roomClients}
+        <div style={styles.page}>
+          <header style={styles.header}>
+            <span style={styles.brand}>codehost</span>
+            <span style={styles.dim}>·</span>
+            <span style={styles.dim}>{activeServer?.meta?.name ?? activePeerId?.slice(0, 8)}</span>
+            {activeServer?.meta?.cwd && <span style={styles.cwd}>{activeServer.meta.cwd}</span>}
+            <span style={{ flex: 1 }} />
+            <button
+              style={styles.shareBtn}
+              onClick={shareLink}
+              title="Copy a link that opens this workspace (includes the room token)"
+            >
+              {copied ? "Copied!" : "Share"}
+            </button>
+            <button style={styles.connectBtn} onClick={disconnect}>
+              Disconnect
+            </button>
+          </header>
+          <iframe title="VS Code" src={iframeSrc} style={{ flex: 1, border: "none", width: "100%", background: "#1e1e1e" }} />
+        </div>
+      </>
     );
   }
 
   return (
-    <div style={styles.page}>
-      <header style={styles.header}>
-        <span style={styles.brand}>codehost</span>
-        <span style={styles.dim}>·</span>
-        <span style={styles.dim}>{getSignalUrl()}</span>
-        <span style={{ flex: 1 }} />
-        <span style={{ ...styles.status, color: connected ? "#4ec9b0" : "#888" }}>
-          {token ? (connected ? "● connected" : "○ connecting…") : "○ no token"}
-        </span>
-      </header>
+    <>
+      {roomClients}
+      <div style={styles.page}>
+        <header style={styles.header}>
+          <span style={styles.brand}>codehost</span>
+          <span style={styles.dim}>·</span>
+          <span style={styles.dim}>{getSignalUrl()}</span>
+          <span style={{ flex: 1 }} />
+          <span style={{ ...styles.status, color: onlineRooms > 0 ? "#4ec9b0" : "#888" }}>
+            {tokens.length === 0
+              ? "○ no rooms"
+              : `${onlineRooms > 0 ? "●" : "○"} ${onlineRooms}/${tokens.length} rooms`}
+          </span>
+        </header>
 
-      <main style={styles.main}>
-        {resolving && (
-          <p style={{ color: "#dcb67a", marginBottom: 12 }}>
-            Looking for <code style={styles.code}>{resolving}</code> in your rooms…{" "}
-            {token ? "waiting for a live server" : "enter the room's token below"}.
-          </p>
-        )}
-        {token && !editingToken ? (
-          <div style={styles.tokenForm}>
-            <label style={styles.label}>Token</label>
-            <span style={styles.tokenSaved}>saved · {roomLabel}</span>
-            <button
-              type="button"
-              style={styles.shareBtn}
-              onClick={() => {
-                setDraft("");
-                setTokenError(null);
-                setEditingToken(true);
-              }}
-            >
-              Change
-            </button>
-          </div>
-        ) : (
-          <>
-            <form onSubmit={applyToken} style={styles.tokenForm}>
-              <label style={styles.label}>Token</label>
-              <input
-                value={draft}
-                onChange={(e) => {
-                  setDraft(e.target.value);
-                  if (tokenError) setTokenError(null);
-                }}
-                placeholder="your room token"
-                style={styles.input}
-                autoFocus={editingToken}
-              />
-              <button type="submit" style={styles.button}>
-                Connect
-              </button>
-            </form>
-            {tokenError ? (
-              <p style={styles.tokenError}>{tokenError}</p>
-            ) : (
-              <p style={styles.tokenHint}>Token requires {TOKEN_REQUIREMENTS}.</p>
-            )}
-          </>
-        )}
-
-        <div style={styles.listHead}>
-          <h2 style={styles.h2}>Workspaces</h2>
-          {token && servers.length > 0 && (
-            <span style={styles.count}>
-              {filtered.length === tagged.length
-                ? `${tagged.length}`
-                : `${filtered.length} / ${tagged.length}`}
-            </span>
+        <main style={styles.main}>
+          {resolving && (
+            <p style={{ color: "#dcb67a", marginBottom: 12 }}>
+              Looking for <code style={styles.code}>{resolving}</code> in your rooms…{" "}
+              {tokens.length > 0 ? "waiting for a live server" : "join the room's token below"}.
+            </p>
           )}
-        </div>
-        {!token && <p style={styles.dim}>Enter a token to see your workspaces.</p>}
-        {token && servers.length === 0 && (
-          <p style={styles.dim}>
-            No servers online. Run{" "}
-            <code style={styles.code}>bunx codehost serve -t {token || "<token>"}</code> on a machine.
-          </p>
-        )}
-        {token && servers.length > 0 && (
-          <>
-            <input
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              placeholder="filter…  e.g.  repo:codehost  host:mbp  (space = AND)"
-              style={styles.search}
-            />
-            {(activeTags.length > 0 || suggestedTags.length > 0) && (
-              <div style={styles.chipRow}>
-                {activeTags.map((t) => (
-                  <button key={t} style={{ ...styles.chip, ...styles.chipActive }} onClick={() => toggleTag(t)}>
-                    {t} ✕
+
+          <div style={styles.tokenForm}>
+            <label style={styles.label}>Rooms</label>
+            {tokens.length > 0 ? (
+              <>
+                <div style={styles.roomChips}>
+                  {tokens.map((t) => (
+                    <span
+                      key={t}
+                      style={{ ...styles.chip, ...styles.roomChip, ...(roomOpen[t] ? styles.roomChipOn : {}) }}
+                      title={roomOpen[t] ? "connected" : "connecting…"}
+                    >
+                      {shortRoomLabel(t)}
+                      <button type="button" style={styles.roomChipX} onClick={() => leaveRoom(t)} title="leave room">
+                        ✕
+                      </button>
+                    </span>
+                  ))}
+                </div>
+                <span style={{ flex: 1 }} />
+                {!editingToken && (
+                  <button
+                    type="button"
+                    style={styles.shareBtn}
+                    onClick={() => {
+                      setDraft("");
+                      setTokenError(null);
+                      setEditingToken(true);
+                    }}
+                  >
+                    + Add
                   </button>
-                ))}
-                {suggestedTags
-                  .filter((t) => !activeTags.includes(t))
-                  .map((t) => (
-                    <button key={t} style={styles.chip} onClick={() => toggleTag(t)}>
-                      {t}
+                )}
+              </>
+            ) : (
+              <span style={styles.dim}>none joined yet</span>
+            )}
+          </div>
+
+          {(editingToken || tokens.length === 0) && (
+            <>
+              <form onSubmit={joinFromInput} style={styles.tokenForm}>
+                <input
+                  value={draft}
+                  onChange={(e) => {
+                    setDraft(e.target.value);
+                    if (tokenError) setTokenError(null);
+                  }}
+                  placeholder="paste a room token to join"
+                  style={styles.input}
+                  autoFocus={editingToken}
+                />
+                <button type="submit" style={styles.button}>
+                  Join
+                </button>
+                {editingToken && tokens.length > 0 && (
+                  <button
+                    type="button"
+                    style={styles.shareBtn}
+                    onClick={() => {
+                      setEditingToken(false);
+                      setTokenError(null);
+                    }}
+                  >
+                    Cancel
+                  </button>
+                )}
+              </form>
+              {tokenError ? (
+                <p style={styles.tokenError}>{tokenError}</p>
+              ) : (
+                <p style={styles.tokenHint}>Token requires {TOKEN_REQUIREMENTS}.</p>
+              )}
+            </>
+          )}
+
+          <div style={styles.listHead}>
+            <h2 style={styles.h2}>Workspaces</h2>
+            {serverCount > 0 && (
+              <span style={styles.count}>
+                {filtered.length === tagged.length
+                  ? `${tagged.length}`
+                  : `${filtered.length} / ${tagged.length}`}
+              </span>
+            )}
+          </div>
+          {tokens.length === 0 && <p style={styles.dim}>Join a room to see your workspaces.</p>}
+          {tokens.length > 0 && serverCount === 0 && (
+            <p style={styles.dim}>
+              No servers online. Run <code style={styles.code}>bunx codehost serve -t &lt;token&gt;</code> on a machine.
+            </p>
+          )}
+          {serverCount > 0 && (
+            <>
+              <input
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                placeholder="filter…  e.g.  repo:codehost  host:mbp  room:ab12  (space = AND)"
+                style={styles.search}
+              />
+              {(activeTags.length > 0 || suggestedTags.length > 0) && (
+                <div style={styles.chipRow}>
+                  {activeTags.map((t) => (
+                    <button key={t} style={{ ...styles.chip, ...styles.chipActive }} onClick={() => toggleTag(t)}>
+                      {t} ✕
                     </button>
                   ))}
-              </div>
-            )}
-          </>
-        )}
-        <ul style={styles.list}>
-          {filtered.map(({ server: s, name, tags }) => {
-            const isActive = s.peerId === activePeerId;
-            return (
-              <li key={s.peerId} style={styles.card}>
-                <div style={styles.cardMain}>
-                  <div style={styles.cardName}>{name}</div>
-                  <div style={styles.tagRow}>
-                    {tags.map((tag) => (
-                      <button key={tag} style={styles.tag} onClick={() => addTag(tag)} title={`filter by ${tag}`}>
-                        {tag}
+                  {suggestedTags
+                    .filter((t) => !activeTags.includes(t))
+                    .map((t) => (
+                      <button key={t} style={styles.chip} onClick={() => toggleTag(t)}>
+                        {t}
                       </button>
                     ))}
-                  </div>
-                  <div style={styles.idLine}>peer {s.peerId.slice(0, 8)}</div>
-                  {isActive && (
-                    <div style={styles.echo}>
-                      {connState === "connecting" && "negotiating WebRTC…"}
-                      {connState === "failed" && "connection failed"}
-                    </div>
-                  )}
                 </div>
-                <button
-                  style={styles.connectBtn}
-                  onClick={() => connectTo(s)}
-                  disabled={isActive && connState === "connecting"}
-                >
-                  {isActive && connState === "connecting" ? "…" : "Connect"}
-                </button>
-              </li>
-            );
-          })}
-          {token && servers.length > 0 && filtered.length === 0 && (
-            <p style={styles.dim}>No workspace matches your filter.</p>
+              )}
+            </>
           )}
-        </ul>
-      </main>
-    </div>
+          <ul style={styles.list}>
+            {filtered.map(({ server: s, room, name, tags }) => {
+              const isActive = s.peerId === activePeerId;
+              return (
+                <li key={s.peerId} style={styles.card}>
+                  <div style={styles.cardMain}>
+                    <div style={styles.cardName}>{name}</div>
+                    <div style={styles.tagRow}>
+                      {tags.map((tag) => (
+                        <button key={tag} style={styles.tag} onClick={() => addTag(tag)} title={`filter by ${tag}`}>
+                          {tag}
+                        </button>
+                      ))}
+                    </div>
+                    <div style={styles.idLine}>peer {s.peerId.slice(0, 8)}</div>
+                    {isActive && (
+                      <div style={styles.echo}>
+                        {connState === "connecting" && "negotiating WebRTC…"}
+                        {connState === "failed" && "connection failed"}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    style={styles.connectBtn}
+                    onClick={() => connectTo(s, room)}
+                    disabled={isActive && connState === "connecting"}
+                  >
+                    {isActive && connState === "connecting" ? "…" : "Connect"}
+                  </button>
+                </li>
+              );
+            })}
+            {serverCount > 0 && filtered.length === 0 && (
+              <p style={styles.dim}>No workspace matches your filter.</p>
+            )}
+          </ul>
+        </main>
+      </div>
+    </>
   );
 }
 
@@ -571,7 +693,10 @@ const styles: Record<string, React.CSSProperties> = {
   tokenHint: { margin: "0 0 20px", fontSize: 12, color: "#888" },
   tokenError: { margin: "0 0 20px", fontSize: 12, color: "#f48771" },
   label: { fontSize: 12, color: "#888" },
-  tokenSaved: { flex: 1, fontFamily: "monospace", fontSize: 13, color: "#4ec9b0" },
+  roomChips: { display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" },
+  roomChip: { display: "inline-flex", alignItems: "center", gap: 6, color: "#9aa4af" },
+  roomChipOn: { borderColor: "#0e639c", color: "#4ec9b0" },
+  roomChipX: { background: "transparent", border: "none", color: "inherit", cursor: "pointer", fontSize: 11, padding: 0, lineHeight: 1 },
   input: { flex: 1, background: "#252525", border: "1px solid #3d3d3d", color: "#eee", padding: "8px 10px", borderRadius: 6, fontSize: 13, outline: "none" },
   button: { background: "#0e639c", border: "none", color: "#fff", padding: "8px 16px", borderRadius: 6, cursor: "pointer", fontSize: 13 },
   listHead: { display: "flex", alignItems: "baseline", gap: 10, margin: "0 0 12px" },
