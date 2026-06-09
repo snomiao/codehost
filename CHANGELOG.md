@@ -1,3 +1,10 @@
+# [0.13.0](https://github.com/snomiao/codehost/compare/v0.12.0...v0.13.0) (2026-06-09)
+
+
+### Features
+
+* **web:** host-scoped folder deep links — /host/<hostname>/<path> ([f6955ab](https://github.com/snomiao/codehost/commit/f6955ab37517f312ee780795efc503cb74ccdc36))
+
 # [0.12.0](https://github.com/snomiao/codehost/compare/v0.11.1...v0.12.0) (2026-06-09)
 
 
