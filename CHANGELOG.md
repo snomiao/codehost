@@ -1,3 +1,10 @@
+# [0.10.0](https://github.com/snomiao/codehost/compare/v0.9.1...v0.10.0) (2026-06-09)
+
+
+### Features
+
+* **web:** join multiple rooms at once, merged workspace list ([de5ae61](https://github.com/snomiao/codehost/commit/de5ae610068b6f2a26792ed7d6e67d1fb5c08257))
+
 ## [0.9.1](https://github.com/snomiao/codehost/compare/v0.9.0...v0.9.1) (2026-06-08)
 
 
