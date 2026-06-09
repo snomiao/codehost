@@ -1,3 +1,10 @@
+# [0.12.0](https://github.com/snomiao/codehost/compare/v0.11.1...v0.12.0) (2026-06-09)
+
+
+### Features
+
+* **web:** URL-driven reconnect — Forward rehydrates, auto-reconnect on drop ([8e1f186](https://github.com/snomiao/codehost/commit/8e1f186bd6611d5d56a9061fed23ed7316c735ca))
+
 ## [0.11.1](https://github.com/snomiao/codehost/compare/v0.11.0...v0.11.1) (2026-06-09)
 
 
