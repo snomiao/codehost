@@ -176,6 +176,11 @@ export function Discovery() {
   const activePeerRef = useRef<string | null>(null);
   const activeRoomRef = useRef<string | null>(null);
   const sendersRef = useRef<Map<string, (to: string, data: unknown) => void>>(new Map());
+  // Whether the live connection pushed a history entry (so Disconnect/Back can
+  // pop it), and whether we're currently *viewing* a workspace (so popstate only
+  // tears down from the iframe view, not during a mid-connect URL revert).
+  const pushedRef = useRef(false);
+  const viewingRef = useRef(false);
 
   // Deep-link resolution (/gh/<owner>/<repo>/... or /dev/<path>): parse once,
   // auto-connect when a matching server appears, remember the opened folder.
@@ -213,6 +218,13 @@ export function Discovery() {
       const folder = activeFolderRef.current;
       setTimeout(() => setIframeSrc(`/vs/${peerId}/${folderQuery(folder)}`), 400);
     });
+    // Back / Cmd+Left from a workspace returns to the list: the browser restores
+    // the previous URL and we drop the connection. Only when actually viewing —
+    // a mid-connect URL revert (failed dial) must leave the list state untouched.
+    const onPopState = () => {
+      if (viewingRef.current) teardownConn();
+    };
+    window.addEventListener("popstate", onPopState);
     // A valid token in the URL fragment (#t=<token>) joins the room and turns on
     // single-server auto-connect for it; consume it from the address bar after,
     // so the secret isn't left visible or re-applied on a manual reload.
@@ -242,6 +254,8 @@ export function Discovery() {
         }
       }
     }
+
+    return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
   // Auto-connect once discovery turns up a match: a deep-link target across any
@@ -291,7 +305,18 @@ export function Discovery() {
     setActivePeerId(server.peerId);
     activePeerRef.current = server.peerId;
     activeRoomRef.current = room;
+    viewingRef.current = false;
     setConnState("connecting");
+
+    // Update the address bar the instant Connect is clicked (don't wait for the
+    // WebRTC handshake) and push a history entry, so Back / Cmd+Left returns to
+    // the list. Reverted if the connection fails.
+    const openFolder = folder ?? server.meta?.cwd;
+    const targetPath = shareablePathFor(server, openFolder);
+    const pushed = !!targetPath && targetPath !== window.location.pathname;
+    if (pushed) history.pushState(null, "", targetPath);
+    pushedRef.current = pushed;
+    sharePathRef.current = targetPath ?? window.location.pathname;
 
     // The broker decides whether this tab owns the connection. `establish` is
     // only invoked when we're the owner (or get promoted on failover); other
@@ -326,29 +351,31 @@ export function Discovery() {
       await connBroker.connect(server.peerId, establish);
       setConnState("connected");
       // The daemon no longer sets a default folder (current VS Code serve-web
-      // dropped that flag), so open the served workspace from here: an explicit
+      // dropped that flag), so open the served workspace from here: the
       // deep-link folder if we have one, else the server's reported cwd.
-      const openFolder = folder ?? server.meta?.cwd;
       activeFolderRef.current = openFolder;
       setIframeSrc(`/vs/${server.peerId}/${folderQuery(openFolder)}`);
       setResolving(null);
       recordConnect(server, room, openFolder);
-      updateAddressBar(server, openFolder);
+      viewingRef.current = true;
     } catch {
       setConnState("failed");
+      // Undo the optimistic history entry / URL change. We never started
+      // viewing, so the popstate handler leaves the "failed" card in place.
+      if (pushed) {
+        pushedRef.current = false;
+        history.back();
+      }
     }
   }
 
-  // Reflect the live connection in the address bar as a clean, shareable deep
-  // link (no token — Share adds that). If we arrived via a deep link, keep its
-  // pathname; otherwise derive one from the server's repo identity or folder.
-  function updateAddressBar(server: PeerInfo, folder?: string) {
-    const path = deepLinkRef.current
+  // Shareable deep-link pathname for a server+folder, with no side effects (no
+  // token — Share adds that). Keeps an existing deep-link path as-is; otherwise
+  // derives /gh|/git|/dev from the server's repo identity or opened folder.
+  function shareablePathFor(server: PeerInfo, folder?: string): string | null {
+    return deepLinkRef.current
       ? window.location.pathname
       : shareableDeepLink({ repo: server.meta?.repo, branch: server.meta?.branch, folder });
-    if (!path) return;
-    sharePathRef.current = path;
-    if (path !== window.location.pathname) history.replaceState(null, "", path);
   }
 
   async function shareLink() {
@@ -408,7 +435,10 @@ export function Discovery() {
     if (dl?.type === "repo") recordConnection(repoKey(dl.target), { ...base, folder });
   }
 
-  function disconnect() {
+  // Tear down the active connection and return to the workspace list. Does NOT
+  // touch history — the caller (Disconnect → history.back, or a popstate from
+  // Cmd+Left) owns the URL.
+  function teardownConn() {
     rtcRef.current?.close();
     rtcRef.current = null;
     if (activePeerRef.current) connBroker.disconnect(activePeerRef.current);
@@ -418,6 +448,18 @@ export function Discovery() {
     activeRoomRef.current = null;
     setConnState("idle");
     sharePathRef.current = null;
+    pushedRef.current = false;
+    viewingRef.current = false;
+  }
+
+  function disconnect() {
+    // Mirror Cmd+Left: if connecting pushed a history entry, pop it — the
+    // browser restores the previous URL and our popstate handler tears down.
+    if (pushedRef.current) {
+      history.back();
+      return;
+    }
+    teardownConn();
     if (window.location.pathname !== "/") history.replaceState(null, "", "/");
   }
 
