@@ -50,7 +50,13 @@ export async function runServer(opts: RunServerOptions): Promise<never> {
     peerId,
     meta: opts.meta,
     onOpen: () => console.log(`[codehost] registered as "${opts.meta.name}" (${peerId.slice(0, 8)})`),
-    onClose: () => console.log("[codehost] disconnected from signaling, reconnecting…"),
+    onClose: (info) => {
+      // Surface the close code + how long the socket lived: a near-instant drop
+      // (low ms) points at a middlebox killing the WebSocket after the upgrade,
+      // not the signaling server. Helps triage field reconnect storms.
+      const detail = info ? ` (code ${info.code}${info.reason ? ` "${info.reason}"` : ""}, up ${info.ms}ms)` : "";
+      console.log(`[codehost] disconnected from signaling${detail}, reconnecting…`);
+    },
     onSignal: (from, data) => rtc.handleSignal(from, data),
   });
 

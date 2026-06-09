@@ -17,8 +17,25 @@ export interface SignalingClientOptions {
   onPeers?: (peers: PeerInfo[]) => void;
   onSignal?: (from: string, data: unknown) => void;
   onOpen?: () => void;
-  onClose?: () => void;
+  /** Called on every socket close. `info` carries the WebSocket close code,
+   *  reason, and how long the socket stayed open (ms) — for diagnosing networks
+   *  that complete the upgrade then drop the connection. */
+  onClose?: (info?: CloseInfo) => void;
 }
+
+export interface CloseInfo {
+  code: number;
+  reason: string;
+  /** Milliseconds the socket was open before it closed. */
+  ms: number;
+}
+
+/** Reset the reconnect backoff only after a socket has stayed open this long. A
+ *  connection that completes the handshake then drops within seconds (a
+ *  middlebox that accepts the WebSocket upgrade but kills the socket, seen on
+ *  some field networks) must keep backing off — otherwise every reset-to-1s
+ *  open/close cycle becomes a sub-second reconnect storm. */
+const STABLE_MS = 10_000;
 
 /**
  * Thin WebSocket client for the signaling room. Runs unchanged in the browser
@@ -31,6 +48,10 @@ export class SignalingClient {
   private closed = false;
   private reconnectDelay = 1000;
   private heartbeat: ReturnType<typeof setInterval> | null = null;
+  /** Fires STABLE_MS after a socket opens; only then is the backoff reset. */
+  private stableTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Wall-clock ms when the current socket opened (0 if never/closed). */
+  private openedAt = 0;
 
   constructor(private opts: SignalingClientOptions) {
     this.peerId = opts.peerId ?? newPeerId();
@@ -51,7 +72,14 @@ export class SignalingClient {
     this.ws = ws;
 
     ws.onopen = () => {
-      this.reconnectDelay = 1000;
+      this.openedAt = Date.now();
+      // Don't reset the backoff yet — only once the socket proves stable (see
+      // STABLE_MS). A handshake-then-drop network never reaches this timer, so
+      // its backoff keeps growing instead of hammering at 1s.
+      this.clearStableTimer();
+      this.stableTimer = setTimeout(() => {
+        this.reconnectDelay = 1000;
+      }, STABLE_MS);
       const hello: ClientMessage = {
         type: "hello",
         role: this.opts.role,
@@ -74,9 +102,12 @@ export class SignalingClient {
       else if (msg.type === "signal") this.opts.onSignal?.(msg.from, msg.data);
     };
 
-    ws.onclose = () => {
+    ws.onclose = (ev) => {
+      this.clearStableTimer();
       this.stopHeartbeat();
-      this.opts.onClose?.();
+      const ms = this.openedAt ? Date.now() - this.openedAt : 0;
+      this.openedAt = 0;
+      this.opts.onClose?.({ code: ev?.code ?? 0, reason: ev?.reason ?? "", ms });
       if (!this.closed) this.scheduleReconnect();
     };
 
@@ -110,6 +141,13 @@ export class SignalingClient {
     }
   }
 
+  private clearStableTimer(): void {
+    if (this.stableTimer != null) {
+      clearTimeout(this.stableTimer);
+      this.stableTimer = null;
+    }
+  }
+
   private scheduleReconnect(): void {
     const delay = this.reconnectDelay;
     this.reconnectDelay = Math.min(delay * 2, 15000);
@@ -126,6 +164,7 @@ export class SignalingClient {
   close(): void {
     this.closed = true;
     this.stopHeartbeat();
+    this.clearStableTimer();
     try {
       this.ws?.close();
     } catch {
