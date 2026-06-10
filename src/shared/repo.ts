@@ -100,6 +100,16 @@ export function toPosixPath(p: string): string {
   return p.replace(/\\/g, "/");
 }
 
+/** Inverse of `toPosixPath` for the host OS: the VS Code `?folder=` form back to
+ *  a real filesystem path. `/C:/ws` -> `C:\ws` (Windows); a POSIX path is
+ *  returned unchanged (only Windows cwds carry the `/<drive>:/` shape). */
+export function fromPosixPath(p: string): string {
+  const drive = /^\/([A-Za-z]):(\/.*)?$/.exec(p);
+  if (!drive) return p;
+  const rest = (drive[2] ?? "").replace(/\//g, "\\");
+  return `${drive[1]}:${rest || "\\"}`;
+}
+
 /** Fill a layout template from a repo target (default branch -> DEFAULT_BRANCH). */
 export function fillLayout(layout: string, t: RepoTarget): string {
   return layout

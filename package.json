@@ -38,6 +38,7 @@
     "oxmgr": "^0.4.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
+    "yaml": "^2.9.0",
     "yargs": "^17.7.2"
   },
   "devDependencies": {

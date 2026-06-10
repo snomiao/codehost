@@ -1,0 +1,178 @@
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { parse as parseYaml } from "yaml";
+import { repoAllowed, resolveWorkspacePath, validateProvisionTarget, type ProvisionTarget } from "../shared/provision";
+import { fromPosixPath, repoKey, toPosixPath } from "../shared/repo";
+
+// Daemon side of provisioning. A repo open hits `GET /__codehost/provision?...`
+// over the tunnel; this validates the identity, computes the daemon-authoritative
+// workspace path, and (if `.codehost/setup.sh` exists) runs it, streaming its
+// output back as the response body. The resolved path rides in the
+// `x-codehost-workspace` header so it never depends on parsing script output.
+
+export const PROVISION_PATH = "/__codehost/provision";
+const TIMEOUT_MS = Number(process.env.CODEHOST_PROVISION_TIMEOUT_MS) || 15 * 60_000;
+
+export interface ProvisionDeps {
+  /** Real OS path of the served home root. */
+  homeDir: string;
+  /** Git host advertised by this daemon (default github.com). */
+  host: string;
+}
+
+interface CodehostConfig {
+  workspace?: string; // layout template, e.g. "ws/{owner}/{repo}/tree/{branch}"
+  allowlist?: string[];
+}
+
+/** True for the provision route (ignoring the query string). */
+export function isProvisionPath(path: string): boolean {
+  return path.split("?")[0] === PROVISION_PATH;
+}
+
+function readConfig(homeDir: string): CodehostConfig {
+  try {
+    const raw = readFileSync(join(homeDir, ".codehost", "config.yaml"), "utf8");
+    const c = (parseYaml(raw) ?? {}) as Record<string, unknown>;
+    return {
+      workspace: typeof c.workspace === "string" ? c.workspace : undefined,
+      allowlist: Array.isArray(c.allowlist)
+        ? c.allowlist.filter((x): x is string => typeof x === "string")
+        : undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
+/** Locate the host's setup script (platform-appropriate), or null if none — in
+ *  which case provisioning is a no-op and we just return the path. */
+function findSetupScript(homeDir: string): string[] | null {
+  const dir = join(homeDir, ".codehost");
+  if (process.platform === "win32") {
+    const bat = join(dir, "setup.bat");
+    if (existsSync(bat)) return ["cmd", "/c", bat];
+    const ps1 = join(dir, "setup.ps1");
+    if (existsSync(ps1)) return ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ps1];
+  }
+  const sh = join(dir, "setup.sh");
+  if (existsSync(sh)) return ["bash", sh];
+  return null;
+}
+
+// Per-workspace coalescing: a concurrent open of the same target waits for the
+// running provision instead of spawning a second one.
+const inFlight = new Map<string, Promise<number>>();
+
+export async function handleProvision(rawPath: string, deps: ProvisionDeps): Promise<Response> {
+  const url = new URL(`http://x${rawPath}`);
+  const v = validateProvisionTarget(
+    url.searchParams.get("owner") ?? "",
+    url.searchParams.get("repo") ?? "",
+    url.searchParams.get("branch") ?? "",
+  );
+  if (!v.ok) return json(400, { error: v.reason });
+
+  const host = (url.searchParams.get("host") ?? deps.host).toLowerCase();
+  const cfg = readConfig(deps.homeDir);
+  const key = repoKey({ host, owner: v.target.owner, name: v.target.repo });
+  if (!repoAllowed(key, cfg.allowlist)) return json(403, { error: `repo not allowlisted: ${key}` });
+
+  const wsPosix = resolveWorkspacePath(toPosixPath(deps.homeDir), cfg.workspace ?? "", v.target);
+  const headers = { "x-codehost-workspace": wsPosix };
+
+  const cmd = findSetupScript(deps.homeDir);
+  if (!cmd) return json(200, { workspace: wsPosix }, headers); // no script: hand back the path
+
+  const lockKey = fromPosixPath(wsPosix);
+  const existing = inFlight.get(lockKey);
+  const body = existing
+    ? coalescedBody(existing) // a provision is already running for this workspace
+    : freshBody(cmd, deps, v.target, host, lockKey);
+  return new Response(body, {
+    status: 200,
+    headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store", ...headers },
+  });
+}
+
+/** Spawn the setup script, streaming merged stdout+stderr, ending with an exit
+ *  sentinel the browser parses for success/failure. */
+function freshBody(
+  cmd: string[],
+  deps: ProvisionDeps,
+  target: ProvisionTarget,
+  host: string,
+  lockKey: string,
+): ReadableStream<Uint8Array> {
+  const enc = new TextEncoder();
+  return new ReadableStream<Uint8Array>({
+    async start(controller) {
+      let resolveDone!: (code: number) => void;
+      inFlight.set(lockKey, new Promise<number>((r) => (resolveDone = r)));
+      const say = (s: string) => controller.enqueue(enc.encode(s));
+      say(`[codehost] provisioning ${host}/${target.owner}/${target.repo}@${target.branch}\n`);
+      let code = 1;
+      try {
+        const proc = Bun.spawn(cmd, {
+          cwd: deps.homeDir,
+          env: {
+            ...process.env,
+            CODEHOST_OWNER: target.owner,
+            CODEHOST_REPO: target.repo,
+            CODEHOST_BRANCH: target.branch,
+            CODEHOST_HOST: host,
+            CODEHOST_HOME: deps.homeDir,
+            CODEHOST_WS: fromPosixPath(lockKey),
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+        const timer = setTimeout(() => {
+          try {
+            proc.kill();
+          } catch {
+            // already gone
+          }
+        }, TIMEOUT_MS);
+        const pump = async (stream: ReadableStream<Uint8Array>) => {
+          const reader = stream.getReader();
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            controller.enqueue(value);
+          }
+        };
+        await Promise.all([pump(proc.stdout), pump(proc.stderr)]);
+        code = await proc.exited;
+        clearTimeout(timer);
+      } catch (err) {
+        say(`[codehost] provision error: ${String(err)}\n`);
+      } finally {
+        inFlight.delete(lockKey);
+        resolveDone(code);
+        say(`\n::codehost:exit=${code}\n`);
+        controller.close();
+      }
+    },
+  });
+}
+
+/** Attach to a running provision: wait for it, then emit the exit sentinel. */
+function coalescedBody(existing: Promise<number>): ReadableStream<Uint8Array> {
+  const enc = new TextEncoder();
+  return new ReadableStream<Uint8Array>({
+    async start(controller) {
+      controller.enqueue(enc.encode("[codehost] provision already running for this workspace; waiting…\n"));
+      const code = await existing.catch(() => 1);
+      controller.enqueue(enc.encode(`\n::codehost:exit=${code}\n`));
+      controller.close();
+    },
+  });
+}
+
+function json(status: number, obj: unknown, extra: Record<string, string> = {}): Response {
+  return new Response(JSON.stringify(obj), {
+    status,
+    headers: { "content-type": "application/json", "cache-control": "no-store", ...extra },
+  });
+}

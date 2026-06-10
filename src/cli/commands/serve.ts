@@ -2,7 +2,7 @@ import { hostname } from "node:os";
 import { resolve } from "node:path";
 import type { CommandModule } from "yargs";
 import type { PeerMeta } from "../../shared/signaling";
-import { DEFAULT_LAYOUT, toPosixPath } from "../../shared/repo";
+import { DEFAULT_LAYOUT, GITHUB_HOST, toPosixPath } from "../../shared/repo";
 import { TOKEN_REQUIREMENTS, validateToken } from "../../shared/token";
 import { launchServeDaemon } from "../daemonize";
 import { announceConnect } from "../open-url";
@@ -101,6 +101,7 @@ export const serveCommand: CommandModule<{}, ServeArgs> = {
       signal: argv.signal,
       meta,
       label: `serving workspace root ${dir}`,
+      provision: { homeDir: dir, host: GITHUB_HOST },
       launch: async (basePath) => {
         const v = await launchVscode({ dir, basePath, port: argv.port });
         return { port: v.port, stop: v.stop };

@@ -1,4 +1,5 @@
 import type { DataChannel } from "node-datachannel";
+import { isProvisionPath } from "./provision-server";
 import {
   type HttpReqHead,
   Op,
@@ -54,6 +55,9 @@ export class Tunnel {
      * doesn't know it, so we strip `/vs/<peerId>` before proxying.
      */
     private stripPrefix?: string,
+    /** Handles `/__codehost/*` requests locally (provisioning) instead of
+     *  forwarding to the local server. Wired only for `serve` (not `expose`). */
+    private onProvision?: (rawPath: string) => Promise<Response>,
   ) {
     this.origin = `http://127.0.0.1:${vscodePort}`;
     this.wsOrigin = `ws://127.0.0.1:${vscodePort}`;
@@ -134,12 +138,15 @@ export class Tunnel {
     const body = hasBody ? concat(stream.body) : undefined;
 
     try {
-      const res = await fetch(this.origin + this.localPath(path), {
-        method,
-        headers: reqHeaders,
-        body: body as BodyInit | undefined,
-        redirect: "manual",
-      });
+      const res =
+        this.onProvision && isProvisionPath(path)
+          ? await this.onProvision(path)
+          : await fetch(this.origin + this.localPath(path), {
+              method,
+              headers: reqHeaders,
+              body: body as BodyInit | undefined,
+              redirect: "manual",
+            });
 
       const resHeaders: Record<string, string> = {};
       res.headers.forEach((v, k) => {

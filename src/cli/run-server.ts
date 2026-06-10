@@ -2,6 +2,7 @@ import { type PeerMeta, newPeerId } from "../shared/signaling";
 import { SignalingClient } from "../shared/signaling-client";
 import { RtcDaemon } from "./rtc-daemon";
 import { Tunnel } from "./tunnel";
+import { handleProvision, type ProvisionDeps } from "./provision-server";
 
 export interface LaunchResult {
   /** Local port to tunnel to. */
@@ -24,6 +25,9 @@ export interface RunServerOptions {
   label: string;
   /** Prepare the local target to tunnel, given the /vs/<peerId> base path. */
   launch: (basePath: string) => Promise<LaunchResult>;
+  /** Enables `/__codehost/provision` on the tunnel (serve only — runs the home's
+   *  setup.sh). Omitted by `expose`, which has no home/workspace. */
+  provision?: ProvisionDeps;
 }
 
 /**
@@ -64,7 +68,12 @@ export async function runServer(opts: RunServerOptions): Promise<never> {
     sendSignal: (to, data) => client.sendSignal(to, data),
     onChannel: (viewerId, channel) => {
       console.log(`[codehost] viewer ${viewerId.slice(0, 8)} connected; bridging to :${target.port}`);
-      new Tunnel(channel, target.port, target.stripBasePath);
+      new Tunnel(
+        channel,
+        target.port,
+        target.stripBasePath,
+        opts.provision ? (rawPath) => handleProvision(rawPath, opts.provision!) : undefined,
+      );
     },
   });
 
