@@ -137,6 +137,28 @@ export function shareableDeepLink(opts: {
   return null;
 }
 
+/**
+ * Turn a pasted git repo URL into a codehost deep-link path: github.com ->
+ * `/gh/<owner>/<repo>`, any other host -> `/git/<host>/<owner>/<repo>`,
+ * preserving `/tree/<branch>`. Accepts with or without a scheme, an `scp`-style
+ * `git@host:owner/repo`, a trailing `.git`, query/hash, and a branch containing
+ * slashes. Returns null when it isn't a recognizable repo URL — lets the "open a
+ * GitHub URL" box reuse the same resolution as a typed deep link.
+ */
+export function gitUrlToPath(input: string): string | null {
+  let s = input.trim();
+  if (!s) return null;
+  s = s.replace(/^[a-z][a-z0-9+.-]*:\/\//i, ""); // scheme://
+  s = s.replace(/^[^@/]+@/, ""); // user@ (incl. git@)
+  s = s.replace(/^([^/:]+):(?!\d)/, "$1/"); // scp-style host:owner/repo -> host/owner/repo
+  s = s.split(/[?#]/)[0].replace(/\/+$/, ""); // drop query/hash + trailing slash
+  const m = s.match(/^([^/]+)\/([^/]+)\/([^/]+?)(?:\.git)?(?:\/tree\/(.+))?$/);
+  if (!m) return null;
+  const host = m[1].toLowerCase();
+  if (!host.includes(".")) return null; // require a real hostname (github.com)
+  return shareableDeepLink({ repo: `${host}/${m[2]}/${m[3]}`, branch: m[4] });
+}
+
 export interface Resolution {
   peerId: string;
   /** Folder to open via ?folder= (root kind); undefined opens the repo as-is. */
@@ -146,7 +168,10 @@ export interface Resolution {
 /**
  * Pick the best live server for a repo deep link. Prefers an exact `repo`
  * daemon; otherwise falls back to a `root` daemon that can open the subfolder.
- * Returns null if nothing matches.
+ * Among several roots, prefers the **deepest** (longest cwd) — with a nested
+ * setup like /Users/sno and /Users/sno/ws both serving, the layout subfolder
+ * exists under the deeper one (observed: /gh/snomiao/codehost belongs to
+ * /Users/sno/ws/..., not /Users/sno/...). Returns null if nothing matches.
  */
 export function resolveRepoTarget(servers: PeerInfo[], target: RepoTarget): Resolution | null {
   const key = repoKey(target);
@@ -155,7 +180,9 @@ export function resolveRepoTarget(servers: PeerInfo[], target: RepoTarget): Reso
   );
   if (repoMatch) return { peerId: repoMatch.peerId };
 
-  const root = servers.find((s) => s.meta?.kind === "root");
+  const root = servers
+    .filter((s) => s.meta?.kind === "root")
+    .sort((a, b) => (b.meta?.cwd.length ?? 0) - (a.meta?.cwd.length ?? 0))[0];
   if (root && root.meta) {
     const folder = `${trimSlash(root.meta.cwd)}/${fillLayout(root.meta.layout || DEFAULT_LAYOUT, target)}`;
     return { peerId: root.peerId, folder };

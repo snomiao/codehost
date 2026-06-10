@@ -11,6 +11,7 @@ import {
   DEFAULT_BRANCH,
   type DeepLink,
   type RoomMatch,
+  gitUrlToPath,
   parseDeepLink,
   pickRoomMatch,
   repoKey,
@@ -162,6 +163,12 @@ export function Discovery() {
   const [editingToken, setEditingToken] = useState(false);
   const [tokenError, setTokenError] = useState<string | null>(null);
 
+  // "Open a GitHub repo" box: paste a github.com URL -> navigate to its /gh/
+  // deep link, which resolves/opens (and, once provisioning lands, materializes)
+  // the workspace.
+  const [ghUrl, setGhUrl] = useState("");
+  const [ghError, setGhError] = useState<string | null>(null);
+
   // Fake-tag filter over the merged workspace list: a free-text box plus a set
   // of pinned tag tokens (chips). Both feed the same `ay ls`-style AND matcher.
   const [filter, setFilter] = useState("");
@@ -310,6 +317,22 @@ export function Discovery() {
     adoptRoom(t);
     setDraft("");
     setEditingToken(false);
+  }
+
+  function openGithubUrl(e: React.FormEvent) {
+    e.preventDefault();
+    const path = gitUrlToPath(ghUrl);
+    if (!path) {
+      setGhError("not a recognizable git repo URL");
+      return;
+    }
+    setGhError(null);
+    setGhUrl("");
+    // Navigate to the deep link and reconcile: connect if a daemon already
+    // serves it (provisioning, later, will materialize it when it doesn't).
+    history.pushState(null, "", path);
+    setResolving(deepLinkLabel(parseDeepLink(path)));
+    syncToUrl();
   }
 
   function leaveRoom(t: string) {
@@ -735,6 +758,26 @@ export function Discovery() {
             </>
           )}
 
+          {tokens.length > 0 && (
+            <>
+              <form onSubmit={openGithubUrl} style={styles.ghForm}>
+                <input
+                  value={ghUrl}
+                  onChange={(e) => {
+                    setGhUrl(e.target.value);
+                    if (ghError) setGhError(null);
+                  }}
+                  placeholder="open a repo…  paste a github.com URL"
+                  style={styles.input}
+                />
+                <button type="submit" style={styles.button}>
+                  Open
+                </button>
+              </form>
+              {ghError && <p style={styles.tokenError}>{ghError}</p>}
+            </>
+          )}
+
           <div style={styles.listHead}>
             <h2 style={styles.h2}>Workspaces</h2>
             {serverCount > 0 && (
@@ -836,6 +879,7 @@ const styles: Record<string, React.CSSProperties> = {
   roomChipX: { background: "transparent", border: "none", color: "inherit", cursor: "pointer", fontSize: 11, padding: 0, lineHeight: 1 },
   input: { flex: 1, background: "#252525", border: "1px solid #3d3d3d", color: "#eee", padding: "8px 10px", borderRadius: 6, fontSize: 13, outline: "none" },
   button: { background: "#0e639c", border: "none", color: "#fff", padding: "8px 16px", borderRadius: 6, cursor: "pointer", fontSize: 13 },
+  ghForm: { display: "flex", alignItems: "center", gap: 8, margin: "0 0 14px" },
   listHead: { display: "flex", alignItems: "baseline", gap: 10, margin: "0 0 12px" },
   h2: { fontSize: 14, color: "#aaa", fontWeight: 600, margin: 0 },
   count: { fontSize: 12, color: "#888", fontFamily: "monospace" },

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseDeepLink, pickRoomMatch, repoKey, resolveDevTarget, shareableDeepLink, toPosixPath } from "./repo";
+import { gitUrlToPath, parseDeepLink, pickRoomMatch, repoKey, resolveDevTarget, resolveRepoTarget, shareableDeepLink, toPosixPath } from "./repo";
 import type { PeerInfo } from "./signaling";
 import { parseGitRemote } from "../cli/git";
 
@@ -191,6 +191,53 @@ describe("shareableDeepLink", () => {
     const path = shareableDeepLink({ repo: "gitlab.com/group/proj", branch: "dev" })!;
     const dl = parseDeepLink(path);
     expect(dl?.type === "repo" && repoKey(dl.target)).toBe("gitlab.com/group/proj");
+  });
+});
+
+describe("resolveRepoTarget root selection", () => {
+  const root = (peerId: string, cwd: string): PeerInfo => ({
+    peerId,
+    role: "server",
+    meta: { name: peerId, host: "Mac", cwd, kind: "root" },
+  });
+
+  test("among nested roots, picks the deepest (longest cwd)", () => {
+    const servers = [root("shallow", "/Users/sno"), root("deep", "/Users/sno/ws")];
+    const res = resolveRepoTarget(servers, { host: "github.com", owner: "snomiao", name: "codehost" });
+    expect(res?.peerId).toBe("deep");
+    expect(res?.folder).toBe("/Users/sno/ws/snomiao/codehost/tree/main");
+  });
+
+  test("an exact repo daemon still wins over any root", () => {
+    const servers: PeerInfo[] = [
+      root("deep", "/Users/sno/ws"),
+      { peerId: "exact", role: "server", meta: { name: "x", host: "Mac", cwd: "/x", repo: "github.com/snomiao/codehost" } },
+    ];
+    expect(resolveRepoTarget(servers, { host: "github.com", owner: "snomiao", name: "codehost" })?.peerId).toBe("exact");
+  });
+});
+
+describe("gitUrlToPath", () => {
+  test("github URLs -> /gh, preserving branch (incl. slashes)", () => {
+    expect(gitUrlToPath("https://github.com/snomiao/codehost")).toBe("/gh/snomiao/codehost");
+    expect(gitUrlToPath("https://github.com/snomiao/codehost/tree/main")).toBe("/gh/snomiao/codehost/tree/main");
+    expect(gitUrlToPath("github.com/snomiao/codehost")).toBe("/gh/snomiao/codehost");
+    expect(gitUrlToPath("https://github.com/snomiao/codehost.git")).toBe("/gh/snomiao/codehost");
+    expect(gitUrlToPath("https://github.com/snomiao/codehost/tree/feat/x")).toBe("/gh/snomiao/codehost/tree/feat/x");
+    expect(gitUrlToPath("https://github.com/snomiao/codehost/")).toBe("/gh/snomiao/codehost");
+    expect(gitUrlToPath("https://github.com/snomiao/codehost?tab=readme#x")).toBe("/gh/snomiao/codehost");
+  });
+
+  test("other hosts + scp form -> /git/<host>/...", () => {
+    expect(gitUrlToPath("https://gitlab.com/group/proj/tree/dev")).toBe("/git/gitlab.com/group/proj/tree/dev");
+    expect(gitUrlToPath("git@github.com:snomiao/codehost.git")).toBe("/gh/snomiao/codehost");
+  });
+
+  test("non-repo / junk -> null", () => {
+    expect(gitUrlToPath("")).toBeNull();
+    expect(gitUrlToPath("not a url")).toBeNull();
+    expect(gitUrlToPath("https://github.com/snomiao")).toBeNull(); // no repo
+    expect(gitUrlToPath("/gh/snomiao/codehost")).toBeNull(); // already a deep link, no host
   });
 });
 
