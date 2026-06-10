@@ -7,11 +7,14 @@ const HISTORY_KEY = "codehost.history";
 
 export interface HistoryEntry {
   token: string;
-  peerId?: string;
+  /** Stable machine id of the server that opened it — unlike a peerId it
+   *  survives daemon restarts, so reconnect prefers the same machine. */
+  hostId?: string;
   kind?: "repo" | "root";
   /** For root-kind opens, the ?folder= path used. */
   folder?: string;
   name?: string;
+  /** Hostname — display + match fallback for pre-hostId daemons/entries. */
   host?: string;
   lastConnected: number;
 }

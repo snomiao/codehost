@@ -175,24 +175,49 @@ export interface Resolution {
   folder?: string;
 }
 
+/** Machine preference (from history) used to break ties between matches. */
+export interface ResolvePrefs {
+  /** Stable machine id — prefer servers advertising it. */
+  hostId?: string;
+  /** Hostname fallback for pre-hostId daemons/entries. */
+  host?: string;
+}
+
+function prefers(meta: PeerMeta | null | undefined, prefer?: ResolvePrefs): boolean {
+  if (!prefer || !meta) return false;
+  if (prefer.hostId && meta.hostId) return meta.hostId === prefer.hostId;
+  return !!prefer.host && meta.host === prefer.host;
+}
+
 /**
  * Pick the best live server for a repo deep link. Prefers an exact `repo`
  * daemon; otherwise falls back to a `root` daemon that can open the subfolder.
- * Among several roots, prefers the **deepest** (longest cwd) — with a nested
- * setup like /Users/sno and /Users/sno/ws both serving, the layout subfolder
- * exists under the deeper one (observed: /gh/snomiao/codehost belongs to
- * /Users/sno/ws/..., not /Users/sno/...). Returns null if nothing matches.
+ * Ties (several repo daemons, or several roots) break toward the machine in
+ * `prefer` — the one history says served this repo last. Among several roots,
+ * then prefers the **deepest** (longest cwd) — with a nested setup like
+ * /Users/sno and /Users/sno/ws both serving, the layout subfolder exists under
+ * the deeper one (observed: /gh/snomiao/codehost belongs to /Users/sno/ws/...,
+ * not /Users/sno/...). Returns null if nothing matches.
  */
-export function resolveRepoTarget(servers: PeerInfo[], target: RepoTarget): Resolution | null {
+export function resolveRepoTarget(
+  servers: PeerInfo[],
+  target: RepoTarget,
+  prefer?: ResolvePrefs,
+): Resolution | null {
   const key = repoKey(target);
-  const repoMatch = servers.find(
+  const repoMatches = servers.filter(
     (s) => s.meta?.kind !== "root" && s.meta?.repo === key && branchOk(s.meta, target),
   );
+  const repoMatch = repoMatches.find((s) => prefers(s.meta, prefer)) ?? repoMatches[0];
   if (repoMatch) return { peerId: repoMatch.peerId };
 
   const root = servers
     .filter((s) => s.meta?.kind === "root")
-    .sort((a, b) => (b.meta?.cwd.length ?? 0) - (a.meta?.cwd.length ?? 0))[0];
+    .sort(
+      (a, b) =>
+        Number(prefers(b.meta, prefer)) - Number(prefers(a.meta, prefer)) ||
+        (b.meta?.cwd.length ?? 0) - (a.meta?.cwd.length ?? 0),
+    )[0];
   if (root && root.meta) {
     const folder = `${trimSlash(root.meta.cwd)}/${fillLayout(root.meta.layout || DEFAULT_LAYOUT, target)}`;
     return { peerId: root.peerId, folder };

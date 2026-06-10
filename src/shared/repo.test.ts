@@ -217,6 +217,46 @@ describe("resolveRepoTarget root selection", () => {
   });
 });
 
+describe("resolveRepoTarget machine preference (history)", () => {
+  const target = { host: "github.com", owner: "snomiao", name: "codehost" };
+  const repoDaemon = (peerId: string, hostId?: string, host = "Mac"): PeerInfo => ({
+    peerId,
+    role: "server",
+    meta: { name: peerId, host, hostId, cwd: "/x", repo: "github.com/snomiao/codehost" },
+  });
+  const root = (peerId: string, cwd: string, hostId?: string, host = "Mac"): PeerInfo => ({
+    peerId,
+    role: "server",
+    meta: { name: peerId, host, hostId, cwd, kind: "root" },
+  });
+
+  test("among equal repo daemons, prefers the history hostId", () => {
+    const servers = [repoDaemon("a", "id-a"), repoDaemon("b", "id-b")];
+    expect(resolveRepoTarget(servers, target, { hostId: "id-b" })?.peerId).toBe("b");
+    expect(resolveRepoTarget(servers, target, { hostId: "id-a" })?.peerId).toBe("a");
+  });
+
+  test("hostname fallback matches entries/daemons without a hostId", () => {
+    const servers = [repoDaemon("a", undefined, "mbp"), repoDaemon("b", undefined, "win")];
+    expect(resolveRepoTarget(servers, target, { host: "win" })?.peerId).toBe("b");
+  });
+
+  test("preferred root beats a deeper root on another machine", () => {
+    const servers = [root("deep", "/Users/sno/ws/x", "id-other"), root("mine", "/Users/sno", "id-mine")];
+    expect(resolveRepoTarget(servers, target, { hostId: "id-mine" })?.peerId).toBe("mine");
+  });
+
+  test("no preference keeps the existing order (deepest root, first repo daemon)", () => {
+    const servers = [root("shallow", "/Users/sno", "id-1"), root("deep", "/Users/sno/ws", "id-2")];
+    expect(resolveRepoTarget(servers, target)?.peerId).toBe("deep");
+  });
+
+  test("a stale preference (machine offline) falls back gracefully", () => {
+    const servers = [repoDaemon("a", "id-a")];
+    expect(resolveRepoTarget(servers, target, { hostId: "gone" })?.peerId).toBe("a");
+  });
+});
+
 describe("gitUrlToPath", () => {
   test("github URLs -> /gh, preserving branch (incl. slashes)", () => {
     expect(gitUrlToPath("https://github.com/snomiao/codehost")).toBe("/gh/snomiao/codehost");

@@ -11,6 +11,7 @@ import {
   DEFAULT_BRANCH,
   type DeepLink,
   type RepoTarget,
+  type ResolvePrefs,
   type RoomMatch,
   gitUrlToPath,
   parseDeepLink,
@@ -545,6 +546,14 @@ export function Discovery() {
     setTimeout(() => setCopied(false), 1500);
   }
 
+  // The machine history says served this repo last — break resolution ties
+  // toward it (stable hostId when recorded, hostname for older entries).
+  function preferFor(dl: DeepLink): ResolvePrefs | undefined {
+    if (dl?.type !== "repo") return undefined;
+    const h = historyFor(repoKey(dl.target));
+    return h ? { hostId: h.hostId, host: h.host } : undefined;
+  }
+
   // Deep-link auto-connect: when servers arrive, pick the best match (exact repo
   // daemon, else a root daemon's subfolder) across all rooms and open it once.
   function tryAutoConnect() {
@@ -552,7 +561,8 @@ export function Discovery() {
     const dl = deepLinkRef.current;
     if (dl) {
       const peers = allServers.map((x) => x.server);
-      const res = dl.type === "repo" ? resolveRepoTarget(peers, dl.target) : resolveDevTarget(peers, dl.target);
+      const res =
+        dl.type === "repo" ? resolveRepoTarget(peers, dl.target, preferFor(dl)) : resolveDevTarget(peers, dl.target);
       if (!res) return;
       const match = allServers.find((x) => x.server.peerId === res.peerId);
       if (!match) return;
@@ -576,7 +586,7 @@ export function Discovery() {
   function recordConnect(server: PeerInfo, room: string, folder?: string) {
     const base = {
       token: room,
-      peerId: server.peerId,
+      hostId: server.meta?.hostId,
       kind: server.meta?.kind,
       name: server.meta?.name,
       host: server.meta?.host,
@@ -607,7 +617,8 @@ export function Discovery() {
   function findServerForDeepLink(dl: DeepLink): (RoomedServer & { folder?: string }) | null {
     if (!dl) return null;
     const peers = allServersRef.current.map((x) => x.server);
-    const res = dl.type === "repo" ? resolveRepoTarget(peers, dl.target) : resolveDevTarget(peers, dl.target);
+    const res =
+      dl.type === "repo" ? resolveRepoTarget(peers, dl.target, preferFor(dl)) : resolveDevTarget(peers, dl.target);
     if (!res) return null;
     const match = allServersRef.current.find((x) => x.server.peerId === res.peerId);
     return match ? { ...match, folder: res.folder } : null;
