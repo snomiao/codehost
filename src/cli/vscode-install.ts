@@ -49,10 +49,17 @@ export async function resolveCodeBinary(opts: { force?: boolean } = {}): Promise
     return override;
   }
 
-  // Prefer a user-owned `code` on PATH — but only if it actually runs. A broken
-  // or stub `code` should fall through to a managed install/upgrade.
+  // Prefer a user-owned `code` on PATH — but only if it actually runs AND can
+  // `serve-web`. The desktop app's bin/code wrapper passes --version yet treats
+  // `serve-web` as a file path ("Ignoring option 'host': not supported") and
+  // exits 0 without ever listening — so probe the subcommand, not just the
+  // binary (observed on macOS VS Code 1.123: serve started, then "VS Code
+  // server exited (code 0) before becoming ready").
   const system = Bun.which("code");
-  if (system && runsOk(system)) return system;
+  if (system && runsOk(system)) {
+    if (supportsServeWeb(system)) return system;
+    console.warn(`[codehost] system code (${system}) can't serve-web — using a managed VS Code CLI instead`);
+  }
 
   return ensureManagedBinary(opts.force ?? false);
 }
@@ -117,6 +124,16 @@ function platformKey(): string {
 function runsOk(bin: string): boolean {
   const r = spawnSync(bin, ["--version"], { stdio: "ignore", timeout: 10_000 });
   return r.status === 0;
+}
+
+/** True if `<bin> serve-web --help` is a real subcommand: clean exit, no
+ *  desktop-wrapper "Ignoring option" complaints, and help text that actually
+ *  mentions serve-web. (Run with --help so nothing starts listening.) */
+function supportsServeWeb(bin: string): boolean {
+  const r = spawnSync(bin, ["serve-web", "--help"], { encoding: "utf8", timeout: 10_000 });
+  if (r.status !== 0) return false;
+  const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
+  return !/ignoring option/i.test(out) && /serve-web/i.test(out);
 }
 
 function isMusl(): boolean {
