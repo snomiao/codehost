@@ -1,3 +1,10 @@
+# [0.15.0](https://github.com/snomiao/codehost/compare/v0.14.0...v0.15.0) (2026-06-10)
+
+
+### Features
+
+* **web:** 'open a GitHub URL' box + deepest-root repo resolution ([0d9ebec](https://github.com/snomiao/codehost/commit/0d9ebec4409430c327e2945657b6803ca704fd53))
+
 # [0.14.0](https://github.com/snomiao/codehost/compare/v0.13.0...v0.14.0) (2026-06-10)
 
 
