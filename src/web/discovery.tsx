@@ -10,6 +10,7 @@ import { connBroker } from "./conn-broker";
 import {
   DEFAULT_BRANCH,
   type DeepLink,
+  type RepoTarget,
   type RoomMatch,
   gitUrlToPath,
   parseDeepLink,
@@ -24,7 +25,7 @@ import { deriveTags, matchQuery, shortRoomLabel, tagKey } from "../shared/tags";
 
 const TOKEN_KEY = "codehost.token";
 
-type ConnState = "idle" | "connecting" | "connected" | "failed";
+type ConnState = "idle" | "connecting" | "provisioning" | "connected" | "failed";
 
 /** A server discovered in a specific room (its token routes the signaling). */
 type RoomedServer = { server: PeerInfo; room: string };
@@ -180,6 +181,8 @@ export function Discovery() {
   const [activePeerId, setActivePeerId] = useState<string | null>(null);
   const [connState, setConnState] = useState<ConnState>("idle");
   const [iframeSrc, setIframeSrc] = useState<string | null>(null);
+  // Streamed setup.sh output shown while connState === "provisioning".
+  const [provisionLog, setProvisionLog] = useState("");
 
   const rtcRef = useRef<RtcClient | null>(null);
   const activePeerRef = useRef<string | null>(null);
@@ -351,7 +354,13 @@ export function Discovery() {
     sendersRef.current.delete(t);
   }
 
-  async function connectTo(server: PeerInfo, room: string, folder?: string, fromHistory = false) {
+  async function connectTo(
+    server: PeerInfo,
+    room: string,
+    folder?: string,
+    fromHistory = false,
+    repoTarget?: RepoTarget,
+  ) {
     const send = sendersRef.current.get(room);
     if (!send) return;
     dialingRef.current = true; // synchronous gate against concurrent triggers
@@ -374,7 +383,7 @@ export function Discovery() {
       // handshake) and push a history entry, so Back returns to the list and
       // Forward returns here. When `fromHistory`, the browser already set the URL
       // (back/forward/reconnect) — don't push again, but a prior entry exists.
-      const openFolder = folder ?? server.meta?.cwd;
+      let openFolder = folder ?? server.meta?.cwd;
       if (fromHistory) {
         pushedRef.current = true;
         sharePathRef.current = window.location.pathname;
@@ -425,10 +434,23 @@ export function Discovery() {
         });
 
       await connBroker.connect(server.peerId, establish);
+
+      // For a repo deep link, ask the daemon to provision (run .codehost/setup.sh
+      // and hand back the authoritative workspace path) before opening. Streams
+      // the log under the "provisioning" state. Daemons without the route (older
+      // builds) return no path → fall back to the browser-computed folder.
+      if (repoTarget) {
+        setConnState("provisioning");
+        setProvisionLog("");
+        const ws = await runProvision(server.peerId, repoTarget);
+        if (activePeerRef.current !== server.peerId) return; // cancelled/switched mid-provision
+        if (ws) openFolder = ws;
+      }
+
       setConnState("connected");
       // The daemon no longer sets a default folder (current VS Code serve-web
       // dropped that flag), so open the served workspace from here: the
-      // deep-link folder if we have one, else the server's reported cwd.
+      // provisioned/deep-link folder if we have one, else the server's reported cwd.
       activeFolderRef.current = openFolder;
       setIframeSrc(`/vs/${server.peerId}/${folderQuery(openFolder)}`);
       setResolving(null);
@@ -444,6 +466,48 @@ export function Discovery() {
     } finally {
       dialingRef.current = false;
     }
+  }
+
+  // Ask the daemon to provision a repo workspace over the tunnel: stream
+  // setup.sh's output into `provisionLog` and return the daemon-authoritative
+  // path (the `x-codehost-workspace` header). Returns null when the daemon has
+  // no provision route (older build) or the call fails — caller falls back.
+  async function runProvision(peerId: string, t: RepoTarget): Promise<string | null> {
+    const params = new URLSearchParams({
+      owner: t.owner,
+      repo: t.name,
+      branch: t.branch ?? DEFAULT_BRANCH,
+      host: t.host,
+    });
+    let res: Response;
+    try {
+      res = await connBroker.tunnelFor(peerId).fetch("GET", `/__codehost/provision?${params}`, {});
+    } catch {
+      return null;
+    }
+    const ws = res.headers.get("x-codehost-workspace");
+    if (!ws) {
+      await res.body?.cancel().catch(() => {});
+      return null;
+    }
+    let buf = `[codehost] provisioning ${t.owner}/${t.name}@${t.branch ?? DEFAULT_BRANCH}…\n`;
+    setProvisionLog(buf);
+    if (res.body) {
+      const reader = res.body.getReader();
+      const dec = new TextDecoder();
+      try {
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          // Hide the internal exit sentinel from the displayed log.
+          setProvisionLog(buf.replace(/\n::codehost:exit=\d+\n?/, "\n"));
+        }
+      } catch {
+        // stream interrupted (channel closed) — return the path anyway
+      }
+    }
+    return ws;
   }
 
   // Shareable deep-link pathname for a server+folder, with no side effects (no
@@ -493,7 +557,7 @@ export function Discovery() {
       const match = allServers.find((x) => x.server.peerId === res.peerId);
       if (!match) return;
       resolvedRef.current = true;
-      void connectTo(match.server, match.room, res.folder);
+      void connectTo(match.server, match.room, res.folder, false, dl.type === "repo" ? dl.target : undefined);
       return;
     }
     // No deep link, but a token arrived via the URL: open that room's server
@@ -563,7 +627,7 @@ export function Discovery() {
     const target = findServerForDeepLink(dl);
     if (!target) return; // its server isn't present (yet) — wait for it to appear
     if (activePeerRef.current === target.server.peerId && connStateRef.current === "connected") return;
-    void connectTo(target.server, target.room, target.folder, true);
+    void connectTo(target.server, target.room, target.folder, true, dl.type === "repo" ? dl.target : undefined);
   }
 
   function disconnect() {
@@ -629,6 +693,27 @@ export function Discovery() {
       }}
     />
   ));
+
+  // Provisioning view: the daemon's setup.sh is running; stream its log.
+  if (connState === "provisioning") {
+    return (
+      <>
+        {roomClients}
+        <div style={styles.page}>
+          <header style={styles.header}>
+            <span style={styles.brand}>codehost</span>
+            <span style={styles.dim}>·</span>
+            <span style={styles.dim}>provisioning…</span>
+            <span style={{ flex: 1 }} />
+            <button style={styles.connectBtn} onClick={disconnect}>
+              Cancel
+            </button>
+          </header>
+          <pre style={styles.provLog}>{provisionLog || "starting…"}</pre>
+        </div>
+      </>
+    );
+  }
 
   // Connected view: VS Code in an iframe, served over the tunnel.
   if (iframeSrc && connState === "connected") {
@@ -910,4 +995,5 @@ const styles: Record<string, React.CSSProperties> = {
   echo: { marginTop: 6, fontSize: 12, color: "#4ec9b0", fontFamily: "monospace" },
   connectBtn: { background: "#0e639c", border: "none", color: "#fff", padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13 },
   shareBtn: { background: "transparent", border: "1px solid #3d3d3d", color: "#ccc", padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13 },
+  provLog: { flex: 1, margin: 0, padding: "14px 18px", overflow: "auto", background: "#1e1e1e", color: "#ccc", fontFamily: "monospace", fontSize: 12.5, lineHeight: 1.5, whiteSpace: "pre-wrap" },
 };
