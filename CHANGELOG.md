@@ -1,3 +1,13 @@
+# [0.16.0](https://github.com/snomiao/codehost/compare/v0.15.0...v0.16.0) (2026-06-10)
+
+
+### Features
+
+* **provision:** codehost init scaffolds .codehost/ (config + setup hooks) ([b1a2e9c](https://github.com/snomiao/codehost/commit/b1a2e9c23230e09dc6a291dbcab098083bb59f4d))
+* **provision:** daemon-side provision handler over the tunnel ([c297e95](https://github.com/snomiao/codehost/commit/c297e9577b3e1a65260ab105478feb63186fce46))
+* **provision:** tested security core for workspace provisioning ([ca7508c](https://github.com/snomiao/codehost/commit/ca7508c48e78eb46fbf8bf42ef398360bea38f86))
+* **web:** provisioning browser flow — run setup.sh on repo open, stream log ([9bd8742](https://github.com/snomiao/codehost/commit/9bd8742b143e84d386f8af138df73e57cac70e46))
+
 # [0.15.0](https://github.com/snomiao/codehost/compare/v0.14.0...v0.15.0) (2026-06-10)
 
 
