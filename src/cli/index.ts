@@ -2,6 +2,7 @@
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import { setupCommand } from "./commands/setup";
+import { initCommand } from "./commands/init";
 import { serveCommand } from "./commands/serve";
 import { devCommand } from "./commands/dev";
 import { exposeCommand } from "./commands/expose";
@@ -14,6 +15,7 @@ yargs(hideBin(process.argv))
   .scriptName("codehost")
   .usage("$0 <command> [options]")
   .command(setupCommand)
+  .command(initCommand)
   .command(serveCommand)
   .command(devCommand)
   .command(exposeCommand)
