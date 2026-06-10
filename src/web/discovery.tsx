@@ -8,6 +8,7 @@ import { getSignalUrl } from "./config";
 import { registerTunnelHost } from "./tunnel-host";
 import { connBroker } from "./conn-broker";
 import {
+  DEFAULT_BRANCH,
   type DeepLink,
   type RoomMatch,
   parseDeepLink,
@@ -356,10 +357,19 @@ export function Discovery() {
         sharePathRef.current = window.location.pathname;
       } else {
         const targetPath = shareablePathFor(server, openFolder);
-        didPush = !!targetPath && targetPath !== window.location.pathname;
-        if (didPush) history.pushState(null, "", targetPath);
-        pushedRef.current = didPush;
         sharePathRef.current = targetPath ?? window.location.pathname;
+        if (targetPath && targetPath !== window.location.pathname) {
+          if (deepLinkRef.current) {
+            // Arrived via a deep link — canonicalize the URL in place (e.g. add
+            // /tree/<branch>). Same destination, so replace, don't push a
+            // back-to-the-list entry.
+            history.replaceState(null, "", targetPath);
+          } else {
+            history.pushState(null, "", targetPath);
+            didPush = true;
+          }
+        }
+        pushedRef.current = didPush;
       }
 
       // The broker decides whether this tab owns the connection. `establish` is
@@ -417,14 +427,20 @@ export function Discovery() {
   // token — Share adds that). Keeps an existing deep-link path as-is; otherwise
   // derives /gh|/git|/dev from the server's repo identity or opened folder.
   function shareablePathFor(server: PeerInfo, folder?: string): string | null {
-    return deepLinkRef.current
-      ? window.location.pathname
-      : shareableDeepLink({
-          repo: server.meta?.repo,
-          branch: server.meta?.branch,
-          folder,
-          host: server.meta?.host,
-        });
+    const dl = deepLinkRef.current;
+    // A repo workspace always shows /tree/<branch> (GitHub-style, and it pins the
+    // worktree in snomiao's /tree/<branch> layout). Branch source, in order: the
+    // deep link's branch, the server's reported branch, else the layout default —
+    // matching the worktree fillLayout actually opened.
+    if (dl?.type === "repo") {
+      const branch = dl.target.branch ?? server.meta?.branch ?? DEFAULT_BRANCH;
+      return shareableDeepLink({ repo: repoKey(dl.target), branch });
+    }
+    if (server.meta?.repo) {
+      return shareableDeepLink({ repo: server.meta.repo, branch: server.meta.branch ?? DEFAULT_BRANCH });
+    }
+    // Folder mount: keep the deep-link path as-is, else derive the host-scoped one.
+    return dl ? window.location.pathname : shareableDeepLink({ folder, host: server.meta?.host });
   }
 
   async function shareLink() {

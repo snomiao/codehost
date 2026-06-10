@@ -7,6 +7,10 @@ import type { PeerInfo, PeerMeta } from "./signaling";
 
 export const DEFAULT_LAYOUT = "{owner}/{repo}/tree/{branch}";
 export const GITHUB_HOST = "github.com";
+/** Branch assumed when a repo link/target carries none — what `fillLayout` opens
+ *  and what the address bar shows, so a bare `/gh/<owner>/<repo>` canonicalizes
+ *  to `/gh/<owner>/<repo>/tree/<DEFAULT_BRANCH>`. */
+export const DEFAULT_BRANCH = "main";
 
 export interface RepoTarget {
   /** Git host, e.g. "github.com" or "gitlab.com". */
@@ -96,12 +100,12 @@ export function toPosixPath(p: string): string {
   return p.replace(/\\/g, "/");
 }
 
-/** Fill a layout template from a repo target (default branch -> "main"). */
+/** Fill a layout template from a repo target (default branch -> DEFAULT_BRANCH). */
 export function fillLayout(layout: string, t: RepoTarget): string {
   return layout
     .replace(/\{owner\}/g, t.owner)
     .replace(/\{repo\}/g, t.name)
-    .replace(/\{branch\}/g, t.branch || "main");
+    .replace(/\{branch\}/g, t.branch || DEFAULT_BRANCH);
 }
 
 /**
