@@ -1,3 +1,10 @@
+# [0.14.0](https://github.com/snomiao/codehost/compare/v0.13.0...v0.14.0) (2026-06-10)
+
+
+### Features
+
+* **web:** always show /tree/<branch> for repo workspaces ([ad34bc2](https://github.com/snomiao/codehost/commit/ad34bc2e2e8acea98ac392b90766488c6f3b4e52))
+
 # [0.13.0](https://github.com/snomiao/codehost/compare/v0.12.0...v0.13.0) (2026-06-09)
 
 
