@@ -1,8 +1,9 @@
 import { type PeerMeta, newPeerId } from "../shared/signaling";
 import { SignalingClient } from "../shared/signaling-client";
 import { RtcDaemon } from "./rtc-daemon";
-import { Tunnel } from "./tunnel";
-import { handleProvision, type ProvisionDeps } from "./provision-server";
+import { type LocalRequest, Tunnel } from "./tunnel";
+import { handleProvision, isProvisionPath, type ProvisionDeps } from "./provision-server";
+import { type DaemonPlugin, routePlugins } from "./plugins/types";
 
 export interface LaunchResult {
   /** Local port to tunnel to. */
@@ -32,6 +33,9 @@ export interface RunServerOptions {
    *  slow interval and right after each provision; pushed to the room only when
    *  it actually changed. */
   refreshMeta?: () => PeerMeta;
+  /** Daemon plugins: tunneled routes under /__codehost/<name>/ (their meta
+   *  contributions are the caller's job, inside `meta`/`refreshMeta`). */
+  plugins?: DaemonPlugin[];
 }
 
 /** How often a daemon re-enumerates its workspaces (manual clones show up). */
@@ -84,17 +88,20 @@ export async function runServer(opts: RunServerOptions): Promise<never> {
   const provision: ProvisionDeps | undefined = opts.provision
     ? { ...opts.provision, onProvisioned: refreshMeta }
     : undefined;
+  const plugins = opts.plugins ?? [];
+  const onLocal =
+    provision || plugins.length > 0
+      ? (req: LocalRequest) => {
+          if (provision && isProvisionPath(req.path)) return handleProvision(req.path, provision);
+          return routePlugins(plugins, req);
+        }
+      : undefined;
 
   rtc = new RtcDaemon({
     sendSignal: (to, data) => client.sendSignal(to, data),
     onChannel: (viewerId, channel) => {
       console.log(`[codehost] viewer ${viewerId.slice(0, 8)} connected; bridging to :${target.port}`);
-      new Tunnel(
-        channel,
-        target.port,
-        target.stripBasePath,
-        provision ? (rawPath) => handleProvision(rawPath, provision) : undefined,
-      );
+      new Tunnel(channel, target.port, target.stripBasePath, onLocal);
     },
   });
 

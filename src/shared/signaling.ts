@@ -4,6 +4,22 @@
 
 export type Role = "server" | "viewer";
 
+/** One live agent CLI session on the daemon's machine (sourced from agent-yes's
+ *  registry) — advertised so clients can see which agents run where. Interact
+ *  with it over the tunnel's `/__codehost/agent-yes/*` proxy. */
+export interface AgentInfo {
+  pid: number;
+  /** CLI the agent runs, e.g. "claude", "codex". */
+  tool: string;
+  /** Prompt/note snippet for display. */
+  title?: string;
+  /** Working directory (?folder= form) — ties an agent to a workspace. */
+  cwd: string;
+  state: "active" | "idle";
+  /** Unix ms when the agent started. */
+  startedAt?: number;
+}
+
 /** One checkout a root daemon found on disk under its layout — advertised so
  *  clients can list and exactly match real workspaces instead of synthesizing
  *  optimistic paths. */
@@ -53,6 +69,11 @@ export interface PeerMeta {
    * absent on older daemons and on repo/expose kinds.
    */
   workspaces?: WorkspaceInfo[];
+  /**
+   * Live agent CLI sessions on this machine (from the agent-yes plugin).
+   * Advertised by root daemons; capped server-side.
+   */
+  agents?: AgentInfo[];
 }
 
 export interface PeerInfo {

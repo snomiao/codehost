@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { PeerInfo, WorkspaceInfo } from "../shared/signaling";
+import type { AgentInfo, PeerInfo, WorkspaceInfo } from "../shared/signaling";
 import { TOKEN_REQUIREMENTS, validateToken } from "../shared/token";
 import { SignalingClient } from "../shared/signaling-client";
 import type { RtcSignal } from "../shared/rtc";
@@ -690,15 +690,20 @@ export function Discovery() {
   const filtered = tagged.filter((t) => matchQuery({ name: t.name, tags: t.tags }, query));
   // Group workspaces by machine: the stable hostId when the daemon advertises
   // one, else the hostname string (older daemons), else the peer stands alone.
-  const hostGroups: { key: string; label: string; items: typeof filtered }[] = [];
+  // Agents are machine-level (advertised by the host's root daemon) — collect
+  // them per group, deduped by pid across peers.
+  const hostGroups: { key: string; label: string; items: typeof filtered; agents: AgentInfo[] }[] = [];
   for (const t of filtered) {
     const key = t.server.meta?.hostId ?? t.server.meta?.host ?? t.server.peerId;
     let group = hostGroups.find((g) => g.key === key);
     if (!group) {
-      group = { key, label: t.server.meta?.host ?? t.name, items: [] };
+      group = { key, label: t.server.meta?.host ?? t.name, items: [], agents: [] };
       hostGroups.push(group);
     }
     group.items.push(t);
+    for (const a of t.server.meta?.agents ?? []) {
+      if (!group.agents.some((x) => x.pid === a.pid)) group.agents.push(a);
+    }
   }
   const toggleTag = (t: string) =>
     setActiveTags((a) => (a.includes(t) ? a.filter((x) => x !== t) : [...a, t]));
@@ -948,8 +953,23 @@ export function Discovery() {
                   <span style={styles.hostName}>{g.label}</span>
                   <span style={styles.count}>
                     {g.items.length} workspace{g.items.length === 1 ? "" : "s"}
+                    {g.agents.length > 0 && ` · ${g.agents.length} agent${g.agents.length === 1 ? "" : "s"}`}
                   </span>
                 </div>
+                {g.agents.length > 0 && (
+                  <div style={styles.agentRow}>
+                    {g.agents.map((a) => (
+                      <span
+                        key={a.pid}
+                        style={styles.agentChip}
+                        title={`${a.cwd}${a.title ? `\n${a.title}` : ""}`}
+                      >
+                        <span style={{ color: a.state === "active" ? "#4ec9b0" : "#777" }}>●</span> {a.tool}{" "}
+                        {a.pid}
+                      </span>
+                    ))}
+                  </div>
+                )}
                 <ul style={styles.list}>
                   {g.items.map(({ server: s, room, name, tags }) => {
                     const isActive = s.peerId === activePeerId;
@@ -1058,6 +1078,11 @@ const styles: Record<string, React.CSSProperties> = {
   list: { listStyle: "none", margin: "0 0 14px", padding: 0, display: "flex", flexDirection: "column", gap: 8 },
   hostHead: { display: "flex", alignItems: "baseline", gap: 10, margin: "0 0 8px" },
   hostName: { fontSize: 13, fontWeight: 600, color: "#dcdcaa", fontFamily: "monospace" },
+  agentRow: { display: "flex", flexWrap: "wrap", gap: 6, margin: "0 0 8px" },
+  agentChip: {
+    fontFamily: "monospace", fontSize: 11.5, padding: "2px 8px", borderRadius: 999,
+    border: "1px solid #3d3d3d", color: "#9aa4af",
+  },
   card: { display: "flex", alignItems: "center", gap: 12, background: "#252525", border: "1px solid #3d3d3d", borderRadius: 8, padding: "12px 14px" },
   cardMain: { flex: 1, minWidth: 0 },
   cardName: { fontSize: 14, fontWeight: 600, color: "#fff" },

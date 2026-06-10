@@ -1,5 +1,4 @@
 import type { DataChannel } from "node-datachannel";
-import { isProvisionPath } from "./provision-server";
 import {
   type HttpReqHead,
   Op,
@@ -34,6 +33,19 @@ interface HttpStream {
   body: Uint8Array[];
 }
 
+/** A tunneled request offered to the daemon's local routes before proxying. */
+export interface LocalRequest {
+  method: string;
+  /** Raw tunneled path incl. query (no /vs/<peerId> stripping applied). */
+  path: string;
+  headers: Headers;
+  body?: Uint8Array;
+}
+
+/** Serve `/__codehost/*` requests in-daemon (provisioning, plugins). Return
+ *  null/undefined to fall through to the local-server proxy. */
+export type LocalHandler = (req: LocalRequest) => Promise<Response> | null | undefined;
+
 /**
  * Bridges one WebRTC data channel to a local `code serve-web` instance.
  * Multiplexes concurrent HTTP requests and WebSocket connections by streamId.
@@ -55,9 +67,9 @@ export class Tunnel {
      * doesn't know it, so we strip `/vs/<peerId>` before proxying.
      */
     private stripPrefix?: string,
-    /** Handles `/__codehost/*` requests locally (provisioning) instead of
-     *  forwarding to the local server. Wired only for `serve` (not `expose`). */
-    private onProvision?: (rawPath: string) => Promise<Response>,
+    /** Serves `/__codehost/*` requests locally (provisioning, plugins) instead
+     *  of forwarding to the local server. Wired only for `serve` (not `expose`). */
+    private onLocal?: LocalHandler,
   ) {
     this.origin = `http://127.0.0.1:${vscodePort}`;
     this.wsOrigin = `ws://127.0.0.1:${vscodePort}`;
@@ -138,15 +150,15 @@ export class Tunnel {
     const body = hasBody ? concat(stream.body) : undefined;
 
     try {
-      const res =
-        this.onProvision && isProvisionPath(path)
-          ? await this.onProvision(path)
-          : await fetch(this.origin + this.localPath(path), {
-              method,
-              headers: reqHeaders,
-              body: body as BodyInit | undefined,
-              redirect: "manual",
-            });
+      const local = this.onLocal?.({ method, path, headers: reqHeaders, body });
+      const res = local
+        ? await local
+        : await fetch(this.origin + this.localPath(path), {
+            method,
+            headers: reqHeaders,
+            body: body as BodyInit | undefined,
+            redirect: "manual",
+          });
 
       const resHeaders: Record<string, string> = {};
       res.headers.forEach((v, k) => {
