@@ -10,6 +10,13 @@ import { announceConnect } from "../open-url";
 import { agentYesPlugin } from "../plugins/agent-yes";
 import { withPluginMeta } from "../plugins/types";
 import { readCodehostConfig } from "../provision-server";
+import {
+  clearDaemonPresence,
+  readRegisteredWorkspaces,
+  workspacesFile,
+  writeDaemonPresence,
+} from "../registry";
+import { repoIdentity } from "../git";
 import { runServer } from "../run-server";
 import { launchVscode } from "../vscode";
 import { enumerateWorkspaces } from "../workspaces";
@@ -94,8 +101,21 @@ export const serveCommand: CommandModule<{}, ServeArgs> = {
     // so the advertised list and the provisioned paths agree.
     const layout = readCodehostConfig(dir).workspace || DEFAULT_LAYOUT;
     const plugins = [agentYesPlugin()].filter((p) => p != null);
-    const buildMeta = (): PeerMeta =>
-      withPluginMeta(
+    const buildMeta = (): PeerMeta => {
+      // Layout-enumerated checkouts plus directories other `codehost dev` runs
+      // registered with this host daemon (git-identified best-effort).
+      const workspaces = enumerateWorkspaces(dir, layout);
+      for (const w of readRegisteredWorkspaces()) {
+        const path = toPosixPath(w.path);
+        if (workspaces.some((x) => x.path === path)) continue;
+        const id = repoIdentity(w.path);
+        workspaces.push({
+          path,
+          ...(id.repo ? { repo: id.repo } : {}),
+          ...(id.branch ? { branch: id.branch } : {}),
+        });
+      }
+      return withPluginMeta(
         {
           name: argv.name ?? host,
           // VS Code-web ?folder= form for the browser (C:\ws -> /C:/ws); the
@@ -105,10 +125,16 @@ export const serveCommand: CommandModule<{}, ServeArgs> = {
           hostId: ensureHostId(),
           kind: "root",
           layout,
-          workspaces: enumerateWorkspaces(dir, layout),
+          workspaces,
         },
         plugins,
       );
+    };
+
+    // Mark this process as the host daemon, so later `codehost dev` runs
+    // register their directory with it instead of spawning a second peer.
+    writeDaemonPresence({ pid: process.pid, root: dir, token: argv.token, startedAt: Date.now() });
+    process.on("exit", () => clearDaemonPresence());
 
     announceConnect(argv.token);
     await runServer({
@@ -116,6 +142,7 @@ export const serveCommand: CommandModule<{}, ServeArgs> = {
       signal: argv.signal,
       meta: buildMeta(),
       refreshMeta: buildMeta,
+      watchFiles: [workspacesFile()],
       plugins,
       label: `serving workspace root ${dir}`,
       provision: { homeDir: dir, host: GITHUB_HOST },

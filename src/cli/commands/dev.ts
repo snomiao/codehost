@@ -9,7 +9,8 @@ import { announceConnect } from "../open-url";
 import { runServer } from "../run-server";
 import { launchVscode } from "../vscode";
 import { repoIdentity } from "../git";
-import { toPosixPath } from "../../shared/repo";
+import { liveDaemon, registerWorkspace } from "../registry";
+import { shareableDeepLink, toPosixPath } from "../../shared/repo";
 import { DEFAULT_SIGNAL_URL } from "./serve";
 
 interface DevArgs {
@@ -18,6 +19,7 @@ interface DevArgs {
   name?: string;
   signal: string;
   daemon: boolean;
+  standalone: boolean;
   port?: number;
 }
 
@@ -53,6 +55,11 @@ export const devCommand: CommandModule<{}, DevArgs> = {
         type: "boolean",
         default: false,
       })
+      .option("standalone", {
+        describe: "Always spawn an own peer + VS Code, even when a host daemon already runs",
+        type: "boolean",
+        default: false,
+      })
       .option("port", {
         describe: "Fixed port for the local VS Code server (default: ephemeral)",
         type: "number",
@@ -68,6 +75,28 @@ export const devCommand: CommandModule<{}, DevArgs> = {
 
     const dir = resolve(process.cwd(), argv.dir);
     const host = hostname();
+
+    // One daemon per host: a single VS Code serve-web opens any local path via
+    // ?folder=, so when a root daemon already runs here, just REGISTER this
+    // directory with it (it re-advertises within moments) instead of spawning a
+    // second peer + VS Code. --standalone restores the old behavior.
+    const daemon = argv.standalone ? null : liveDaemon();
+    if (daemon) {
+      registerWorkspace(dir);
+      const id = repoIdentity(dir);
+      const path =
+        (id.repo
+          ? shareableDeepLink({ repo: id.repo, branch: id.branch })
+          : shareableDeepLink({ folder: toPosixPath(dir), host })) ?? "/";
+      console.log(`[codehost] host daemon already serving "${daemon.root}" (pid ${daemon.pid})`);
+      console.log(`[codehost] registered ${dir} with it — no second daemon needed`);
+      console.log(`[codehost] open: https://codehost.dev${path}#t=${encodeURIComponent(daemon.token)}`);
+      if (daemon.token !== argv.token) {
+        console.log("[codehost] note: the host daemon's room differs from your -t; the link above uses the daemon's room");
+      }
+      console.log("[codehost] (use --standalone to force an own daemon instead)");
+      return;
+    }
 
     if (argv.daemon) {
       const { ok } = await launchServeDaemon({

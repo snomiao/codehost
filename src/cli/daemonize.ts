@@ -75,6 +75,10 @@ function buildForegroundArgv(opts: ServeDaemonOptions): string[] {
   const parts = [process.execPath, process.argv[1], opts.command ?? "serve", opts.arg ?? opts.dir, "-t", opts.token, "--signal", opts.signal];
   if (opts.name) parts.push("--name", opts.name);
   if (opts.port) parts.push("--port", String(opts.port));
+  // An oxmgr-managed `dev` must stay a real daemon across restarts/reboots —
+  // never collapse into register-with-the-host-daemon-and-exit (oxmgr would
+  // see an instant exit and thrash).
+  if ((opts.command ?? "serve") === "dev") parts.push("--standalone");
   return parts;
 }
 

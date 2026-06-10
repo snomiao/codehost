@@ -33,7 +33,7 @@ export class CodehostRoom {
   private tunnels = new Map<string, Promise<TunnelClient>>();
   private closed = false;
 
-  constructor(private opts: RoomOptions) {
+  constructor(opts: RoomOptions) {
     this.signaling = new SignalingClient({
       url: opts.signalUrl ?? DEFAULT_SIGNAL_URL,
       token: opts.token,

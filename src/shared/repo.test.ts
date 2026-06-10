@@ -217,6 +217,36 @@ describe("resolveRepoTarget root selection", () => {
   });
 });
 
+describe("resolveDevTarget advertised workspaces", () => {
+  const root: PeerInfo = {
+    peerId: "root1",
+    role: "server",
+    meta: {
+      name: "mac",
+      host: "mbp",
+      cwd: "/Users/sno",
+      kind: "root",
+      workspaces: [{ path: "/Users/sno/scratch/tool" }],
+    },
+  };
+
+  test("a /host/<host>/<path> link matches a registered workspace on a root daemon", () => {
+    const res = resolveDevTarget([root], { host: "mbp", path: "/Users/sno/scratch/tool" });
+    expect(res?.peerId).toBe("root1");
+    expect(res?.folder).toBe("/Users/sno/scratch/tool");
+    expect(res?.exact).toBe(true);
+  });
+
+  test("host scoping still applies to workspace matches", () => {
+    expect(resolveDevTarget([root], { host: "other", path: "/Users/sno/scratch/tool" })).toBeNull();
+  });
+
+  test("an exact cwd mount still wins (no folder synthesized)", () => {
+    const res = resolveDevTarget([root], { host: "mbp", path: "/Users/sno" });
+    expect(res).toEqual({ peerId: "root1" });
+  });
+});
+
 describe("resolveRepoTarget enumerated workspaces (exact)", () => {
   const target = { host: "github.com", owner: "snomiao", name: "codehost" };
   const root = (peerId: string, cwd: string, workspaces?: WorkspaceInfo[]): PeerInfo => ({

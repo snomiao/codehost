@@ -1,3 +1,5 @@
+import { watch } from "node:fs";
+import { basename, dirname } from "node:path";
 import { type PeerMeta, newPeerId } from "../shared/signaling";
 import { SignalingClient } from "../shared/signaling-client";
 import { RtcDaemon } from "./rtc-daemon";
@@ -36,6 +38,10 @@ export interface RunServerOptions {
   /** Daemon plugins: tunneled routes under /__codehost/<name>/ (their meta
    *  contributions are the caller's job, inside `meta`/`refreshMeta`). */
   plugins?: DaemonPlugin[];
+  /** Files whose change should trigger an immediate `refreshMeta` (e.g. the
+   *  host workspace registry). Watched via their parent directory so the file
+   *  may not exist yet. */
+  watchFiles?: string[];
 }
 
 /** How often a daemon re-enumerates its workspaces (manual clones show up). */
@@ -106,7 +112,23 @@ export async function runServer(opts: RunServerOptions): Promise<never> {
   });
 
   client.connect();
-  if (opts.refreshMeta) setInterval(refreshMeta, META_REFRESH_MS);
+  if (opts.refreshMeta) {
+    setInterval(refreshMeta, META_REFRESH_MS);
+    // Instant re-advertise when a watched file changes (debounced — editors
+    // and fs.watch both fire in bursts).
+    let pending: ReturnType<typeof setTimeout> | null = null;
+    for (const file of opts.watchFiles ?? []) {
+      try {
+        watch(dirname(file), (_event, filename) => {
+          if (filename && filename !== basename(file)) return;
+          if (pending) clearTimeout(pending);
+          pending = setTimeout(refreshMeta, 300);
+        });
+      } catch {
+        // missing dir / unsupported platform — the interval still covers it
+      }
+    }
+  }
 
   const shutdown = () => {
     console.log("\n[codehost] shutting down");

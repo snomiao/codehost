@@ -244,13 +244,20 @@ export function resolveRepoTarget(
  *  to `target.host` when the link carries one (a bare path is ambiguous across
  *  machines). Compares with leading + trailing slashes stripped: `parseDeepLink`
  *  forces a leading "/" on the path, but a served cwd may lack one (e.g. an
- *  `expose` server's `localhost:<port>`), so a trailing-only trim never matches. */
+ *  `expose` server's `localhost:<port>`), so a trailing-only trim never matches.
+ *  A root daemon whose *advertised workspaces* include the path matches too —
+ *  that's how directories registered with the host daemon resolve. */
 export function resolveDevTarget(servers: PeerInfo[], target: DevTarget): Resolution | null {
   const want = stripEnds(target.path);
-  const hit = servers.find(
-    (s) => s.meta && stripEnds(s.meta.cwd) === want && (!target.host || s.meta.host === target.host),
-  );
-  return hit ? { peerId: hit.peerId } : null;
+  const hostOk = (meta: PeerMeta) => !target.host || meta.host === target.host;
+  const hit = servers.find((s) => s.meta && stripEnds(s.meta.cwd) === want && hostOk(s.meta));
+  if (hit) return { peerId: hit.peerId };
+  for (const s of servers) {
+    if (!s.meta || !hostOk(s.meta)) continue;
+    const ws = s.meta.workspaces?.find((w) => stripEnds(w.path) === want);
+    if (ws) return { peerId: s.peerId, folder: ws.path, exact: true };
+  }
+  return null;
 }
 
 /** A candidate room (its token) plus how the deep link resolved within it. */
