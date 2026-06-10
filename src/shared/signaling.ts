@@ -4,6 +4,18 @@
 
 export type Role = "server" | "viewer";
 
+/** One checkout a root daemon found on disk under its layout — advertised so
+ *  clients can list and exactly match real workspaces instead of synthesizing
+ *  optimistic paths. */
+export interface WorkspaceInfo {
+  /** ?folder= form path of the checkout (see toPosixPath). */
+  path: string;
+  /** Host-agnostic repo identity, e.g. "github.com/owner/repo". */
+  repo?: string;
+  /** Branch from the layout path, e.g. "main". */
+  branch?: string;
+}
+
 /** Metadata a `codehost serve`/`dev` daemon advertises about itself. */
 export interface PeerMeta {
   /** Human label, defaults to hostname. */
@@ -35,6 +47,12 @@ export interface PeerMeta {
    * `cwd + "/" + fill(layout, target)`.
    */
   layout?: string;
+  /**
+   * root kind: the checkouts that actually exist under `cwd` (enumerated on
+   * start, after each provision, and on a slow rescan). Capped server-side;
+   * absent on older daemons and on repo/expose kinds.
+   */
+  workspaces?: WorkspaceInfo[];
 }
 
 export interface PeerInfo {
@@ -68,7 +86,15 @@ export interface PingMessage {
   type: "ping";
 }
 
-export type ClientMessage = HelloMessage | SignalMessage | PingMessage;
+/** Replace this peer's advertised metadata mid-session (e.g. a provision
+ *  created a new workspace) — the room re-broadcasts the peer list. Older
+ *  workers ignore it; the meta still lands via `hello` on the next reconnect. */
+export interface MetaMessage {
+  type: "meta";
+  meta: PeerMeta;
+}
+
+export type ClientMessage = HelloMessage | SignalMessage | PingMessage | MetaMessage;
 
 // ---- Server -> Client ----
 

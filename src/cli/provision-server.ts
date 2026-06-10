@@ -18,9 +18,12 @@ export interface ProvisionDeps {
   homeDir: string;
   /** Git host advertised by this daemon (default github.com). */
   host: string;
+  /** Called after a setup script finishes (any exit code) — lets the daemon
+   *  re-enumerate + re-advertise its workspaces. */
+  onProvisioned?: () => void;
 }
 
-interface CodehostConfig {
+export interface CodehostConfig {
   workspace?: string; // layout template, e.g. "ws/{owner}/{repo}/tree/{branch}"
   allowlist?: string[];
 }
@@ -30,7 +33,7 @@ export function isProvisionPath(path: string): boolean {
   return path.split("?")[0] === PROVISION_PATH;
 }
 
-function readConfig(homeDir: string): CodehostConfig {
+export function readCodehostConfig(homeDir: string): CodehostConfig {
   try {
     const raw = readFileSync(join(homeDir, ".codehost", "config.yaml"), "utf8");
     const c = (parseYaml(raw) ?? {}) as Record<string, unknown>;
@@ -74,7 +77,7 @@ export async function handleProvision(rawPath: string, deps: ProvisionDeps): Pro
   if (!v.ok) return json(400, { error: v.reason });
 
   const host = (url.searchParams.get("host") ?? deps.host).toLowerCase();
-  const cfg = readConfig(deps.homeDir);
+  const cfg = readCodehostConfig(deps.homeDir);
   const key = repoKey({ host, owner: v.target.owner, name: v.target.repo });
   if (!repoAllowed(key, cfg.allowlist)) return json(403, { error: `repo not allowlisted: ${key}` });
 
@@ -152,6 +155,11 @@ function freshBody(
         resolveDone(code);
         say(`\n::codehost:exit=${code}\n`);
         controller.close();
+        try {
+          deps.onProvisioned?.();
+        } catch {
+          // advertising is best-effort; never fail the provision response
+        }
       }
     },
   });

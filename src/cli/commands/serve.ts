@@ -7,8 +7,10 @@ import { TOKEN_REQUIREMENTS, validateToken } from "../../shared/token";
 import { ensureHostId } from "../config";
 import { launchServeDaemon } from "../daemonize";
 import { announceConnect } from "../open-url";
+import { readCodehostConfig } from "../provision-server";
 import { runServer } from "../run-server";
 import { launchVscode } from "../vscode";
+import { enumerateWorkspaces } from "../workspaces";
 
 export const DEFAULT_SIGNAL_URL = "wss://signal.codehost.dev";
 
@@ -85,8 +87,11 @@ export const serveCommand: CommandModule<{}, ServeArgs> = {
     }
 
     // A workspace root: repos under it open by GitHub-shaped deep link, mapped
-    // onto subfolders via VS Code's ?folder= using this layout.
-    const meta: PeerMeta = {
+    // onto subfolders via VS Code's ?folder= using this layout. The layout is
+    // the same template provisioning uses (.codehost/config.yaml `workspace`),
+    // so the advertised list and the provisioned paths agree.
+    const layout = readCodehostConfig(dir).workspace || DEFAULT_LAYOUT;
+    const buildMeta = (): PeerMeta => ({
       name: argv.name ?? host,
       // VS Code-web ?folder= form for the browser (C:\ws -> /C:/ws); the real
       // OS path `dir` is still what we spawn VS Code in.
@@ -94,14 +99,16 @@ export const serveCommand: CommandModule<{}, ServeArgs> = {
       host,
       hostId: ensureHostId(),
       kind: "root",
-      layout: DEFAULT_LAYOUT,
-    };
+      layout,
+      workspaces: enumerateWorkspaces(dir, layout),
+    });
 
     announceConnect(argv.token);
     await runServer({
       token: argv.token,
       signal: argv.signal,
-      meta,
+      meta: buildMeta(),
+      refreshMeta: buildMeta,
       label: `serving workspace root ${dir}`,
       provision: { homeDir: dir, host: GITHUB_HOST },
       launch: async (basePath) => {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { PeerInfo } from "../shared/signaling";
+import type { PeerInfo, WorkspaceInfo } from "../shared/signaling";
 import { TOKEN_REQUIREMENTS, validateToken } from "../shared/token";
 import { SignalingClient } from "../shared/signaling-client";
 import type { RtcSignal } from "../shared/rtc";
@@ -92,7 +92,7 @@ function findRoomForDeepLink(dl: DeepLink, tokens: string[], timeoutMs = 6000): 
           const res =
             dl.type === "repo" ? resolveRepoTarget(servers, dl.target) : resolveDevTarget(servers, dl.target);
           if (!res) return;
-          if (!res.folder) finish(tok); // exact match — take it now
+          if (!res.folder || res.exact) finish(tok); // exact match — take it now
           else if (!fallbacks.some((f) => f.token === tok)) fallbacks.push({ token: tok, resolution: res });
         },
       });
@@ -641,6 +641,19 @@ export function Discovery() {
     void connectTo(target.server, target.room, target.folder, true, dl.type === "repo" ? dl.target : undefined);
   }
 
+  // Open an enumerated checkout via its deep link, reusing the URL-driven
+  // resolution (provisioning, history, machine preference) instead of dialing
+  // the card's peer directly.
+  function openWorkspace(server: PeerInfo, w: WorkspaceInfo) {
+    const path = w.repo
+      ? shareableDeepLink({ repo: w.repo, branch: w.branch })
+      : shareableDeepLink({ folder: w.path, host: server.meta?.host });
+    if (!path) return;
+    history.pushState(null, "", path);
+    setResolving(deepLinkLabel(parseDeepLink(path)));
+    syncToUrl();
+  }
+
   function disconnect() {
     // Mirror Cmd+Left: if connecting pushed a history entry, pop it — the
     // browser restores the previous URL and our popstate handler tears down.
@@ -951,6 +964,22 @@ export function Discovery() {
                               </button>
                             ))}
                           </div>
+                          {(s.meta?.workspaces?.length ?? 0) > 0 && (
+                            <div style={styles.wsRow}>
+                              {s.meta!.workspaces!.map((w) => (
+                                <button
+                                  key={w.path}
+                                  style={styles.wsLink}
+                                  onClick={() => openWorkspace(s, w)}
+                                  title={w.path}
+                                >
+                                  {w.repo
+                                    ? `${w.repo.split("/").slice(1).join("/")}${w.branch ? ` @${w.branch}` : ""}`
+                                    : w.path}
+                                </button>
+                              ))}
+                            </div>
+                          )}
                           <div style={styles.idLine}>peer {s.peerId.slice(0, 8)}</div>
                           {isActive && (
                             <div style={styles.echo}>
@@ -1020,6 +1049,11 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid #3d3d3d", background: "transparent", color: "#9aa4af", cursor: "pointer",
   },
   idLine: { fontFamily: "monospace", fontSize: 11, color: "#666", marginTop: 6 },
+  wsRow: { display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 3, marginTop: 8 },
+  wsLink: {
+    fontFamily: "monospace", fontSize: 12, padding: "2px 0", border: "none", background: "transparent",
+    color: "#75beff", cursor: "pointer", textAlign: "left",
+  },
   code: { background: "#252525", padding: "2px 6px", borderRadius: 4, fontFamily: "monospace", fontSize: 12 },
   list: { listStyle: "none", margin: "0 0 14px", padding: 0, display: "flex", flexDirection: "column", gap: 8 },
   hostHead: { display: "flex", alignItems: "baseline", gap: 10, margin: "0 0 8px" },

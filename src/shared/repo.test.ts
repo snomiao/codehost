@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { gitUrlToPath, parseDeepLink, pickRoomMatch, repoKey, resolveDevTarget, resolveRepoTarget, shareableDeepLink, toPosixPath } from "./repo";
-import type { PeerInfo } from "./signaling";
+import type { PeerInfo, WorkspaceInfo } from "./signaling";
 import { parseGitRemote } from "../cli/git";
 
 describe("toPosixPath", () => {
@@ -214,6 +214,45 @@ describe("resolveRepoTarget root selection", () => {
       { peerId: "exact", role: "server", meta: { name: "x", host: "Mac", cwd: "/x", repo: "github.com/snomiao/codehost" } },
     ];
     expect(resolveRepoTarget(servers, { host: "github.com", owner: "snomiao", name: "codehost" })?.peerId).toBe("exact");
+  });
+});
+
+describe("resolveRepoTarget enumerated workspaces (exact)", () => {
+  const target = { host: "github.com", owner: "snomiao", name: "codehost" };
+  const root = (peerId: string, cwd: string, workspaces?: WorkspaceInfo[]): PeerInfo => ({
+    peerId,
+    role: "server",
+    meta: { name: peerId, host: "Mac", cwd, kind: "root", workspaces },
+  });
+
+  test("an enumerated checkout beats a deeper root's synthesized fallback", () => {
+    const servers = [
+      root("deep", "/Users/sno/ws"),
+      root("listed", "/Users/sno", [
+        { path: "/Users/sno/snomiao/codehost/tree/main", repo: "github.com/snomiao/codehost", branch: "main" },
+      ]),
+    ];
+    const res = resolveRepoTarget(servers, target);
+    expect(res?.peerId).toBe("listed");
+    expect(res?.folder).toBe("/Users/sno/snomiao/codehost/tree/main");
+    expect(res?.exact).toBe(true);
+  });
+
+  test("branch mismatch falls back to the synthesized path", () => {
+    const servers = [
+      root("listed", "/Users/sno/ws", [
+        { path: "/Users/sno/ws/snomiao/codehost/tree/main", repo: "github.com/snomiao/codehost", branch: "main" },
+      ]),
+    ];
+    const res = resolveRepoTarget(servers, { ...target, branch: "dev" });
+    expect(res?.exact).toBeUndefined();
+    expect(res?.folder).toBe("/Users/sno/ws/snomiao/codehost/tree/dev");
+  });
+
+  test("pickRoomMatch ranks an exact enumerated match like a repo daemon", () => {
+    const fallback = { token: "room-a", resolution: { peerId: "x", folder: "/a/b" } };
+    const exact = { token: "room-b", resolution: { peerId: "y", folder: "/c/d", exact: true } };
+    expect(pickRoomMatch([fallback, exact])?.token).toBe("room-b");
   });
 });
 

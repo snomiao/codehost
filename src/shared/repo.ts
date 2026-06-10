@@ -173,6 +173,9 @@ export interface Resolution {
   peerId: string;
   /** Folder to open via ?folder= (root kind); undefined opens the repo as-is. */
   folder?: string;
+  /** The folder is a checkout the daemon *enumerated* (it exists on disk), not
+   *  an optimistic layout-synthesized path — rank it like an exact match. */
+  exact?: boolean;
 }
 
 /** Machine preference (from history) used to break ties between matches. */
@@ -211,13 +214,25 @@ export function resolveRepoTarget(
   const repoMatch = repoMatches.find((s) => prefers(s.meta, prefer)) ?? repoMatches[0];
   if (repoMatch) return { peerId: repoMatch.peerId };
 
-  const root = servers
+  const roots = servers
     .filter((s) => s.meta?.kind === "root")
     .sort(
       (a, b) =>
         Number(prefers(b.meta, prefer)) - Number(prefers(a.meta, prefer)) ||
         (b.meta?.cwd.length ?? 0) - (a.meta?.cwd.length ?? 0),
-    )[0];
+    );
+
+  // A root that *enumerated* a matching checkout knows it exists on disk —
+  // rank it exact, ahead of any synthesized fallback.
+  const wantBranch = target.branch || DEFAULT_BRANCH;
+  for (const s of roots) {
+    const ws = s.meta?.workspaces?.find(
+      (w) => w.repo === key && (!w.branch || w.branch === wantBranch),
+    );
+    if (ws) return { peerId: s.peerId, folder: ws.path, exact: true };
+  }
+
+  const root = roots[0];
   if (root && root.meta) {
     const folder = `${trimSlash(root.meta.cwd)}/${fillLayout(root.meta.layout || DEFAULT_LAYOUT, target)}`;
     return { peerId: root.peerId, folder };
@@ -246,14 +261,15 @@ export interface RoomMatch {
 
 /**
  * Rank matches found while searching multiple rooms for a token-less deep link.
- * An *exact* match (a server that genuinely serves this repo/folder — no
- * synthesized `folder`) beats a *root fallback* (a root daemon that would open
- * the repo as a subfolder, which `resolveRepoTarget` returns for ANY repo link).
- * Without this preference, first-responder-wins could pick an unrelated room
- * that merely has a root server. Returns null when there are no matches.
+ * An *exact* match (a server that genuinely serves this repo/folder — a repo
+ * daemon, or a root whose enumerated checkout matched) beats a *root fallback*
+ * (a root daemon that would open the repo as a synthesized subfolder, which
+ * `resolveRepoTarget` returns for ANY repo link). Without this preference,
+ * first-responder-wins could pick an unrelated room that merely has a root
+ * server. Returns null when there are no matches.
  */
 export function pickRoomMatch(matches: RoomMatch[]): RoomMatch | null {
-  return matches.find((m) => !m.resolution.folder) ?? matches[0] ?? null;
+  return matches.find((m) => !m.resolution.folder || m.resolution.exact) ?? matches[0] ?? null;
 }
 
 function branchOk(meta: PeerMeta, target: RepoTarget): boolean {

@@ -71,6 +71,15 @@ export class Room implements DurableObject {
       return;
     }
 
+    if (msg.type === "meta") {
+      const att = this.touch(ws);
+      if (!att) return; // never said hello
+      att.meta = msg.meta ?? null;
+      ws.serializeAttachment(att);
+      this.broadcastPeers();
+      return;
+    }
+
     if (msg.type === "signal") {
       const att = this.touch(ws);
       if (!att) return;

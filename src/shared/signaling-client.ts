@@ -161,6 +161,16 @@ export class SignalingClient {
     this.ws?.send(JSON.stringify(msg));
   }
 
+  /** Replace the advertised metadata: a live socket pushes it to the room now,
+   *  and every future (re)connect's `hello` carries it. */
+  updateMeta(meta: PeerMeta): void {
+    this.opts.meta = meta;
+    if (this.ws?.readyState === 1 /* OPEN */) {
+      const msg: ClientMessage = { type: "meta", meta };
+      this.ws.send(JSON.stringify(msg));
+    }
+  }
+
   close(): void {
     this.closed = true;
     this.stopHeartbeat();

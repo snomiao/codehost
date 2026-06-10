@@ -28,7 +28,14 @@ export interface RunServerOptions {
   /** Enables `/__codehost/provision` on the tunnel (serve only — runs the home's
    *  setup.sh). Omitted by `expose`, which has no home/workspace. */
   provision?: ProvisionDeps;
+  /** Recompute the advertised meta (e.g. re-enumerate workspaces). Polled on a
+   *  slow interval and right after each provision; pushed to the room only when
+   *  it actually changed. */
+  refreshMeta?: () => PeerMeta;
 }
+
+/** How often a daemon re-enumerates its workspaces (manual clones show up). */
+const META_REFRESH_MS = 60_000;
 
 /**
  * Foreground server loop shared by `serve`, `dev`, and `expose`: register in the
@@ -64,6 +71,20 @@ export async function runServer(opts: RunServerOptions): Promise<never> {
     onSignal: (from, data) => rtc.handleSignal(from, data),
   });
 
+  // Re-advertise when the workspace set changes (provision, manual clone).
+  let lastMeta = JSON.stringify(opts.meta);
+  const refreshMeta = () => {
+    if (!opts.refreshMeta) return;
+    const meta = opts.refreshMeta();
+    const s = JSON.stringify(meta);
+    if (s === lastMeta) return;
+    lastMeta = s;
+    client.updateMeta(meta);
+  };
+  const provision: ProvisionDeps | undefined = opts.provision
+    ? { ...opts.provision, onProvisioned: refreshMeta }
+    : undefined;
+
   rtc = new RtcDaemon({
     sendSignal: (to, data) => client.sendSignal(to, data),
     onChannel: (viewerId, channel) => {
@@ -72,12 +93,13 @@ export async function runServer(opts: RunServerOptions): Promise<never> {
         channel,
         target.port,
         target.stripBasePath,
-        opts.provision ? (rawPath) => handleProvision(rawPath, opts.provision!) : undefined,
+        provision ? (rawPath) => handleProvision(rawPath, provision) : undefined,
       );
     },
   });
 
   client.connect();
+  if (opts.refreshMeta) setInterval(refreshMeta, META_REFRESH_MS);
 
   const shutdown = () => {
     console.log("\n[codehost] shutting down");
