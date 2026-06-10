@@ -4,6 +4,7 @@ import type { CommandModule } from "yargs";
 import type { PeerMeta } from "../../shared/signaling";
 import { DEFAULT_LAYOUT, GITHUB_HOST, toPosixPath } from "../../shared/repo";
 import { TOKEN_REQUIREMENTS, validateToken } from "../../shared/token";
+import { ensureHostId } from "../config";
 import { launchServeDaemon } from "../daemonize";
 import { announceConnect } from "../open-url";
 import { runServer } from "../run-server";
@@ -91,6 +92,7 @@ export const serveCommand: CommandModule<{}, ServeArgs> = {
       // OS path `dir` is still what we spawn VS Code in.
       cwd: toPosixPath(dir),
       host,
+      hostId: ensureHostId(),
       kind: "root",
       layout: DEFAULT_LAYOUT,
     };

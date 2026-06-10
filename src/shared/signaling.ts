@@ -13,6 +13,13 @@ export interface PeerMeta {
   /** Hostname of the machine running the daemon. */
   host: string;
   /**
+   * Stable machine identity (UUID persisted in ~/.codehost/config.json). All
+   * daemons on one machine share it, unlike the per-process peerId, so clients
+   * can group peers by host and keep history across daemon restarts. Absent on
+   * older daemons — fall back to `host`.
+   */
+  hostId?: string;
+  /**
    * "repo": serves a single folder (`codehost dev`), git-identified when possible.
    * "root": serves a workspace root (`codehost serve`) whose repos live under it.
    * Absent is treated as "repo" for backward compatibility.

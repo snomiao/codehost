@@ -664,6 +664,18 @@ export function Discovery() {
   }));
   const query = [...activeTags, filter].join(" ");
   const filtered = tagged.filter((t) => matchQuery({ name: t.name, tags: t.tags }, query));
+  // Group workspaces by machine: the stable hostId when the daemon advertises
+  // one, else the hostname string (older daemons), else the peer stands alone.
+  const hostGroups: { key: string; label: string; items: typeof filtered }[] = [];
+  for (const t of filtered) {
+    const key = t.server.meta?.hostId ?? t.server.meta?.host ?? t.server.peerId;
+    let group = hostGroups.find((g) => g.key === key);
+    if (!group) {
+      group = { key, label: t.server.meta?.host ?? t.name, items: [] };
+      hostGroups.push(group);
+    }
+    group.items.push(t);
+  }
   const toggleTag = (t: string) =>
     setActiveTags((a) => (a.includes(t) ? a.filter((x) => x !== t) : [...a, t]));
   const addTag = (t: string) => setActiveTags((a) => (a.includes(t) ? a : [...a, t]));
@@ -905,42 +917,54 @@ export function Discovery() {
               )}
             </>
           )}
-          <ul style={styles.list}>
-            {filtered.map(({ server: s, room, name, tags }) => {
-              const isActive = s.peerId === activePeerId;
-              return (
-                <li key={s.peerId} style={styles.card}>
-                  <div style={styles.cardMain}>
-                    <div style={styles.cardName}>{name}</div>
-                    <div style={styles.tagRow}>
-                      {tags.map((tag) => (
-                        <button key={tag} style={styles.tag} onClick={() => addTag(tag)} title={`filter by ${tag}`}>
-                          {tag}
+          <div>
+            {hostGroups.map((g) => (
+              <section key={g.key}>
+                <div style={styles.hostHead}>
+                  <span style={styles.hostName}>{g.label}</span>
+                  <span style={styles.count}>
+                    {g.items.length} workspace{g.items.length === 1 ? "" : "s"}
+                  </span>
+                </div>
+                <ul style={styles.list}>
+                  {g.items.map(({ server: s, room, name, tags }) => {
+                    const isActive = s.peerId === activePeerId;
+                    return (
+                      <li key={s.peerId} style={styles.card}>
+                        <div style={styles.cardMain}>
+                          <div style={styles.cardName}>{name}</div>
+                          <div style={styles.tagRow}>
+                            {tags.map((tag) => (
+                              <button key={tag} style={styles.tag} onClick={() => addTag(tag)} title={`filter by ${tag}`}>
+                                {tag}
+                              </button>
+                            ))}
+                          </div>
+                          <div style={styles.idLine}>peer {s.peerId.slice(0, 8)}</div>
+                          {isActive && (
+                            <div style={styles.echo}>
+                              {connState === "connecting" && "negotiating WebRTC…"}
+                              {connState === "failed" && "connection failed"}
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          style={styles.connectBtn}
+                          onClick={() => connectTo(s, room)}
+                          disabled={isActive && connState === "connecting"}
+                        >
+                          {isActive && connState === "connecting" ? "…" : "Connect"}
                         </button>
-                      ))}
-                    </div>
-                    <div style={styles.idLine}>peer {s.peerId.slice(0, 8)}</div>
-                    {isActive && (
-                      <div style={styles.echo}>
-                        {connState === "connecting" && "negotiating WebRTC…"}
-                        {connState === "failed" && "connection failed"}
-                      </div>
-                    )}
-                  </div>
-                  <button
-                    style={styles.connectBtn}
-                    onClick={() => connectTo(s, room)}
-                    disabled={isActive && connState === "connecting"}
-                  >
-                    {isActive && connState === "connecting" ? "…" : "Connect"}
-                  </button>
-                </li>
-              );
-            })}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            ))}
             {serverCount > 0 && filtered.length === 0 && (
               <p style={styles.dim}>No workspace matches your filter.</p>
             )}
-          </ul>
+          </div>
         </main>
       </div>
     </>
@@ -986,7 +1010,9 @@ const styles: Record<string, React.CSSProperties> = {
   },
   idLine: { fontFamily: "monospace", fontSize: 11, color: "#666", marginTop: 6 },
   code: { background: "#252525", padding: "2px 6px", borderRadius: 4, fontFamily: "monospace", fontSize: 12 },
-  list: { listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 },
+  list: { listStyle: "none", margin: "0 0 14px", padding: 0, display: "flex", flexDirection: "column", gap: 8 },
+  hostHead: { display: "flex", alignItems: "baseline", gap: 10, margin: "0 0 8px" },
+  hostName: { fontSize: 13, fontWeight: 600, color: "#dcdcaa", fontFamily: "monospace" },
   card: { display: "flex", alignItems: "center", gap: 12, background: "#252525", border: "1px solid #3d3d3d", borderRadius: 8, padding: "12px 14px" },
   cardMain: { flex: 1, minWidth: 0 },
   cardName: { fontSize: 14, fontWeight: 600, color: "#fff" },
