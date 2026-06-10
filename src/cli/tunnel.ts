@@ -8,7 +8,6 @@ import {
   encodeFrame,
   encodeJson,
   payloadJson,
-  payloadText,
   wsMessageFrames,
 } from "../shared/protocol";
 

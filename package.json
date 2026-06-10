@@ -18,6 +18,7 @@
     "dev:signal": "cd worker && wrangler dev",
     "cli": "bun src/cli/index.ts",
     "build": "vite build && vite build --config vite.sw.config.ts",
+    "build:lib": "bun build src/web/room-client.ts --target browser --format esm --minify --outfile dist/room-client.js",
     "deploy:signal": "cd worker && wrangler deploy",
     "deploy:pages": "vite build && wrangler pages deploy dist/public --project-name codehost",
     "start": "bun src/server.ts",
