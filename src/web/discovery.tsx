@@ -58,6 +58,18 @@ function folderQuery(folder?: string): string {
   return folder ? `?folder=${encodeURIComponent(folder)}` : "";
 }
 
+/** Human label for a connected workspace: its GitHub-style URL when the share
+ *  path is repo-shaped (/gh/owner/repo -> github.com/owner/repo, /git/<host>/…
+ *  -> <host>/…), else the deep-link path as-is. */
+function shareLabel(path: string | null): string | null {
+  if (!path) return null;
+  const gh = path.match(/^\/gh\/(.+)$/);
+  if (gh) return `github.com/${gh[1]}`;
+  const git = path.match(/^\/git\/(.+)$/);
+  if (git) return git[1];
+  return path;
+}
+
 /**
  * Find which of the user's saved rooms hosts a server matching a token-less deep
  * link. Opens a short-lived viewer connection to each candidate room in
@@ -291,6 +303,13 @@ export function Discovery() {
     if (resolvedRef.current) return;
     tryAutoConnect();
   }, [serversByRoom, tokens]);
+
+  // Mirror the open workspace into the tab title (GitHub-style URL), so tabs
+  // read as "github.com/owner/repo/tree/main — codehost", not all "Codehost".
+  useEffect(() => {
+    const label = connState === "connected" ? shareLabel(sharePathRef.current) : null;
+    document.title = label ? `${label} — codehost` : "Codehost";
+  }, [connState]);
 
   // Keep the connection in sync with the URL as servers come and go: reconnect
   // when the workspace named by the address bar (re)appears in a room — covers a
@@ -691,8 +710,10 @@ export function Discovery() {
   // Group workspaces by machine: the stable hostId when the daemon advertises
   // one, else the hostname string (older daemons), else the peer stands alone.
   // Agents are machine-level (advertised by the host's root daemon) — collect
-  // them per group, deduped by pid across peers.
-  const hostGroups: { key: string; label: string; items: typeof filtered; agents: AgentInfo[] }[] = [];
+  // them per group, deduped by pid across peers, each remembering its room so
+  // a click can hand the agent-yes console the right token.
+  type RoomedAgent = AgentInfo & { room: string };
+  const hostGroups: { key: string; label: string; items: typeof filtered; agents: RoomedAgent[] }[] = [];
   for (const t of filtered) {
     const key = t.server.meta?.hostId ?? t.server.meta?.host ?? t.server.peerId;
     let group = hostGroups.find((g) => g.key === key);
@@ -702,7 +723,7 @@ export function Discovery() {
     }
     group.items.push(t);
     for (const a of t.server.meta?.agents ?? []) {
-      if (!group.agents.some((x) => x.pid === a.pid)) group.agents.push(a);
+      if (!group.agents.some((x) => x.pid === a.pid)) group.agents.push({ ...a, room: t.room });
     }
   }
   const toggleTag = (t: string) =>
@@ -765,8 +786,15 @@ export function Discovery() {
           <header style={styles.header}>
             <span style={styles.brand}>codehost</span>
             <span style={styles.dim}>·</span>
-            <span style={styles.dim}>{activeServer?.meta?.name ?? activePeerId?.slice(0, 8)}</span>
-            {activeServer?.meta?.cwd && <span style={styles.cwd}>{activeServer.meta.cwd}</span>}
+            <span
+              style={styles.cwd}
+              title={`${activeServer?.meta?.name ?? ""} ${activeServer?.meta?.cwd ?? ""}`.trim()}
+            >
+              {shareLabel(sharePathRef.current) ??
+                activeServer?.meta?.cwd ??
+                activeServer?.meta?.name ??
+                activePeerId?.slice(0, 8)}
+            </span>
             <span style={{ flex: 1 }} />
             <button
               style={styles.shareBtn}
@@ -959,14 +987,20 @@ export function Discovery() {
                 {g.agents.length > 0 && (
                   <div style={styles.agentRow}>
                     {g.agents.map((a) => (
-                      <span
+                      <a
                         key={a.pid}
                         style={styles.agentChip}
-                        title={`${a.cwd}${a.title ? `\n${a.title}` : ""}`}
+                        title={`${a.cwd}${a.title ? `\n${a.title}` : ""}\nopen in the agent-yes console`}
+                        // Tail & send live in the agent-yes console — it joins
+                        // this same room as a viewer (token rides the fragment,
+                        // never sent to a server) and auto-selects the pid.
+                        href={`https://agent-yes.com/?pid=${a.pid}#ch:${encodeURIComponent(a.room)}`}
+                        target="_blank"
+                        rel="noopener"
                       >
                         <span style={{ color: a.state === "active" ? "#4ec9b0" : "#777" }}>●</span> {a.tool}{" "}
                         {a.pid}
-                      </span>
+                      </a>
                     ))}
                   </div>
                 )}
@@ -1081,7 +1115,7 @@ const styles: Record<string, React.CSSProperties> = {
   agentRow: { display: "flex", flexWrap: "wrap", gap: 6, margin: "0 0 8px" },
   agentChip: {
     fontFamily: "monospace", fontSize: 11.5, padding: "2px 8px", borderRadius: 999,
-    border: "1px solid #3d3d3d", color: "#9aa4af",
+    border: "1px solid #3d3d3d", color: "#9aa4af", textDecoration: "none", cursor: "pointer",
   },
   card: { display: "flex", alignItems: "center", gap: 12, background: "#252525", border: "1px solid #3d3d3d", borderRadius: 8, padding: "12px 14px" },
   cardMain: { flex: 1, minWidth: 0 },
