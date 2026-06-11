@@ -146,16 +146,26 @@ export const serveCommand: CommandModule<{}, ServeArgs> = {
     // so the advertised list and the provisioned paths agree.
     const layout = readCodehostConfig(dir).workspace || DEFAULT_LAYOUT;
     const plugins = [agentYesPlugin()].filter((p) => p != null);
+    // buildMeta runs every AGENTS_META_POLL_MS so live agent titles propagate
+    // (the room only sees a push when something changed). The filesystem walk
+    // for checkouts is the expensive part — memoize it; registered workspaces
+    // and agents are cheap reads and stay fresh on every call.
+    const WORKSPACE_WALK_TTL_MS = 30_000;
+    let wsWalk: { at: number; list: ReturnType<typeof enumerateWorkspaces> } | null = null;
     const buildMeta = (): PeerMeta => {
       // Layout-enumerated checkouts plus directories other `codehost dev` runs
       // registered with this host daemon (git-identified best-effort).
-      const workspaces = enumerateWorkspaces(dir, layout);
-      // The config dir itself is editable from the site (rendered as ⚙, opens
-      // in the editor) — advertised so its /host/<host>/<path> link resolves.
-      const configDir = join(dir, ".codehost");
-      if (existsSync(configDir)) {
-        workspaces.push({ path: toPosixPath(configDir), config: true });
+      if (!wsWalk || Date.now() - wsWalk.at > WORKSPACE_WALK_TTL_MS) {
+        const list = enumerateWorkspaces(dir, layout);
+        // The config dir itself is editable from the site (rendered as ⚙, opens
+        // in the editor) — advertised so its /host/<host>/<path> link resolves.
+        const configDir = join(dir, ".codehost");
+        if (existsSync(configDir)) {
+          list.push({ path: toPosixPath(configDir), config: true });
+        }
+        wsWalk = { at: Date.now(), list };
       }
+      const workspaces = [...wsWalk.list];
       for (const w of readRegisteredWorkspaces()) {
         const path = toPosixPath(w.path);
         if (workspaces.some((x) => x.path === path)) continue;
@@ -193,6 +203,9 @@ export const serveCommand: CommandModule<{}, ServeArgs> = {
       signal: argv.signal,
       meta: buildMeta(),
       refreshMeta: buildMeta,
+      // Fast poll so agents' self-set titles go live on the site sidepanel;
+      // per tick it's pid-liveness checks + log-tail stat()s (see liveTitle).
+      metaRefreshMs: 3_000,
       watchFiles: [workspacesFile()],
       plugins,
       label: `serving workspace root ${dir}`,

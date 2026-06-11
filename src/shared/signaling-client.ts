@@ -34,14 +34,30 @@ export interface CloseInfo {
  *  connection that completes the handshake then drops within seconds (a
  *  middlebox that accepts the WebSocket upgrade but kills the socket, seen on
  *  some field networks) must keep backing off — otherwise every reset-to-1s
- *  open/close cycle becomes a sub-second reconnect storm. */
-const STABLE_MS = 10_000;
+ *  open/close cycle becomes a sub-second reconnect storm. A server that drops
+ *  sockets every few tens of seconds (room DO redeploys, sweep evictions) must
+ *  also keep backing off, so this sits above any such churn period. */
+const STABLE_MS = 60_000;
 
 /** Abort a connect attempt that hasn't opened by this deadline. Observed in the
  *  field (Chrome, page-load burst): a socket can sit in CONNECTING for minutes
  *  and never fire close — so without this, no retry ever runs, even though a
  *  freshly-created socket to the same room opens instantly. */
 const CONNECT_TIMEOUT_MS = 10_000;
+
+/** Reconnect backoff bounds. Every signaling round-trip (WS upgrade, hello,
+ *  ping) is a billable request on the room Durable Object, so idle/broken
+ *  clients must converge to a slow cadence: cap at 2 min, with ±25% jitter so
+ *  a fleet of daemons dropped by one server restart doesn't thundering-herd. */
+const RECONNECT_MIN_MS = 1_000;
+const RECONNECT_MAX_MS = 120_000;
+
+/** Heartbeat cadence. Paired with the room's STALE_MS (65s): the sweep
+ *  tolerates ~2 missed beats. Each ping is a billable DO request — at 25s a
+ *  day-long connection costs ~3.5k requests, vs ~8.6k at the old 10s. Hidden
+ *  tabs survive too: Chrome's intensive throttling clamps timers to 1/min,
+ *  still inside the 65s window. */
+const HEARTBEAT_MS = 25_000;
 
 /**
  * Thin WebSocket client for the signaling room. Runs unchanged in the browser
@@ -52,8 +68,10 @@ export class SignalingClient {
   readonly peerId: string;
   private ws: WebSocket | null = null;
   private closed = false;
-  private reconnectDelay = 1000;
+  private reconnectDelay = RECONNECT_MIN_MS;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  /** True while a hidden tab sits out reconnection; onWake resumes it. */
+  private dormant = false;
   private heartbeat: ReturnType<typeof setInterval> | null = null;
   /** Fires STABLE_MS after a socket opens; only then is the backoff reset. */
   private stableTimer: ReturnType<typeof setTimeout> | null = null;
@@ -90,12 +108,23 @@ export class SignalingClient {
       }
       return;
     }
-    // Closed and waiting out the (throttled) backoff: skip the wait.
-    if (this.reconnectTimer != null) {
+    // Dormant (hidden tab sat out reconnection) or waiting out a throttled
+    // backoff: reconnect now.
+    if (this.dormant || this.reconnectTimer != null) {
+      this.dormant = false;
       this.clearReconnectTimer();
       this.open();
     }
   };
+
+  /** A hidden tab doesn't reconnect at all — abandoned tabs used to churn
+   *  evict/reconnect cycles against the room DO all night. Existing WebRTC
+   *  tunnels keep working without signaling; on visibility/focus/online the
+   *  wake handler reconnects within milliseconds. */
+  private hidden(): boolean {
+    const doc = (globalThis as { document?: { visibilityState?: string } }).document;
+    return doc?.visibilityState === "hidden";
+  }
 
   private attachWakeListeners(): void {
     const doc = (globalThis as { document?: EventTarget }).document;
@@ -143,7 +172,7 @@ export class SignalingClient {
       // its backoff keeps growing instead of hammering at 1s.
       this.clearStableTimer();
       this.stableTimer = setTimeout(() => {
-        this.reconnectDelay = 1000;
+        this.reconnectDelay = RECONNECT_MIN_MS;
       }, STABLE_MS);
       const hello: ClientMessage = {
         type: "hello",
@@ -186,9 +215,8 @@ export class SignalingClient {
     };
   }
 
-  // Heartbeat keeps the room's liveness sweep from evicting us. At 10s, the DO
-  // (STALE_MS 35s) tolerates ~3 missed beats before treating us as gone — fast
-  // enough that a crashed peer stops showing as a phantom server within ~1 sweep.
+  // Heartbeat keeps the room's liveness sweep from evicting us — see
+  // HEARTBEAT_MS for the cadence/cost trade-off.
   private startHeartbeat(): void {
     this.stopHeartbeat();
     this.heartbeat = setInterval(() => {
@@ -197,7 +225,7 @@ export class SignalingClient {
       } catch {
         // socket gone; onclose will reconnect
       }
-    }, 10000);
+    }, HEARTBEAT_MS);
   }
 
   private stopHeartbeat(): void {
@@ -215,12 +243,23 @@ export class SignalingClient {
   }
 
   private scheduleReconnect(): void {
-    const delay = this.reconnectDelay;
-    this.reconnectDelay = Math.min(delay * 2, 15000);
+    if (this.hidden()) {
+      this.dormant = true;
+      return;
+    }
+    // ±25% jitter so a fleet dropped together doesn't reconnect together.
+    const delay = Math.round(this.reconnectDelay * (0.75 + Math.random() * 0.5));
+    this.reconnectDelay = Math.min(this.reconnectDelay * 2, RECONNECT_MAX_MS);
     this.clearReconnectTimer();
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
-      if (!this.closed) this.open();
+      if (this.closed) return;
+      if (this.hidden()) {
+        // Went hidden while waiting — sit out until the wake handler fires.
+        this.dormant = true;
+        return;
+      }
+      this.open();
     }, delay);
   }
 
@@ -248,6 +287,7 @@ export class SignalingClient {
 
   close(): void {
     this.closed = true;
+    this.dormant = false;
     this.detachWakeListeners();
     this.clearReconnectTimer();
     this.stopHeartbeat();

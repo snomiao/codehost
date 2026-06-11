@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { agentYesPlugin, readAgents } from "./agent-yes";
+import { agentYesPlugin, liveTitle, readAgents } from "./agent-yes";
 import { routePlugins, withPluginMeta } from "./types";
 
 function makeAyDir(lines: object[]): string {
@@ -33,6 +33,42 @@ describe("readAgents", () => {
 
   test("missing registry -> empty", () => {
     expect(readAgents(mkdtempSync(join(tmpdir(), "codehost-ay-empty-")))).toEqual([]);
+  });
+
+  test("live OSC title from the log tail beats the launch prompt", () => {
+    const dir = mkdtempSync(join(tmpdir(), "codehost-ay-title-"));
+    const log = join(dir, "agent.raw.log");
+    writeFileSync(log, "boot\x1b]2;first title\x07work work\x1b]0;renamed by agent\x07tail");
+    writeFileSync(
+      join(dir, "pids.jsonl"),
+      JSON.stringify({
+        pid: process.pid,
+        cli: "claude",
+        prompt: "the launch prompt",
+        cwd: "/tmp/x",
+        log_file: log,
+        status: "active",
+      }) + "\n",
+    );
+    expect(readAgents(dir)[0].title).toBe("renamed by agent");
+  });
+});
+
+describe("liveTitle", () => {
+  test("returns the LAST OSC 0/2 title, cached by (size, mtime)", () => {
+    const dir = mkdtempSync(join(tmpdir(), "codehost-ay-osc-"));
+    const log = join(dir, "x.log");
+    writeFileSync(log, "\x1b]0;one\x07...\x1b]2;two\x1b\\rest");
+    expect(liveTitle(log)).toBe("two");
+    expect(liveTitle(log)).toBe("two"); // cache hit path
+  });
+
+  test("missing file / no title -> null", () => {
+    expect(liveTitle("/nonexistent/x.log")).toBeNull();
+    const dir = mkdtempSync(join(tmpdir(), "codehost-ay-osc2-"));
+    const log = join(dir, "plain.log");
+    writeFileSync(log, "no escapes here");
+    expect(liveTitle(log)).toBeNull();
   });
 });
 

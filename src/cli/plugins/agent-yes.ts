@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { closeSync, existsSync, fstatSync, openSync, readFileSync, readSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { toPosixPath } from "../../shared/repo";
@@ -22,8 +22,45 @@ interface AyRecord {
   cli?: string;
   prompt?: string | null;
   cwd?: string;
+  log_file?: string | null;
   status?: "active" | "idle" | "exited";
   started_at?: number;
+}
+
+// Agents retitle their terminal by writing OSC 0/2 (\x1b]2;name\x07) into the
+// PTY stream agent-yes logs; the most recent one is the live title (same trick
+// `ay serve` uses for /api/ls). Read straight from the log tail so it works
+// even when ay serve is down. Cached per (size, mtime): only logs that grew
+// since the last refresh are re-read, so a frequent meta poll stays cheap.
+const TITLE_TAIL_BYTES = 65536;
+const titleCache = new Map<string, { size: number; mtimeMs: number; title: string | null }>();
+
+export function liveTitle(logFile: string | null | undefined): string | null {
+  if (!logFile) return null;
+  try {
+    const fd = openSync(logFile, "r");
+    try {
+      const { size, mtimeMs } = fstatSync(fd);
+      const hit = titleCache.get(logFile);
+      if (hit && hit.size === size && hit.mtimeMs === mtimeMs) return hit.title;
+      const len = Math.min(size, TITLE_TAIL_BYTES);
+      const buf = Buffer.allocUnsafe(len);
+      const bytesRead = readSync(fd, buf, 0, len, size - len);
+      const text = buf.toString("utf-8", 0, bytesRead);
+      // eslint-disable-next-line no-control-regex
+      const oscTitleRe = /\x1b\][02];([^\x07\x1b]*)(?:\x07|\x1b\\)/g;
+      let title: string | null = null;
+      for (let m: RegExpExecArray | null; (m = oscTitleRe.exec(text)); ) {
+        if (m[1].trim()) title = m[1].trim();
+      }
+      titleCache.set(logFile, { size, mtimeMs, title });
+      return title;
+    } finally {
+      closeSync(fd);
+    }
+  } catch {
+    return null;
+  }
 }
 
 /** agent-yes's global registry: JSONL, last line per pid wins. */
@@ -48,10 +85,12 @@ export function readAgents(dir: string = AY_DIR): AgentInfo[] {
   for (const rec of [...byPid.values()].sort((a, b) => (b.started_at ?? 0) - (a.started_at ?? 0))) {
     if (out.length >= MAX_AGENTS) break;
     if (rec.status === "exited" || !alive(rec.pid)) continue;
+    // Live self-set title from the PTY log beats the static launch prompt.
+    const title = liveTitle(rec.log_file) ?? rec.prompt ?? null;
     out.push({
       pid: rec.pid,
       tool: rec.cli || "agent",
-      ...(rec.prompt ? { title: rec.prompt.slice(0, 120) } : {}),
+      ...(title ? { title: title.slice(0, 120) } : {}),
       cwd: toPosixPath(rec.cwd ?? ""),
       state: rec.status === "active" ? "active" : "idle",
       ...(rec.started_at ? { startedAt: rec.started_at } : {}),

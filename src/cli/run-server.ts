@@ -31,10 +31,14 @@ export interface RunServerOptions {
   /** Enables `/__codehost/provision` on the tunnel (serve only — runs the home's
    *  setup.sh). Omitted by `expose`, which has no home/workspace. */
   provision?: ProvisionDeps;
-  /** Recompute the advertised meta (e.g. re-enumerate workspaces). Polled on a
-   *  slow interval and right after each provision; pushed to the room only when
+  /** Recompute the advertised meta (e.g. re-enumerate workspaces). Polled on
+   *  an interval and right after each provision; pushed to the room only when
    *  it actually changed. */
   refreshMeta?: () => PeerMeta;
+  /** Meta poll cadence (default META_REFRESH_MS). `serve` polls fast so live
+   *  agent titles propagate — refreshMeta must then be cheap per call. The
+   *  room only sees a message when the meta actually changed. */
+  metaRefreshMs?: number;
   /** Daemon plugins: tunneled routes under /__codehost/<name>/ (their meta
    *  contributions are the caller's job, inside `meta`/`refreshMeta`). */
   plugins?: DaemonPlugin[];
@@ -113,16 +117,24 @@ export async function runServer(opts: RunServerOptions): Promise<never> {
 
   client.connect();
   if (opts.refreshMeta) {
-    setInterval(refreshMeta, META_REFRESH_MS);
-    // Instant re-advertise when a watched file changes (debounced — editors
-    // and fs.watch both fire in bursts).
+    setInterval(refreshMeta, opts.metaRefreshMs ?? META_REFRESH_MS);
+    // Near-instant re-advertise when a watched file changes. Throttled, not
+    // debounced: fs.watch fires in bursts, but a file that changes CONSTANTLY
+    // (a busy registry) would keep resetting a debounce forever — a trailing
+    // throttle guarantees a refresh at most/at least every 300ms.
     let pending: ReturnType<typeof setTimeout> | null = null;
+    const requestRefresh = () => {
+      if (pending) return;
+      pending = setTimeout(() => {
+        pending = null;
+        refreshMeta();
+      }, 300);
+    };
     for (const file of opts.watchFiles ?? []) {
       try {
         watch(dirname(file), (_event, filename) => {
           if (filename && filename !== basename(file)) return;
-          if (pending) clearTimeout(pending);
-          pending = setTimeout(refreshMeta, 300);
+          requestRefresh();
         });
       } catch {
         // missing dir / unsupported platform — the interval still covers it

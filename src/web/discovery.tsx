@@ -1000,6 +1000,7 @@ export function Discovery() {
                       >
                         <span style={{ color: a.state === "active" ? "#4ec9b0" : "#777" }}>●</span> {a.tool}{" "}
                         {a.pid}
+                        {a.title && <span style={styles.agentTitle}>{a.title}</span>}
                       </a>
                     ))}
                   </div>
@@ -1118,6 +1119,13 @@ const styles: Record<string, React.CSSProperties> = {
   agentChip: {
     fontFamily: "monospace", fontSize: 11.5, padding: "2px 8px", borderRadius: 999,
     border: "1px solid #3d3d3d", color: "#9aa4af", textDecoration: "none", cursor: "pointer",
+    display: "inline-flex", alignItems: "baseline", gap: 4, maxWidth: 360,
+  },
+  // Live self-set agent title (daemon re-reads it from the PTY log and pushes
+  // a meta update, so this re-renders as the agent renames itself).
+  agentTitle: {
+    color: "#6e7681", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+    minWidth: 0, flex: "0 1 auto",
   },
   card: { display: "flex", alignItems: "center", gap: 12, background: "#252525", border: "1px solid #3d3d3d", borderRadius: 8, padding: "12px 14px" },
   cardMain: { flex: 1, minWidth: 0 },

@@ -15,10 +15,14 @@ interface Attachment {
 }
 
 /** How often the room scans for dead sockets, and how long a socket may go
- *  silent before eviction. Clients heartbeat every ~10s; allow ~3 misses, so a
- *  crashed peer drops out within ~35-50s instead of lingering as a phantom. */
-const SWEEP_MS = 15_000;
-const STALE_MS = 35_000;
+ *  silent before eviction. Clients heartbeat every ~25s (HEARTBEAT_MS in
+ *  signaling-client.ts); allow ~2 misses, so a crashed peer drops out within
+ *  ~65-85s. Every sweep alarm and every ping is a billable DO request, so both
+ *  cadences are deliberately slow — a hidden Chrome tab's throttled timers
+ *  (1/min) must still beat STALE_MS, or background tabs churn evict/reconnect
+ *  cycles all day. */
+const SWEEP_MS = 20_000;
+const STALE_MS = 65_000;
 
 /**
  * One Durable Object instance per token-room. Holds the live WebSocket

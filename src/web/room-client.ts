@@ -25,12 +25,19 @@ export interface RoomOptions {
   onStatus?: (open: boolean) => void;
 }
 
+/** After a failed dial, refuse redials to that peer for this long. Pollers
+ *  (the agent-yes console asks every host for /api/ls every ~3s) would
+ *  otherwise spin up a fresh RTCPeerConnection per poll, and every ICE
+ *  candidate of every attempt is a billable signaling-DO request. */
+const DIAL_FAIL_COOLDOWN_MS = 10_000;
+
 export class CodehostRoom {
   /** Server peers currently in the room (viewers filtered out). */
   peers: PeerInfo[] = [];
   private signaling: SignalingClient;
   private rtcs = new Map<string, RtcClient>();
   private tunnels = new Map<string, Promise<TunnelClient>>();
+  private dialFailedAt = new Map<string, number>();
   private closed = false;
 
   constructor(opts: RoomOptions) {
@@ -65,6 +72,10 @@ export class CodehostRoom {
   private dial(peerId: string): Promise<TunnelClient> {
     const existing = this.tunnels.get(peerId);
     if (existing) return existing;
+    const failedAt = this.dialFailedAt.get(peerId);
+    if (failedAt != null && Date.now() - failedAt < DIAL_FAIL_COOLDOWN_MS) {
+      return Promise.reject(new Error("dial failed recently; cooling down"));
+    }
     const drop = () => {
       this.tunnels.delete(peerId);
       this.rtcs.get(peerId)?.close();
@@ -79,6 +90,7 @@ export class CodehostRoom {
         sendSignal: (data: RtcSignal) => this.signaling.sendSignal(peerId, data),
         onOpen: (channel) => {
           clearTimeout(timer);
+          this.dialFailedAt.delete(peerId);
           resolve(new TunnelClient(channel));
         },
         onClose: drop,
@@ -94,7 +106,10 @@ export class CodehostRoom {
       });
     });
     this.tunnels.set(peerId, dialing);
-    dialing.catch(() => this.tunnels.delete(peerId));
+    dialing.catch(() => {
+      this.dialFailedAt.set(peerId, Date.now());
+      this.tunnels.delete(peerId);
+    });
     return dialing;
   }
 
