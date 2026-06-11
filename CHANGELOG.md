@@ -1,3 +1,10 @@
+## [0.18.1](https://github.com/snomiao/codehost/compare/v0.18.0...v0.18.1) (2026-06-11)
+
+
+### Bug Fixes
+
+* **signaling:** abort connect attempts stuck in CONNECTING; guard tunnel stream enqueue ([b3ae0d1](https://github.com/snomiao/codehost/commit/b3ae0d11299a195b8d09e42355cd14a3b09b8d2f))
+
 # [0.18.0](https://github.com/snomiao/codehost/compare/v0.17.0...v0.18.0) (2026-06-11)
 
 
