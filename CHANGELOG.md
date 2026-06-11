@@ -1,3 +1,10 @@
+# [0.20.0](https://github.com/snomiao/codehost/compare/v0.19.0...v0.20.0) (2026-06-11)
+
+
+### Features
+
+* **web:** edit a host's .codehost config from the site — advertised as a ⚙ workspace entry ([7c97b87](https://github.com/snomiao/codehost/commit/7c97b870715d6879cee39dab286cc7b8d45f08a6))
+
 # [0.19.0](https://github.com/snomiao/codehost/compare/v0.18.2...v0.19.0) (2026-06-11)
 
 
