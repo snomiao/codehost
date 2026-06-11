@@ -53,6 +53,7 @@ export class SignalingClient {
   private ws: WebSocket | null = null;
   private closed = false;
   private reconnectDelay = 1000;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private heartbeat: ReturnType<typeof setInterval> | null = null;
   /** Fires STABLE_MS after a socket opens; only then is the backoff reset. */
   private stableTimer: ReturnType<typeof setTimeout> | null = null;
@@ -65,7 +66,51 @@ export class SignalingClient {
 
   connect(): void {
     this.closed = false;
+    this.attachWakeListeners();
     this.open();
+  }
+
+  // ---- background-tab recovery -------------------------------------------
+  // Chrome throttles timers in hidden tabs to minutes, so the backoff retry
+  // (and the connect-timeout abort) may be arbitrarily far away even though a
+  // fresh socket would connect in milliseconds. When the tab becomes visible /
+  // focused / back online, recover NOW instead of waiting for a timer.
+
+  private onWake = (): void => {
+    if (this.closed) return;
+    const state = this.ws?.readyState;
+    if (state === 1 /* OPEN */) return;
+    if (state === 0 /* CONNECTING */) {
+      // Stuck handshake: abort — onclose reschedules, and timers run normally
+      // now that the tab is active.
+      try {
+        this.ws?.close();
+      } catch {
+        // ignore
+      }
+      return;
+    }
+    // Closed and waiting out the (throttled) backoff: skip the wait.
+    if (this.reconnectTimer != null) {
+      this.clearReconnectTimer();
+      this.open();
+    }
+  };
+
+  private attachWakeListeners(): void {
+    const doc = (globalThis as { document?: EventTarget }).document;
+    doc?.addEventListener("visibilitychange", this.onWake);
+    const win = (globalThis as { window?: EventTarget }).window;
+    win?.addEventListener("focus", this.onWake);
+    win?.addEventListener("online", this.onWake);
+  }
+
+  private detachWakeListeners(): void {
+    const doc = (globalThis as { document?: EventTarget }).document;
+    doc?.removeEventListener("visibilitychange", this.onWake);
+    const win = (globalThis as { window?: EventTarget }).window;
+    win?.removeEventListener("focus", this.onWake);
+    win?.removeEventListener("online", this.onWake);
   }
 
   private roomUrl(): string {
@@ -172,9 +217,18 @@ export class SignalingClient {
   private scheduleReconnect(): void {
     const delay = this.reconnectDelay;
     this.reconnectDelay = Math.min(delay * 2, 15000);
-    setTimeout(() => {
+    this.clearReconnectTimer();
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
       if (!this.closed) this.open();
     }, delay);
+  }
+
+  private clearReconnectTimer(): void {
+    if (this.reconnectTimer != null) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
   }
 
   sendSignal(to: string, data: unknown): void {
@@ -194,6 +248,8 @@ export class SignalingClient {
 
   close(): void {
     this.closed = true;
+    this.detachWakeListeners();
+    this.clearReconnectTimer();
     this.stopHeartbeat();
     this.clearStableTimer();
     try {
