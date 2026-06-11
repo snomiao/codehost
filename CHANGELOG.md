@@ -1,3 +1,10 @@
+## [0.18.2](https://github.com/snomiao/codehost/compare/v0.18.1...v0.18.2) (2026-06-11)
+
+
+### Bug Fixes
+
+* **signaling:** recover instantly when a throttled tab wakes (visibility/focus/online) ([d459132](https://github.com/snomiao/codehost/commit/d45913267f053ee1fee062bae550cfe60a193207))
+
 ## [0.18.1](https://github.com/snomiao/codehost/compare/v0.18.0...v0.18.1) (2026-06-11)
 
 
