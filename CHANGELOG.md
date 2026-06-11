@@ -1,3 +1,20 @@
+# [0.17.0](https://github.com/snomiao/codehost/compare/v0.16.0...v0.17.0) (2026-06-11)
+
+
+### Bug Fixes
+
+* **vscode:** reject the desktop bin/code wrapper — probe serve-web support, not just --version ([e5b133d](https://github.com/snomiao/codehost/commit/e5b133d0ff38f4e1052f87c22279c7850eb98968))
+
+
+### Features
+
+* **history:** durable history via hostId + machine-preferring deep-link resolution ([1935579](https://github.com/snomiao/codehost/commit/1935579a40fb7c42f46b8f1596497dac812cdc2b))
+* **host:** one daemon per host — `dev` registers with a live root daemon instead of spawning a second peer ([43051de](https://github.com/snomiao/codehost/commit/43051deaae33f647b26bdcf0facb0bac9507471f))
+* **identity:** stable per-machine hostId, advertised in PeerMeta; web groups workspaces by host ([43a48a2](https://github.com/snomiao/codehost/commit/43a48a2630534c36c399f0cce294a2e96235b5fb))
+* **lib:** embeddable room-client bundle for external consoles (agent-yes.com) ([fd0afd1](https://github.com/snomiao/codehost/commit/fd0afd19234816127b640c397eeac5cc7968f484))
+* **plugins:** daemon plugin layer + agent-yes plugin (agents[] in meta, ay API proxy over the tunnel) ([60f77b2](https://github.com/snomiao/codehost/commit/60f77b2dbbe3b649bbc8a34982b028d5a432ddb7))
+* **tree:** root daemons advertise enumerated workspaces; live meta updates; exact deep-link matching ([81493be](https://github.com/snomiao/codehost/commit/81493be6694d85110a0e9f1244bd6604875c02a2))
+
 # [0.16.0](https://github.com/snomiao/codehost/compare/v0.15.0...v0.16.0) (2026-06-10)
 
 
