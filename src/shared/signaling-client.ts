@@ -37,6 +37,12 @@ export interface CloseInfo {
  *  open/close cycle becomes a sub-second reconnect storm. */
 const STABLE_MS = 10_000;
 
+/** Abort a connect attempt that hasn't opened by this deadline. Observed in the
+ *  field (Chrome, page-load burst): a socket can sit in CONNECTING for minutes
+ *  and never fire close — so without this, no retry ever runs, even though a
+ *  freshly-created socket to the same room opens instantly. */
+const CONNECT_TIMEOUT_MS = 10_000;
+
 /**
  * Thin WebSocket client for the signaling room. Runs unchanged in the browser
  * and in Bun (both expose a global `WebSocket`). Auto-reconnects with backoff
@@ -71,7 +77,21 @@ export class SignalingClient {
     const ws = new WebSocket(this.roomUrl());
     this.ws = ws;
 
+    // A stuck CONNECTING socket never fires close on its own — abort it so the
+    // normal onclose -> backoff -> retry path takes over.
+    const connectTimer = setTimeout(() => {
+      if (ws.readyState === 0 /* CONNECTING */) {
+        try {
+          ws.close();
+        } catch {
+          // closing an unopened socket may throw in some runtimes — the
+          // onerror/onclose path still runs
+        }
+      }
+    }, CONNECT_TIMEOUT_MS);
+
     ws.onopen = () => {
+      clearTimeout(connectTimer);
       this.openedAt = Date.now();
       // Don't reset the backoff yet — only once the socket proves stable (see
       // STABLE_MS). A handshake-then-drop network never reaches this timer, so
@@ -103,6 +123,7 @@ export class SignalingClient {
     };
 
     ws.onclose = (ev) => {
+      clearTimeout(connectTimer);
       this.clearStableTimer();
       this.stopHeartbeat();
       const ms = this.openedAt ? Date.now() - this.openedAt : 0;

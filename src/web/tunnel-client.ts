@@ -129,7 +129,13 @@ export class TunnelClient {
             }),
           );
         },
-        onBody: (b) => controller?.enqueue(b),
+        onBody: (b) => {
+          try {
+            controller?.enqueue(b);
+          } catch {
+            // stream already closed/cancelled (consumer went away mid-body)
+          }
+        },
         onEnd: () => {
           try {
             controller?.close();
