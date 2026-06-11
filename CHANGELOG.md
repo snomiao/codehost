@@ -1,3 +1,11 @@
+# [0.18.0](https://github.com/snomiao/codehost/compare/v0.17.0...v0.18.0) (2026-06-11)
+
+
+### Features
+
+* **cli:** ~/ws as the default workspace root + loud y/N confirm for serving $HOME ([aee5a20](https://github.com/snomiao/codehost/commit/aee5a207a930058472f5b2042a56904051e079a7))
+* **provision:** batteries-included roots — setup auto-scaffolds .codehost/, scaffold detaches fresh clones ([625d958](https://github.com/snomiao/codehost/commit/625d9587d97b59da0bb595aa456a56d3bf920ac4))
+
 # [0.17.0](https://github.com/snomiao/codehost/compare/v0.16.0...v0.17.0) (2026-06-11)
 
 
