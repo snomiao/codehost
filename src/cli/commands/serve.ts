@@ -1,10 +1,11 @@
-import { hostname } from "node:os";
+import { mkdirSync } from "node:fs";
+import { homedir, hostname } from "node:os";
 import { resolve } from "node:path";
 import type { CommandModule } from "yargs";
 import type { PeerMeta } from "../../shared/signaling";
 import { DEFAULT_LAYOUT, GITHUB_HOST, toPosixPath } from "../../shared/repo";
 import { TOKEN_REQUIREMENTS, validateToken } from "../../shared/token";
-import { ensureHostId } from "../config";
+import { defaultRoot, ensureHostId } from "../config";
 import { launchServeDaemon } from "../daemonize";
 import { announceConnect } from "../open-url";
 import { agentYesPlugin } from "../plugins/agent-yes";
@@ -23,8 +24,43 @@ import { enumerateWorkspaces } from "../workspaces";
 
 export const DEFAULT_SIGNAL_URL = "wss://signal.codehost.dev";
 
+/** Warn + interactively confirm a risky root (default No). Non-TTY contexts
+ *  (the oxmgr-daemonized child, CI) can't answer — there the human already
+ *  confirmed at launch time, so warn loudly and proceed. */
+export async function confirmRiskyRoot(dir: string): Promise<boolean> {
+  const warning = rootWarning(dir);
+  if (!warning) return true;
+  console.warn(`[codehost] warning: ${warning}`);
+  if (!process.stdin.isTTY || !process.stdout.isTTY) return true;
+  process.stdout.write("[codehost] serve it anyway? [y/N] ");
+  const line = await new Promise<string>((res) => {
+    process.stdin.resume();
+    process.stdin.once("data", (d) => {
+      process.stdin.pause();
+      res(String(d));
+    });
+  });
+  return /^y(es)?$/i.test(line.trim());
+}
+
+/** Warning for serving a risky workspace root, or null if fine. $HOME (and the
+ *  filesystem root) expose everything you own over the room, collide the
+ *  provisioning `.codehost/` with the machine-level `~/.codehost`, and make
+ *  workspace enumeration walk your whole home. Allowed if you insist — but
+ *  say so loudly and point at a dedicated dir like ~/ws. */
+export function rootWarning(dir: string): string | null {
+  const norm = resolve(dir);
+  if (norm === resolve(homedir())) {
+    return "serving your HOME directory as the workspace root — everything in it is reachable through this room. A dedicated dir is safer: codehost serve ~/ws";
+  }
+  if (norm === resolve("/")) {
+    return "serving the filesystem root — the entire machine is reachable through this room. A dedicated dir is safer, e.g. ~/ws";
+  }
+  return null;
+}
+
 interface ServeArgs {
-  dir: string;
+  dir?: string;
   token: string;
   name?: string;
   signal: string;
@@ -39,9 +75,8 @@ export const serveCommand: CommandModule<{}, ServeArgs> = {
   builder: (y) =>
     y
       .positional("dir", {
-        describe: "Directory to serve (defaults to cwd)",
+        describe: "Workspace root to serve (default: the remembered root, else ~/ws)",
         type: "string",
-        default: ".",
       })
       .option("token", {
         alias: "t",
@@ -77,7 +112,17 @@ export const serveCommand: CommandModule<{}, ServeArgs> = {
       process.exit(1);
     }
 
-    const dir = resolve(process.cwd(), argv.dir);
+    // Explicit dir > remembered root (config.json) > ~/ws. Bare `codehost
+    // serve` should land somewhere sane, never accidentally on $HOME/cwd.
+    const dir = argv.dir ? resolve(process.cwd(), argv.dir) : defaultRoot();
+    if (!argv.dir) {
+      mkdirSync(dir, { recursive: true });
+      console.log(`[codehost] no dir given — serving workspace root ${dir}`);
+    }
+    if (!(await confirmRiskyRoot(dir))) {
+      console.error("[codehost] aborted");
+      process.exit(1);
+    }
     const host = hostname();
 
     // `-d`: re-launch this same `serve` (without -d) under oxmgr, then exit.

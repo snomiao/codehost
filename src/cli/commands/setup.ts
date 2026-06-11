@@ -1,17 +1,19 @@
+import { mkdirSync } from "node:fs";
 import { hostname } from "node:os";
 import { resolve } from "node:path";
 import type { CommandModule } from "yargs";
 import { generateToken, validateToken, TOKEN_REQUIREMENTS } from "../../shared/token";
-import { readConfig, writeConfig } from "../config";
+import { defaultRoot, readConfig, writeConfig } from "../config";
 import { launchServeDaemon } from "../daemonize";
 import { isGitRepo } from "../git";
 import { scaffoldCodehost } from "../init";
+import { confirmRiskyRoot } from "./serve";
 import { resolveCodeBinary } from "../vscode-install";
 import { announceConnect } from "../open-url";
 import { DEFAULT_SIGNAL_URL } from "./serve";
 
 interface SetupArgs {
-  dir: string;
+  dir?: string;
   token?: string;
   newToken: boolean;
   name?: string;
@@ -24,7 +26,10 @@ export const setupCommand: CommandModule<{}, SetupArgs> = {
   describe: "One-shot: pick a token, ensure VS Code, and start a daemonized server",
   builder: (y) =>
     y
-      .positional("dir", { describe: "Directory to serve (defaults to cwd)", type: "string", default: "." })
+      .positional("dir", {
+        describe: "Directory to serve (default: a git cwd serves itself, else the remembered root / ~/ws)",
+        type: "string",
+      })
       .option("token", {
         alias: "t",
         describe: "Room token (generated + saved if omitted)",
@@ -39,7 +44,23 @@ export const setupCommand: CommandModule<{}, SetupArgs> = {
       .option("signal", { describe: "Signaling server URL", type: "string", default: DEFAULT_SIGNAL_URL })
       .option("port", { describe: "Fixed port for the local VS Code server", type: "number" }) as any,
   handler: async (argv) => {
-    const dir = resolve(process.cwd(), argv.dir);
+    // Explicit dir > a git cwd (serve THIS repo) > remembered root > ~/ws —
+    // so a bare `codehost setup` (e.g. from the installer) lands on a sane
+    // workspace root instead of whatever directory it happened to run in.
+    let dir: string;
+    if (argv.dir) {
+      dir = resolve(process.cwd(), argv.dir);
+    } else if (isGitRepo(process.cwd())) {
+      dir = process.cwd();
+    } else {
+      dir = defaultRoot();
+      mkdirSync(dir, { recursive: true });
+      console.log(`[codehost] no dir given — using workspace root ${dir}`);
+    }
+    if (!(await confirmRiskyRoot(dir))) {
+      console.error("[codehost] aborted");
+      process.exit(1);
+    }
     const host = hostname();
 
     // 1. Resolve the room token: validate an explicit one, otherwise reuse the
@@ -64,6 +85,8 @@ export const setupCommand: CommandModule<{}, SetupArgs> = {
       if (written.length > 0) {
         console.log(`[codehost] scaffolded ${dir}/.codehost (config.yaml + setup hook — edit freely)`);
       }
+      // Remember an explicitly chosen root so future bare runs reuse it.
+      if (argv.dir) writeConfig({ ...readConfig(), root: dir });
     }
 
     // 4. Start the WebRTC + VS Code server under oxmgr. A git repo is a single

@@ -15,6 +15,9 @@ export interface CliConfig {
    *  this machine advertises it, so the web UI can group peers by host and
    *  history entries survive daemon restarts (peerIds are per-process). */
   hostId?: string;
+  /** Workspace root remembered from an explicit `codehost setup <dir>` —
+   *  reused when serve/setup run with no dir. Absent -> ~/ws. */
+  root?: string;
 }
 
 export function readConfig(file: string = CONFIG_FILE): CliConfig {
@@ -28,6 +31,12 @@ export function readConfig(file: string = CONFIG_FILE): CliConfig {
 export function writeConfig(config: CliConfig, file: string = CONFIG_FILE): void {
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, JSON.stringify(config, null, 2));
+}
+
+/** The workspace root to use when no dir was given: the remembered root from
+ *  config, else ~/ws (created on demand by the caller). Never $HOME itself. */
+export function defaultRoot(file: string = CONFIG_FILE): string {
+  return readConfig(file).root || join(homedir(), "ws");
 }
 
 /** This machine's persistent hostId, minting + saving it on first call. */

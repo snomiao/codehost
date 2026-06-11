@@ -7,9 +7,8 @@ import { join } from "node:path";
 
 const CONFIG_YAML = `# codehost workspace config — see docs/provisioning.md
 
-# Where /gh/<owner>/<repo>/tree/<branch> lands, relative to this home dir.
-# Recommended: serve your workspace root itself (codehost serve ~/ws) so this
-# stays prefix-free; if you serve $HOME instead, use "ws/{owner}/{repo}/tree/{branch}".
+# Where /gh/<owner>/<repo>/tree/<branch> lands, relative to this served root
+# (serve a dedicated workspace dir like ~/ws — never \$HOME itself).
 workspace: "{owner}/{repo}/tree/{branch}"
 
 # Optional: only these repos may auto-provision (a trailing /* is an owner
