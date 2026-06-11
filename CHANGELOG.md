@@ -1,3 +1,10 @@
+## [0.20.2](https://github.com/snomiao/codehost/compare/v0.20.1...v0.20.2) (2026-06-11)
+
+
+### Performance Improvements
+
+* **tunnel:** 64KB frames, gzip passthrough, immutable-asset SW cache, event-driven backpressure; ICE path badge ([da3647c](https://github.com/snomiao/codehost/commit/da3647c96ac1e323237e4743e7f0e4b1a83f741d))
+
 ## [0.20.1](https://github.com/snomiao/codehost/compare/v0.20.0...v0.20.1) (2026-06-11)
 
 
