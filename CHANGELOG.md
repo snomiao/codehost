@@ -1,3 +1,10 @@
+## [0.20.1](https://github.com/snomiao/codehost/compare/v0.20.0...v0.20.1) (2026-06-11)
+
+
+### Bug Fixes
+
+* **signaling:** tame the room-DO request storm; live agent titles on the sidepanel ([d39dceb](https://github.com/snomiao/codehost/commit/d39dceb2c7e3cd47dcb17f099aa8e0d37d3a7e13))
+
 # [0.20.0](https://github.com/snomiao/codehost/compare/v0.19.0...v0.20.0) (2026-06-11)
 
 
