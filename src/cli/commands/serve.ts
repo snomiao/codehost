@@ -1,6 +1,6 @@
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { homedir, hostname } from "node:os";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import type { CommandModule } from "yargs";
 import type { PeerMeta } from "../../shared/signaling";
 import { DEFAULT_LAYOUT, GITHUB_HOST, toPosixPath } from "../../shared/repo";
@@ -150,6 +150,12 @@ export const serveCommand: CommandModule<{}, ServeArgs> = {
       // Layout-enumerated checkouts plus directories other `codehost dev` runs
       // registered with this host daemon (git-identified best-effort).
       const workspaces = enumerateWorkspaces(dir, layout);
+      // The config dir itself is editable from the site (rendered as ⚙, opens
+      // in the editor) — advertised so its /host/<host>/<path> link resolves.
+      const configDir = join(dir, ".codehost");
+      if (existsSync(configDir)) {
+        workspaces.push({ path: toPosixPath(configDir), config: true });
+      }
       for (const w of readRegisteredWorkspaces()) {
         const path = toPosixPath(w.path);
         if (workspaces.some((x) => x.path === path)) continue;

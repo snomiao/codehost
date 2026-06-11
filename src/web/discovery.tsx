@@ -1025,11 +1025,13 @@ export function Discovery() {
                                   key={w.path}
                                   style={styles.wsLink}
                                   onClick={() => openWorkspace(s, w)}
-                                  title={w.path}
+                                  title={w.config ? `edit this host's provisioning config\n${w.path}` : w.path}
                                 >
-                                  {w.repo
-                                    ? `${w.repo.split("/").slice(1).join("/")}${w.branch ? ` @${w.branch}` : ""}`
-                                    : w.path}
+                                  {w.config
+                                    ? "⚙ .codehost (setup.sh, config.yaml)"
+                                    : w.repo
+                                      ? `${w.repo.split("/").slice(1).join("/")}${w.branch ? ` @${w.branch}` : ""}`
+                                      : w.path}
                                 </button>
                               ))}
                             </div>

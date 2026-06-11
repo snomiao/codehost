@@ -30,6 +30,10 @@ export interface WorkspaceInfo {
   repo?: string;
   /** Branch from the layout path, e.g. "main". */
   branch?: string;
+  /** This entry is the daemon's `.codehost/` config dir (setup.sh etc.), not a
+   *  repo checkout — clients render it as a settings affordance, openable in
+   *  the editor like any workspace. */
+  config?: boolean;
 }
 
 /** Metadata a `codehost serve`/`dev` daemon advertises about itself. */
