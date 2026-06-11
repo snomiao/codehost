@@ -1,3 +1,10 @@
+# [0.19.0](https://github.com/snomiao/codehost/compare/v0.18.2...v0.19.0) (2026-06-11)
+
+
+### Features
+
+* **web:** GitHub-URL header/title for the open workspace; agent chips link into the agent-yes console ([83d62bc](https://github.com/snomiao/codehost/commit/83d62bc2ab3e70722f8a4f0f817541bea7cf69a2))
+
 ## [0.18.2](https://github.com/snomiao/codehost/compare/v0.18.1...v0.18.2) (2026-06-11)
 
 
