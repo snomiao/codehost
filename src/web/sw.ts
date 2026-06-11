@@ -10,6 +10,12 @@ const sw = self as unknown as ServiceWorkerGlobalScope;
 
 const VS_PREFIX = /^\/vs\/([^/]+)(\/.*)?$/;
 const CDN_CACHE = "codehost-cdn-v1";
+const VS_STATIC_CACHE = "codehost-vs-static-v1";
+// VS Code's own immutable assets: /stable-<commit>/static/** is content-
+// addressed by the commit hash and identical across daemons, so it's cached
+// once per browser instead of crossing the WebRTC tunnel on every load. The
+// cache key strips the per-process /vs/<peerId> prefix.
+const VS_STATIC = /^\/(stable-[0-9a-f]{40})\/static\//;
 
 sw.addEventListener("install", () => sw.skipWaiting());
 sw.addEventListener("activate", (e) => e.waitUntil(sw.clients.claim()));
@@ -35,9 +41,38 @@ sw.addEventListener("fetch", (event: FetchEvent) => {
   const m = url.pathname.match(VS_PREFIX);
   if (!m) return; // let the network/Pages handle the discovery app itself
   const peerId = m[1];
+  const rest = (m[2] ?? "/") + url.search;
+
+  if (event.request.method === "GET" && !event.request.headers.has("range") && VS_STATIC.test(rest)) {
+    event.respondWith(cachedStatic(event.request, peerId, rest));
+    return;
+  }
 
   event.respondWith(proxyOverTunnel(event.request, peerId));
 });
+
+/** Cache-first for the immutable VS Code static assets; on a cache miss the
+ *  tunnel fills it, and assets of other (older) commits are evicted. */
+async function cachedStatic(request: Request, peerId: string, rest: string): Promise<Response> {
+  const key = `${sw.location.origin}/__codehost/vs-static${rest}`;
+  const cache = await caches.open(VS_STATIC_CACHE);
+  const hit = await cache.match(key);
+  if (hit) return hit;
+  const res = await proxyOverTunnel(request, peerId);
+  if (res.status === 200) {
+    void cache.put(key, res.clone()).catch(() => {});
+    void evictOtherCommits(cache, rest).catch(() => {});
+  }
+  return res;
+}
+
+async function evictOtherCommits(cache: Cache, rest: string): Promise<void> {
+  const commit = rest.match(VS_STATIC)?.[1];
+  if (!commit) return;
+  for (const req of await cache.keys()) {
+    if (!new URL(req.url).pathname.includes(`/${commit}/`)) void cache.delete(req);
+  }
+}
 
 /**
  * Fetch an allow-listed VS Code CDN asset through the signaling Worker's /cdn

@@ -193,6 +193,9 @@ export function Discovery() {
   // client carries the peer's signaling and it's the token Share/history record.
   const [activePeerId, setActivePeerId] = useState<string | null>(null);
   const [connState, setConnState] = useState<ConnState>("idle");
+  // ICE path of the live session ("lan" | "p2p"); null when unknown or when
+  // this tab rides another tab's connection via the broker.
+  const [connPath, setConnPath] = useState<"lan" | "p2p" | null>(null);
   const [iframeSrc, setIframeSrc] = useState<string | null>(null);
   // Streamed setup.sh output shown while connState === "provisioning".
   const [provisionLog, setProvisionLog] = useState("");
@@ -455,6 +458,22 @@ export function Discovery() {
 
       await connBroker.connect(server.peerId, establish);
 
+      // Show which ICE path got nominated (owner tab only — a proxied tab has
+      // no RTCPeerConnection of its own). ICE may re-nominate just after the
+      // channel opens, so sample again shortly.
+      setConnPath(null);
+      // (assertion: TS narrows the ref to null from the reset above and can't
+      // see that `establish` re-assigned it)
+      const rtcForPath = rtcRef.current as RtcClient | null;
+      if (rtcForPath) {
+        const sample = () =>
+          void rtcForPath.selectedPath().then((p) => {
+            if (rtcRef.current === rtcForPath && p) setConnPath(p);
+          });
+        sample();
+        setTimeout(sample, 3000);
+      }
+
       // For a repo deep link, ask the daemon to provision (run .codehost/setup.sh
       // and hand back the authoritative workspace path) before opening. Streams
       // the log under the "provisioning" state. Daemons without the route (older
@@ -624,6 +643,7 @@ export function Discovery() {
     rtcRef.current = null;
     if (activePeerRef.current) connBroker.disconnect(activePeerRef.current);
     setIframeSrc(null);
+    setConnPath(null);
     setActivePeerId(null);
     activePeerRef.current = null;
     activeRoomRef.current = null;
@@ -795,6 +815,18 @@ export function Discovery() {
                 activeServer?.meta?.name ??
                 activePeerId?.slice(0, 8)}
             </span>
+            {connPath && (
+              <span
+                style={styles.dim}
+                title={
+                  connPath === "lan"
+                    ? "direct LAN path — both ends on the same network"
+                    : "direct peer-to-peer path (NAT traversed)"
+                }
+              >
+                {connPath === "lan" ? "⚡LAN" : "🌐p2p"}
+              </span>
+            )}
             <span style={{ flex: 1 }} />
             <button
               style={styles.shareBtn}

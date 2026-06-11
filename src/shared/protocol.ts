@@ -31,12 +31,15 @@ export enum Op {
   WsCont = 13,
 }
 
-// WebRTC data-channel messages must stay small to be portable: 16 KiB is the
-// largest size every WebRTC stack (libdatachannel, Chrome, Firefox) reliably
-// accepts. A frame is [op:1][streamId:4][payload], so the payload budget is
-// 16 KiB minus the 5-byte header.
+// Frame size vs JS overhead: every frame costs a promise hop + two copies on
+// its way through the tunnel, so bigger frames = faster bulk transfer. Both
+// stacks we pair (Chrome/Firefox <-> libdatachannel) negotiate an SCTP
+// max-message-size of 256 KiB, so 64 KiB rides well inside every negotiated
+// limit while cutting per-MB frame count 4x vs the old 16 KiB. Receivers
+// accept any frame size (decodeFrame is length-agnostic), so mixed old/new
+// peers interoperate. A frame is [op:1][streamId:4][payload].
 export const FRAME_HEADER = 5;
-export const MAX_FRAME = 16 * 1024;
+export const MAX_FRAME = 64 * 1024;
 /** Max payload bytes per frame; larger bodies/messages are split across frames. */
 export const MAX_CHUNK = MAX_FRAME - FRAME_HEADER;
 

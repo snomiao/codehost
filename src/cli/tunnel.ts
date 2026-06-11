@@ -13,6 +13,13 @@ import {
 
 const textDecoder = new TextDecoder();
 
+// Send-queue water marks. HIGH bounds how much data can sit ahead of an
+// interactive message on the (single, ordered) channel — at 20 Mbps, 4 MB is
+// already ~1.6 s of head-of-line latency, so resist raising it; LOW is where
+// the bufferedAmountLow event resumes a paused sender.
+const HIGH_WATER = 4 * 1024 * 1024;
+const LOW_WATER = 1 * 1024 * 1024;
+
 // Hop-by-hop headers that must not be forwarded across the tunnel.
 const HOP_BY_HOP = new Set([
   "connection",
@@ -72,6 +79,12 @@ export class Tunnel {
   ) {
     this.origin = `http://127.0.0.1:${vscodePort}`;
     this.wsOrigin = `ws://127.0.0.1:${vscodePort}`;
+    try {
+      this.channel.setBufferedAmountLowThreshold(LOW_WATER);
+      this.channel.onBufferedAmountLow(() => this.drainWaiter?.());
+    } catch {
+      // older node-datachannel: the poll in waitForDrain still covers it
+    }
     this.channel.onMessage((msg) => {
       if (typeof msg === "string") return; // all frames are binary
       const buf = msg as Buffer;
@@ -148,6 +161,14 @@ export class Tunnel {
     const hasBody = method !== "GET" && method !== "HEAD" && stream.body.length > 0;
     const body = hasBody ? concat(stream.body) : undefined;
 
+    // A client that can inflate (TunnelClient sends this marker) gets the
+    // upstream's gzip bytes passed through UNTOUCHED — 3-4x fewer bytes over
+    // the channel for VS Code's JS/CSS. gzip only: the browser inflates with
+    // DecompressionStream, which has no brotli.
+    const wantsGzip = reqHeaders.get("x-codehost-accept-gzip") === "1";
+    reqHeaders.delete("x-codehost-accept-gzip");
+    if (wantsGzip) reqHeaders.set("accept-encoding", "gzip");
+
     try {
       const local = this.onLocal?.({ method, path, headers: reqHeaders, body });
       const res = local
@@ -157,6 +178,8 @@ export class Tunnel {
             headers: reqHeaders,
             body: body as BodyInit | undefined,
             redirect: "manual",
+            // Bun extension: don't auto-inflate — keep the wire bytes compressed.
+            ...(wantsGzip ? ({ decompress: false } as RequestInit) : {}),
           });
 
       const resHeaders: Record<string, string> = {};
@@ -240,15 +263,26 @@ export class Tunnel {
     return p;
   }
 
+  // Fires from onBufferedAmountLow so a paused sender resumes the moment the
+  // queue drains past LOW_WATER instead of on the next poll tick.
+  private drainWaiter: (() => void) | null = null;
+
   private waitForDrain(): Promise<void> {
-    const HIGH = 8 * 1024 * 1024; // 8 MB
-    if (!this.channel.isOpen() || this.channel.bufferedAmount() < HIGH) return Promise.resolve();
+    if (!this.channel.isOpen() || this.channel.bufferedAmount() < HIGH_WATER) return Promise.resolve();
     return new Promise((resolve) => {
-      const tick = () => {
-        if (!this.channel.isOpen() || this.channel.bufferedAmount() < HIGH) resolve();
-        else setTimeout(tick, 10);
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        clearInterval(timer);
+        this.drainWaiter = null;
+        resolve();
       };
-      tick();
+      this.drainWaiter = finish;
+      // Safety poll in case the low event raced or isn't available.
+      const timer = setInterval(() => {
+        if (!this.channel.isOpen() || this.channel.bufferedAmount() < HIGH_WATER) finish();
+      }, 100);
     });
   }
 

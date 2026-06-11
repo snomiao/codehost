@@ -118,14 +118,31 @@ export class TunnelClient {
         },
       });
 
+      // Tell the daemon we can inflate: it then passes the upstream's gzip
+      // bytes through untouched (3-4x fewer bytes over the channel) and we
+      // decompress here, once, for every consumer.
+      const reqHeaders =
+        typeof DecompressionStream !== "undefined"
+          ? { ...headers, "x-codehost-accept-gzip": "1" }
+          : headers;
+
       this.https.set(streamId, {
         onHead: (h) => {
           head = h;
+          const resHeaders = new Headers(h.headers);
+          let bodyStream: ReadableStream<Uint8Array> = stream;
+          if (resHeaders.get("content-encoding") === "gzip") {
+            bodyStream = stream.pipeThrough(
+              new DecompressionStream("gzip") as unknown as ReadableWritablePair<Uint8Array, Uint8Array>,
+            );
+            resHeaders.delete("content-encoding");
+            resHeaders.delete("content-length");
+          }
           resolve(
-            new Response(stream, {
+            new Response(bodyStream, {
               status: h.status === 204 || h.status === 304 ? h.status : h.status,
               statusText: h.statusText,
-              headers: h.headers,
+              headers: resHeaders,
             }),
           );
         },
@@ -154,7 +171,7 @@ export class TunnelClient {
         },
       });
 
-      this.send(encodeJson(Op.HttpReq, streamId, { method, path, headers }));
+      this.send(encodeJson(Op.HttpReq, streamId, { method, path, headers: reqHeaders }));
       if (body && body.byteLength) {
         for (const part of chunk(body)) this.send(encodeFrame(Op.HttpReqBody, streamId, part));
       }
