@@ -8,8 +8,9 @@ import { join } from "node:path";
 const CONFIG_YAML = `# codehost workspace config — see docs/provisioning.md
 
 # Where /gh/<owner>/<repo>/tree/<branch> lands, relative to this home dir.
-# Default (if omitted): {owner}/{repo}/tree/{branch}
-workspace: "ws/{owner}/{repo}/tree/{branch}"
+# Recommended: serve your workspace root itself (codehost serve ~/ws) so this
+# stays prefix-free; if you serve $HOME instead, use "ws/{owner}/{repo}/tree/{branch}".
+workspace: "{owner}/{repo}/tree/{branch}"
 
 # Optional: only these repos may auto-provision (a trailing /* is an owner
 # wildcard). Empty/absent = allow all. The room token already grants access, so
@@ -41,6 +42,10 @@ if [ ! -e "$repo/.git" ]; then
   echo "[setup] cloning $url"
   mkdir -p "$(dirname "$repo")"
   git clone "$url" "$repo"
+  # Detach the fresh primary clone so EVERY branch (incl. the default one it
+  # just checked out) can be worktree-added under tree/<branch>. Skipped for
+  # pre-existing clones — they may be someone's live working copy.
+  git -C "$repo" switch --detach
 fi
 
 echo "[setup] adding worktree $ws @ $CODEHOST_BRANCH"
@@ -67,6 +72,8 @@ if (-not (Test-Path (Join-Path $repo ".git"))) {
   Write-Host "[setup] cloning $url"
   New-Item -ItemType Directory -Force -Path (Split-Path $repo) | Out-Null
   git clone $url $repo
+  # Detach so every branch (incl. the default) can be worktree-added.
+  git -C $repo switch --detach
 }
 Write-Host "[setup] adding worktree $ws @ $($env:CODEHOST_BRANCH)"
 New-Item -ItemType Directory -Force -Path (Split-Path $ws) | Out-Null

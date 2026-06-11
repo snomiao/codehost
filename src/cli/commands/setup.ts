@@ -5,6 +5,7 @@ import { generateToken, validateToken, TOKEN_REQUIREMENTS } from "../../shared/t
 import { readConfig, writeConfig } from "../config";
 import { launchServeDaemon } from "../daemonize";
 import { isGitRepo } from "../git";
+import { scaffoldCodehost } from "../init";
 import { resolveCodeBinary } from "../vscode-install";
 import { announceConnect } from "../open-url";
 import { DEFAULT_SIGNAL_URL } from "./serve";
@@ -53,10 +54,22 @@ export const setupCommand: CommandModule<{}, SetupArgs> = {
     const codeBin = await resolveCodeBinary();
     console.log(`[codehost] using VS Code: ${codeBin}`);
 
-    // 3. Start the WebRTC + VS Code server under oxmgr. A git repo is a single
+    // 3. Batteries included: a workspace root gets its `.codehost/` scaffold
+    //    (config.yaml + clone/worktree setup hook) so /gh/<owner>/<repo> links
+    //    provision on demand out of the box. Existing files are never touched;
+    //    no new trust — the room token already grants code execution.
+    const root = !isGitRepo(dir);
+    if (root) {
+      const written = scaffoldCodehost(dir);
+      if (written.length > 0) {
+        console.log(`[codehost] scaffolded ${dir}/.codehost (config.yaml + setup hook — edit freely)`);
+      }
+    }
+
+    // 4. Start the WebRTC + VS Code server under oxmgr. A git repo is a single
     //    workspace (`dev`); anything else is treated as a root (`serve`).
     const { ok, name } = await launchServeDaemon({
-      command: isGitRepo(dir) ? "dev" : "serve",
+      command: root ? "serve" : "dev",
       dir,
       token,
       signal: argv.signal,
@@ -66,7 +79,7 @@ export const setupCommand: CommandModule<{}, SetupArgs> = {
     });
     if (!ok) process.exit(1);
 
-    // 4. Tell the user how to connect, and open the browser straight at the
+    // 5. Tell the user how to connect, and open the browser straight at the
     //    token-carrying URL so VS Code loads without typing the token in.
     console.log("");
     console.log(`[codehost] ✓ server "${name}" is live, serving ${dir}`);

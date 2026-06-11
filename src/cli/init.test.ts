@@ -23,11 +23,11 @@ describe("scaffoldCodehost", () => {
     expect(existsSync(join(home, ".codehost", "setup.ps1"))).toBe(true);
   });
 
-  test("config.yaml is valid YAML with a workspace template", () => {
+  test("config.yaml is valid YAML with a prefix-free workspace template", () => {
     const home = mkHome();
     scaffoldCodehost(home);
     const cfg = parseYaml(readFileSync(join(home, ".codehost", "config.yaml"), "utf8"));
-    expect(cfg.workspace).toBe("ws/{owner}/{repo}/tree/{branch}");
+    expect(cfg.workspace).toBe("{owner}/{repo}/tree/{branch}");
   });
 
   test("setup.sh keeps shell vars literal (no JS interpolation leaked)", () => {
@@ -37,6 +37,8 @@ describe("scaffoldCodehost", () => {
     expect(sh).toContain("$CODEHOST_WS");
     expect(sh).toContain("${ws%/tree/$CODEHOST_BRANCH}");
     expect(sh).toContain("git -C \"$repo\" worktree add");
+    // Fresh clones detach so the default branch is worktree-able too.
+    expect(sh).toContain('git -C "$repo" switch --detach');
   });
 
   test("idempotent: a second run writes nothing; --force overwrites", () => {
