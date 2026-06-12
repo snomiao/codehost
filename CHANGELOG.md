@@ -1,3 +1,10 @@
+## [0.20.3](https://github.com/snomiao/codehost/compare/v0.20.2...v0.20.3) (2026-06-12)
+
+
+### Bug Fixes
+
+* **web:** stop wasting wide screens — workspace cards and checkout links flow into grid columns ([3e4b41c](https://github.com/snomiao/codehost/commit/3e4b41c70f111aeff015ba1e50ae687e98d9d5eb))
+
 ## [0.20.2](https://github.com/snomiao/codehost/compare/v0.20.1...v0.20.2) (2026-06-11)
 
 
