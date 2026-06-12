@@ -1,3 +1,10 @@
+## [0.20.4](https://github.com/snomiao/codehost/compare/v0.20.3...v0.20.4) (2026-06-12)
+
+
+### Bug Fixes
+
+* **web:** a root card with many checkouts spans the full grid row so its links actually flow into columns ([21d65ff](https://github.com/snomiao/codehost/commit/21d65ff18a8e266a32b6e314f0de03d26cc97c4c))
+
 ## [0.20.3](https://github.com/snomiao/codehost/compare/v0.20.2...v0.20.3) (2026-06-12)
 
 
