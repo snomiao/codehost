@@ -1044,8 +1044,11 @@ export function Discovery() {
                 <ul style={styles.list}>
                   {g.items.map(({ server: s, room, name, tags }) => {
                     const isActive = s.peerId === activePeerId;
+                    // A root daemon listing many checkouts gets the whole row,
+                    // so its links can flow into columns.
+                    const wide = (s.meta?.workspaces?.length ?? 0) > 3;
                     return (
-                      <li key={s.peerId} style={styles.card}>
+                      <li key={s.peerId} style={{ ...styles.card, ...(wide ? { gridColumn: "1 / -1" } : {}) }}>
                         <div style={styles.cardMain}>
                           <div style={styles.cardName}>{name}</div>
                           <div style={styles.tagRow}>
