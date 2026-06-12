@@ -862,6 +862,9 @@ export function Discovery() {
         </header>
 
         <main style={styles.main}>
+          {/* Inputs stay at a readable measure; the workspace grid below uses
+              the full width. */}
+          <div style={styles.controls}>
           {resolving && (
             <p style={{ color: "#dcb67a", marginBottom: 12 }}>
               Looking for <code style={styles.code}>{resolving}</code> in your rooms…{" "}
@@ -963,6 +966,7 @@ export function Discovery() {
               {ghError && <p style={styles.tokenError}>{ghError}</p>}
             </>
           )}
+          </div>
 
           <div style={styles.listHead}>
             <h2 style={styles.h2}>Workspaces</h2>
@@ -1106,7 +1110,11 @@ const styles: Record<string, React.CSSProperties> = {
   brand: { fontFamily: "monospace", fontWeight: 700, color: "#fff" },
   dim: { color: "#888", fontSize: 12 },
   status: { fontSize: 12 },
-  main: { flex: 1, overflow: "auto", padding: "20px 24px", maxWidth: 760, width: "100%", margin: "0 auto", boxSizing: "border-box" },
+  // Wide cap + per-host card GRID below: a 4K monitor gets several columns of
+  // workspaces instead of one skinny 760px strip. Inputs keep a readable
+  // measure via `controls`.
+  main: { flex: 1, overflow: "auto", padding: "20px 24px", maxWidth: 1560, width: "100%", margin: "0 auto", boxSizing: "border-box" },
+  controls: { maxWidth: 760 },
   tokenForm: { display: "flex", alignItems: "center", gap: 8, marginBottom: 8 },
   tokenHint: { margin: "0 0 20px", fontSize: 12, color: "#888" },
   tokenError: { margin: "0 0 20px", fontSize: 12, color: "#f48771" },
@@ -1138,13 +1146,22 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid #3d3d3d", background: "transparent", color: "#9aa4af", cursor: "pointer",
   },
   idLine: { fontFamily: "monospace", fontSize: 11, color: "#666", marginTop: 6 },
-  wsRow: { display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 3, marginTop: 8 },
+  // Workspace links flow into columns on wide screens (a busy root daemon can
+  // advertise 50+ checkouts — a single column wasted the whole viewport).
+  wsRow: {
+    display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+    gap: "2px 14px", marginTop: 8,
+  },
   wsLink: {
     fontFamily: "monospace", fontSize: 12, padding: "2px 0", border: "none", background: "transparent",
     color: "#75beff", cursor: "pointer", textAlign: "left",
   },
   code: { background: "#252525", padding: "2px 6px", borderRadius: 4, fontFamily: "monospace", fontSize: 12 },
-  list: { listStyle: "none", margin: "0 0 14px", padding: 0, display: "flex", flexDirection: "column", gap: 8 },
+  list: {
+    listStyle: "none", margin: "0 0 14px", padding: 0,
+    display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: 8,
+    alignItems: "start",
+  },
   hostHead: { display: "flex", alignItems: "baseline", gap: 10, margin: "0 0 8px" },
   hostName: { fontSize: 13, fontWeight: 600, color: "#dcdcaa", fontFamily: "monospace" },
   agentRow: { display: "flex", flexWrap: "wrap", gap: 6, margin: "0 0 8px" },
