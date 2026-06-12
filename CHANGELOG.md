@@ -1,3 +1,10 @@
+## [0.20.5](https://github.com/snomiao/codehost/compare/v0.20.4...v0.20.5) (2026-06-12)
+
+
+### Performance Improvements
+
+* **tunnel:** dedicated bulk lane — HTTP bodies ride a second data channel so they can't HOL-block typing ([b14797b](https://github.com/snomiao/codehost/commit/b14797b5e4efb4e3f299ba9c3b78bdf360a9a064))
+
 ## [0.20.4](https://github.com/snomiao/codehost/compare/v0.20.3...v0.20.4) (2026-06-12)
 
 
