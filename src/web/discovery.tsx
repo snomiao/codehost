@@ -431,7 +431,7 @@ export function Discovery() {
       // only invoked when we're the owner (or get promoted on failover); other
       // tabs reuse the owner's channel via a proxy, so they never open WebRTC.
       const establish = () =>
-        new Promise<RTCDataChannel>((resolve, reject) => {
+        new Promise<{ channel: RTCDataChannel; bulk: RTCDataChannel | null }>((resolve, reject) => {
           const rtc = new RtcClient({
             sendSignal: (data: RtcSignal) => send(server.peerId, data),
             onState: (state) => {
@@ -439,7 +439,7 @@ export function Discovery() {
             },
             onOpen: (channel) => {
               clearTimeout(timer);
-              resolve(channel);
+              resolve({ channel, bulk: rtc.bulkChannel });
             },
             onClose: () => setConnState((s) => (s === "connected" ? "idle" : s)),
           });

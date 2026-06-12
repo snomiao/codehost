@@ -15,9 +15,10 @@ import { TunnelClient, type TunnelLike, type TunnelWsHandlers, type TunnelWsHand
 
 type AnyMsg = Record<string, any>;
 
-/** Creates the RTCPeerConnection for a peer and resolves with its open channel.
+/** Creates the RTCPeerConnection for a peer and resolves with its open
+ *  interactive channel plus the (possibly still-connecting) bulk lane.
  *  Provided by the UI (discovery.tsx) and invoked only when this tab is owner. */
-export type Establish = () => Promise<RTCDataChannel>;
+export type Establish = () => Promise<{ channel: RTCDataChannel; bulk: RTCDataChannel | null }>;
 
 class ConnBroker {
   private port: MessagePort | null = null;
@@ -110,8 +111,8 @@ class ConnBroker {
     if (!establish) return;
     this.establishing.add(peerId);
     try {
-      const channel = await establish();
-      this.locals.set(peerId, new TunnelClient(channel));
+      const { channel, bulk } = await establish();
+      this.locals.set(peerId, new TunnelClient(channel, bulk));
       this.post({ t: "ready", peerId });
       this.resolveReady(peerId);
     } catch (err) {

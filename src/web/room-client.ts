@@ -91,7 +91,7 @@ export class CodehostRoom {
         onOpen: (channel) => {
           clearTimeout(timer);
           this.dialFailedAt.delete(peerId);
-          resolve(new TunnelClient(channel));
+          resolve(new TunnelClient(channel, rtc.bulkChannel));
         },
         onClose: drop,
         onState: (state) => {

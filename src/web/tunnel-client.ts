@@ -49,9 +49,24 @@ export class TunnelClient {
   private wsRx = new WsReassembler(); // reassembles daemon -> browser WS messages
   private textEncoder = new TextEncoder();
 
-  constructor(private channel: RTCDataChannel) {
+  /**
+   * `channel` carries the interactive traffic (WebSocket frames — VS Code's
+   * remote protocol, terminals); `bulk`, when provided and open, carries HTTP
+   * request/response streams on its own SCTP stream so multi-MB asset bodies
+   * never head-of-line block a keystroke. The daemon runs one Tunnel per
+   * channel, so each lane answers on itself and no demuxing is needed beyond
+   * listening on both.
+   */
+  constructor(
+    private channel: RTCDataChannel,
+    private bulk: RTCDataChannel | null = null,
+  ) {
     channel.binaryType = "arraybuffer";
     channel.addEventListener("message", (ev) => this.onFrame(ev.data));
+    if (bulk) {
+      bulk.binaryType = "arraybuffer";
+      bulk.addEventListener("message", (ev) => this.onFrame(ev.data));
+    }
   }
 
   private allocId(): number {
@@ -171,11 +186,16 @@ export class TunnelClient {
         },
       });
 
-      this.send(encodeJson(Op.HttpReq, streamId, { method, path, headers: reqHeaders }));
+      // HTTP rides the bulk lane. Pinned per request: every frame of this
+      // stream must hit the SAME channel — the daemon runs one Tunnel per
+      // channel, so a mid-request switch (e.g. bulk finishing its handshake)
+      // would strand the stream across two Tunnels.
+      const lane = this.bulk?.readyState === "open" ? this.bulk : this.channel;
+      this.sendOn(lane, encodeJson(Op.HttpReq, streamId, { method, path, headers: reqHeaders }));
       if (body && body.byteLength) {
-        for (const part of chunk(body)) this.send(encodeFrame(Op.HttpReqBody, streamId, part));
+        for (const part of chunk(body)) this.sendOn(lane, encodeFrame(Op.HttpReqBody, streamId, part));
       }
-      this.send(encodeFrame(Op.HttpReqEnd, streamId));
+      this.sendOn(lane, encodeFrame(Op.HttpReqEnd, streamId));
     });
   }
 
@@ -198,12 +218,17 @@ export class TunnelClient {
     };
   }
 
+  /** Interactive-channel send (WS frames, control). */
   private send(frame: Uint8Array): void {
-    if (this.channel.readyState === "open") {
+    this.sendOn(this.channel, frame);
+  }
+
+  private sendOn(ch: RTCDataChannel, frame: Uint8Array): void {
+    if (ch.readyState === "open") {
       // Copy into a fresh ArrayBuffer-backed view to satisfy send()'s typing.
       const copy = new Uint8Array(frame.byteLength);
       copy.set(frame);
-      this.channel.send(copy.buffer);
+      ch.send(copy.buffer);
     }
   }
 

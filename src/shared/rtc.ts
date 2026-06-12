@@ -24,3 +24,11 @@ export type RtcSignal = SdpSignal | CandidateSignal;
 
 /** Label used for the control/tunnel data channel. */
 export const CHANNEL_LABEL = "codehost";
+/**
+ * Second data channel for bulk HTTP bodies. Separate channel = separate SCTP
+ * stream, so multi-MB asset downloads no longer head-of-line block the
+ * interactive WS traffic (VS Code remote protocol, terminal) on
+ * CHANNEL_LABEL. The daemon spins up one Tunnel per incoming channel, so old
+ * daemons handle this unmodified; old browsers simply never open it.
+ */
+export const BULK_CHANNEL_LABEL = "codehost-bulk";

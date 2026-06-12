@@ -1,4 +1,4 @@
-import { CHANNEL_LABEL, ICE_SERVERS, type RtcSignal } from "../shared/rtc";
+import { BULK_CHANNEL_LABEL, CHANNEL_LABEL, ICE_SERVERS, type RtcSignal } from "../shared/rtc";
 
 export interface RtcClientOptions {
   /** Relay a signal to the server peer via the signaling channel. */
@@ -15,6 +15,7 @@ export interface RtcClientOptions {
 export class RtcClient {
   private pc: RTCPeerConnection;
   private channel: RTCDataChannel | null = null;
+  private bulk: RTCDataChannel | null = null;
 
   constructor(private opts: RtcClientOptions) {
     this.pc = new RTCPeerConnection({
@@ -36,13 +37,20 @@ export class RtcClient {
     };
   }
 
-  /** Create the data channel + offer and kick off the handshake. */
+  /** Create the data channels + offer and kick off the handshake. */
   async start(): Promise<void> {
     const channel = this.pc.createDataChannel(CHANNEL_LABEL, { ordered: true });
     channel.binaryType = "arraybuffer";
     this.channel = channel;
     channel.onopen = () => this.opts.onOpen?.(channel);
     channel.onclose = () => this.opts.onClose?.();
+
+    // Bulk lane for HTTP bodies (its own SCTP stream — no HOL with the
+    // interactive channel above). Senders fall back to the interactive channel
+    // until it opens, so nothing waits on it.
+    const bulk = this.pc.createDataChannel(BULK_CHANNEL_LABEL, { ordered: true });
+    bulk.binaryType = "arraybuffer";
+    this.bulk = bulk;
 
     const offer = await this.pc.createOffer();
     await this.pc.setLocalDescription(offer);
@@ -67,6 +75,11 @@ export class RtcClient {
 
   get dataChannel(): RTCDataChannel | null {
     return this.channel;
+  }
+
+  /** The bulk lane (may still be CONNECTING when the interactive one opens). */
+  get bulkChannel(): RTCDataChannel | null {
+    return this.bulk;
   }
 
   /**
@@ -108,6 +121,11 @@ export class RtcClient {
   close(): void {
     try {
       this.channel?.close();
+    } catch {
+      // ignore
+    }
+    try {
+      this.bulk?.close();
     } catch {
       // ignore
     }
