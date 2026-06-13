@@ -1,3 +1,10 @@
+# [0.21.0](https://github.com/snomiao/codehost/compare/v0.20.5...v0.21.0) (2026-06-13)
+
+
+### Features
+
+* room roster, host approval/kick, `codehost open`; rename viewer→client ([f3a2a82](https://github.com/snomiao/codehost/commit/f3a2a8265aa8b1adf95ad764fb6d30d9561c6e3c))
+
 ## [0.20.5](https://github.com/snomiao/codehost/compare/v0.20.4...v0.20.5) (2026-06-12)
 
 
