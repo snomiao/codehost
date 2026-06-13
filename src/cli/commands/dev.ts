@@ -2,6 +2,7 @@ import { hostname } from "node:os";
 import { resolve } from "node:path";
 import type { CommandModule } from "yargs";
 import type { PeerMeta } from "../../shared/signaling";
+import type { ApprovePolicy } from "../approver";
 import { TOKEN_REQUIREMENTS, validateToken } from "../../shared/token";
 import { ensureHostId } from "../config";
 import { launchServeDaemon } from "../daemonize";
@@ -21,6 +22,8 @@ interface DevArgs {
   daemon: boolean;
   standalone: boolean;
   port?: number;
+  approve: string;
+  allow: string[];
 }
 
 export const devCommand: CommandModule<{}, DevArgs> = {
@@ -63,6 +66,18 @@ export const devCommand: CommandModule<{}, DevArgs> = {
       .option("port", {
         describe: "Fixed port for the local VS Code server (default: ephemeral)",
         type: "number",
+      })
+      .option("approve", {
+        describe: "Client admission: 'auto' (anyone with the token) or 'confirm' (approve each at the terminal)",
+        type: "string",
+        choices: ["auto", "confirm"],
+        default: "auto",
+      })
+      .option("allow", {
+        describe: "Under --approve confirm, auto-approve clients whose label matches (repeatable)",
+        type: "string",
+        array: true,
+        default: [],
       }) as any,
   handler: async (argv) => {
     argv.token = argv.token.trim();
@@ -107,6 +122,8 @@ export const devCommand: CommandModule<{}, DevArgs> = {
         name: argv.name,
         port: argv.port,
         host,
+        approve: argv.approve,
+        allow: argv.allow,
       });
       if (ok) announceConnect(argv.token);
       process.exit(ok ? 0 : 1);
@@ -132,6 +149,8 @@ export const devCommand: CommandModule<{}, DevArgs> = {
       signal: argv.signal,
       meta,
       label: `serving ${dir}`,
+      approve: argv.approve as ApprovePolicy,
+      allow: argv.allow,
       launch: async (basePath) => {
         const v = await launchVscode({ dir, basePath, port: argv.port });
         return { port: v.port, stop: v.stop };

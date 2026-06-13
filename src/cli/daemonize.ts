@@ -20,6 +20,10 @@ export interface ServeDaemonOptions {
   port?: number;
   /** Hostname, used as a label fallback. */
   host: string;
+  /** Client admission policy ("auto" | "confirm"); propagated to the daemon. */
+  approve?: string;
+  /** Pre-approved client label patterns, propagated to the daemon. */
+  allow?: string[];
 }
 
 export interface ServeDaemonResult {
@@ -79,6 +83,10 @@ function buildForegroundArgv(opts: ServeDaemonOptions): string[] {
   // never collapse into register-with-the-host-daemon-and-exit (oxmgr would
   // see an instant exit and thrash).
   if ((opts.command ?? "serve") === "dev") parts.push("--standalone");
+  // A backgrounded daemon has no terminal, so "confirm" can only admit clients
+  // that match an --allow pattern; we still propagate it so that works.
+  if (opts.approve && opts.approve !== "auto") parts.push("--approve", opts.approve);
+  for (const pat of opts.allow ?? []) parts.push("--allow", pat);
   return parts;
 }
 

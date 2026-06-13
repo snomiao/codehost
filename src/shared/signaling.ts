@@ -2,7 +2,26 @@
 // Worker / Durable Object. A "room" is keyed by the user's token; every member
 // of a room can see the others and exchange WebRTC SDP/ICE via the relay.
 
-export type Role = "server" | "viewer";
+/**
+ * Room roles. A connecting browser is a "client"; "viewer" is the legacy wire
+ * value for the same role, kept so older daemons/pages still interop (the term
+ * understated the access — a connected client gets the host's full VS Code:
+ * terminal + file write). Backward-compat plan ("accept both, emit old"):
+ * receivers treat client and viewer alike via `isClientRole`, and new code
+ * still EMITS the legacy `CLIENT_WIRE_ROLE` ("viewer") until daemons have rolled
+ * forward; a later release flips the emit to "client".
+ */
+export type Role = "server" | "client" | "viewer";
+
+/** The connecting-role value new code emits. Still the legacy "viewer" during
+ *  the accept-both transition; flip to "client" once daemons recognize it. */
+export const CLIENT_WIRE_ROLE: Role = "viewer";
+
+/** True for either spelling of the connecting (browser) role. Use everywhere a
+ *  receiver decides "is this peer a client" so both old and new peers match. */
+export function isClientRole(role: Role): boolean {
+  return role === "client" || role === "viewer";
+}
 
 /** One live agent CLI session on the daemon's machine (sourced from agent-yes's
  *  registry) — advertised so clients can see which agents run where. Interact
@@ -36,14 +55,19 @@ export interface WorkspaceInfo {
   config?: boolean;
 }
 
-/** Metadata a `codehost serve`/`dev` daemon advertises about itself. */
+/**
+ * Metadata a room member advertises. Servers (`codehost serve`/`dev`) fill the
+ * workspace fields; a client (the codehost.dev page) sends just `name` as its
+ * roster label and leaves the server-only fields unset — hence everything but
+ * `name` is optional.
+ */
 export interface PeerMeta {
-  /** Human label, defaults to hostname. */
+  /** Human label. Server: defaults to hostname. Client: a browser/OS label. */
   name: string;
-  /** Directory the VS Code instance is serving (the repo dir, or the root). */
-  cwd: string;
-  /** Hostname of the machine running the daemon. */
-  host: string;
+  /** Server only: directory the VS Code instance is serving (repo dir or root). */
+  cwd?: string;
+  /** Server only: hostname of the machine running the daemon. */
+  host?: string;
   /**
    * Stable machine identity (UUID persisted in ~/.codehost/config.json). All
    * daemons on one machine share it, unlike the per-process peerId, so clients
@@ -84,6 +108,10 @@ export interface PeerInfo {
   peerId: string;
   role: Role;
   meta: PeerMeta | null;
+  /** Worker-stamped join time (ms). Compare against `PeersMessage.now`, which
+   *  is on the same clock, for a roster "connected N ago" without clock skew.
+   *  Absent from older workers. */
+  since?: number;
 }
 
 // ---- Client -> Server ----
@@ -133,6 +161,10 @@ export interface WelcomeMessage {
 export interface PeersMessage {
   type: "peers";
   peers: PeerInfo[];
+  /** Worker wall-clock (ms) at send time — same clock as `PeerInfo.since`, so a
+   *  client renders relative join ages without trusting its own clock. Absent
+   *  from older workers. */
+  now?: number;
 }
 
 /** A signal relayed from another peer. */

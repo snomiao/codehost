@@ -20,7 +20,19 @@ export interface CandidateSignal {
   mid: string;
 }
 
-export type RtcSignal = SdpSignal | CandidateSignal;
+/**
+ * Host-side admission control, relayed opaquely like any other signal. The
+ * daemon sends "pending" while a client awaits the host's approval and "denied"
+ * if the host rejects (or kicks) it — so the client can show why it's waiting or
+ * was cut off, instead of a silent hang. Approval needs no signal: the daemon
+ * just answers the offer. Old daemons never send these; old clients ignore an
+ * unknown `kind`, so this is backward compatible both ways.
+ */
+export interface ControlSignal {
+  kind: "pending" | "denied";
+}
+
+export type RtcSignal = SdpSignal | CandidateSignal | ControlSignal;
 
 /** Label used for the control/tunnel data channel. */
 export const CHANNEL_LABEL = "codehost";

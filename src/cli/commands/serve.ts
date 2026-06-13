@@ -3,6 +3,7 @@ import { homedir, hostname } from "node:os";
 import { join, resolve } from "node:path";
 import type { CommandModule } from "yargs";
 import type { PeerMeta } from "../../shared/signaling";
+import type { ApprovePolicy } from "../approver";
 import { DEFAULT_LAYOUT, GITHUB_HOST, toPosixPath } from "../../shared/repo";
 import { TOKEN_REQUIREMENTS, validateToken } from "../../shared/token";
 import { defaultRoot, ensureHostId } from "../config";
@@ -66,6 +67,8 @@ interface ServeArgs {
   signal: string;
   daemon: boolean;
   port?: number;
+  approve: string;
+  allow: string[];
 }
 
 export const serveCommand: CommandModule<{}, ServeArgs> = {
@@ -102,6 +105,18 @@ export const serveCommand: CommandModule<{}, ServeArgs> = {
       .option("port", {
         describe: "Fixed port for the local VS Code server (default: ephemeral)",
         type: "number",
+      })
+      .option("approve", {
+        describe: "Client admission: 'auto' (anyone with the token) or 'confirm' (approve each at the terminal)",
+        type: "string",
+        choices: ["auto", "confirm"],
+        default: "auto",
+      })
+      .option("allow", {
+        describe: "Under --approve confirm, auto-approve clients whose label matches (repeatable)",
+        type: "string",
+        array: true,
+        default: [],
       }) as any,
   handler: async (argv) => {
     argv.token = argv.token.trim();
@@ -135,6 +150,8 @@ export const serveCommand: CommandModule<{}, ServeArgs> = {
         name: argv.name,
         port: argv.port,
         host,
+        approve: argv.approve,
+        allow: argv.allow,
       });
       if (ok) announceConnect(argv.token);
       process.exit(ok ? 0 : 1);
@@ -208,6 +225,8 @@ export const serveCommand: CommandModule<{}, ServeArgs> = {
       metaRefreshMs: 3_000,
       watchFiles: [workspacesFile()],
       plugins,
+      approve: argv.approve as ApprovePolicy,
+      allow: argv.allow,
       label: `serving workspace root ${dir}`,
       provision: { homeDir: dir, host: GITHUB_HOST },
       launch: async (basePath) => {

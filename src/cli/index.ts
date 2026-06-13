@@ -6,6 +6,7 @@ import { initCommand } from "./commands/init";
 import { serveCommand } from "./commands/serve";
 import { devCommand } from "./commands/dev";
 import { exposeCommand } from "./commands/expose";
+import { openCommand } from "./commands/open";
 import { listCommand } from "./commands/list";
 import { stopCommand } from "./commands/stop";
 import { updateCommand } from "./commands/update";
@@ -19,6 +20,7 @@ yargs(hideBin(process.argv))
   .command(serveCommand)
   .command(devCommand)
   .command(exposeCommand)
+  .command(openCommand)
   .command(listCommand)
   .command(stopCommand)
   .command(updateCommand)

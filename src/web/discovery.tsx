@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { AgentInfo, PeerInfo, WorkspaceInfo } from "../shared/signaling";
+import { type AgentInfo, type PeerInfo, type WorkspaceInfo, CLIENT_WIRE_ROLE, isClientRole } from "../shared/signaling";
 import { TOKEN_REQUIREMENTS, validateToken } from "../shared/token";
 import { SignalingClient } from "../shared/signaling-client";
 import type { RtcSignal } from "../shared/rtc";
@@ -26,10 +26,42 @@ import { deriveTags, matchQuery, shortRoomLabel, tagKey } from "../shared/tags";
 
 const TOKEN_KEY = "codehost.token";
 
-type ConnState = "idle" | "connecting" | "provisioning" | "connected" | "failed";
+type ConnState = "idle" | "connecting" | "pending" | "provisioning" | "connected" | "failed" | "denied";
 
 /** A server discovered in a specific room (its token routes the signaling). */
 type RoomedServer = { server: PeerInfo; room: string };
+
+/**
+ * A short "Browser · OS" label this page advertises in the room roster, so the
+ * host and other clients can tell devices apart (and spot a stranger that
+ * shouldn't have the token). Best-effort UA sniff; falls back to "browser".
+ */
+function clientLabel(): string {
+  const ua = navigator.userAgent;
+  const browser = /Edg\//.test(ua) ? "Edge"
+    : /OPR\//.test(ua) ? "Opera"
+    : /Firefox\//.test(ua) ? "Firefox"
+    : /Chrome\//.test(ua) ? "Chrome"
+    : /Safari\//.test(ua) ? "Safari"
+    : "browser";
+  const os = /Mac OS X/.test(ua) ? "macOS"
+    : /Windows/.test(ua) ? "Windows"
+    : /Android/.test(ua) ? "Android"
+    : /(iPhone|iPad|iPod)/.test(ua) ? "iOS"
+    : /Linux/.test(ua) ? "Linux"
+    : "";
+  return os ? `${browser} · ${os}` : browser;
+}
+
+/** Coarse "Ns/Nm/Nh" from a worker-clock join time and the room's clock. */
+function relTime(since?: number, now?: number): string | null {
+  if (!since || !now) return null;
+  const secs = Math.max(0, Math.round((now - since) / 1000));
+  if (secs < 60) return `${secs}s`;
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return `${mins}m`;
+  return `${Math.round(mins / 60)}h`;
+}
 
 /**
  * Read a room token handed in the URL fragment as `#t=<token>` (what the CLI
@@ -98,7 +130,7 @@ function findRoomForDeepLink(dl: DeepLink, tokens: string[], timeoutMs = 6000): 
       const client = new SignalingClient({
         url: getSignalUrl(),
         token: tok,
-        role: "viewer",
+        role: CLIENT_WIRE_ROLE,
         onPeers: (peers) => {
           const servers = peers.filter((p) => p.role === "server");
           const res =
@@ -124,7 +156,9 @@ function findRoomForDeepLink(dl: DeepLink, tokens: string[], timeoutMs = 6000): 
  */
 function RoomClient(props: {
   token: string;
+  label: string;
   onPeers: (peers: PeerInfo[]) => void;
+  onRoster: (clients: PeerInfo[], now?: number) => void;
   onStatus: (open: boolean) => void;
   onSignal: (from: string, data: unknown) => void;
   registerSender: (send: ((to: string, data: unknown) => void) | null) => void;
@@ -133,15 +167,23 @@ function RoomClient(props: {
   // not on every parent re-render (which would needlessly churn the WebSocket).
   const cb = useRef(props);
   cb.current = props;
-  const { token } = props;
+  const { token, label } = props;
   useEffect(() => {
     const client = new SignalingClient({
       url: getSignalUrl(),
       token,
-      role: "viewer",
+      // Connecting role. CLIENT_WIRE_ROLE is still the legacy "viewer" during the
+      // accept-both transition; servers match it via isClientRole either way.
+      role: CLIENT_WIRE_ROLE,
+      // Advertise a label so this tab shows up named in the room roster.
+      meta: { name: label },
       onOpen: () => cb.current.onStatus(true),
       onClose: () => cb.current.onStatus(false),
-      onPeers: (peers) => cb.current.onPeers(peers.filter((p) => p.role === "server")),
+      onPeers: (peers, now) => {
+        cb.current.onPeers(peers.filter((p) => p.role === "server"));
+        // Other clients in the room (not us) — surfaced as the roster.
+        cb.current.onRoster(peers.filter((p) => isClientRole(p.role) && p.peerId !== client.peerId), now);
+      },
       onSignal: (from, data) => cb.current.onSignal(from, data),
     });
     cb.current.registerSender((to, data) => client.sendSignal(to, data));
@@ -170,6 +212,12 @@ export function Discovery() {
   // Per-room discovery state, merged into one workspace list below.
   const [serversByRoom, setServersByRoom] = useState<Record<string, PeerInfo[]>>({});
   const [roomOpen, setRoomOpen] = useState<Record<string, boolean>>({});
+  // Other clients (browsers) per room, for the "In this room" roster, plus the
+  // worker clock from the latest peers message for relative join times.
+  const [clientsByRoom, setClientsByRoom] = useState<Record<string, PeerInfo[]>>({});
+  const [roomNow, setRoomNow] = useState<number | undefined>(undefined);
+  // This tab's roster label, computed once.
+  const labelRef = useRef(clientLabel());
 
   // Token input = "join another room": validated, then appended to the set.
   // Never pre-filled with a saved token — it's a bearer secret.
@@ -204,6 +252,12 @@ export function Discovery() {
   const activePeerRef = useRef<string | null>(null);
   const activeRoomRef = useRef<string | null>(null);
   const sendersRef = useRef<Map<string, (to: string, data: unknown) => void>>(new Map());
+  // Admission control: the host can hold ("pending") or reject ("denied") us.
+  // `deniedRef` stops a trailing pc state change from overwriting the denied UI;
+  // the timer/reject refs let a control signal extend or abort the dial attempt.
+  const deniedRef = useRef(false);
+  const dialTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dialRejectRef = useRef<((e: Error) => void) | null>(null);
   // Whether the live connection pushed a history entry (so Disconnect/Back can
   // pop it back to the list).
   const pushedRef = useRef(false);
@@ -387,6 +441,7 @@ export function Discovery() {
     const send = sendersRef.current.get(room);
     if (!send) return;
     dialingRef.current = true; // synchronous gate against concurrent triggers
+    deniedRef.current = false;
     let didPush = false;
     try {
       // Clear any prior connection's broker state first: after an RTC drop the
@@ -435,23 +490,25 @@ export function Discovery() {
           const rtc = new RtcClient({
             sendSignal: (data: RtcSignal) => send(server.peerId, data),
             onState: (state) => {
-              if (state === "failed" || state === "disconnected") setConnState("failed");
+              if ((state === "failed" || state === "disconnected") && !deniedRef.current) setConnState("failed");
             },
             onOpen: (channel) => {
-              clearTimeout(timer);
+              if (dialTimerRef.current) clearTimeout(dialTimerRef.current);
               resolve({ channel, bulk: rtc.bulkChannel });
             },
             onClose: () => setConnState((s) => (s === "connected" ? "idle" : s)),
           });
           rtcRef.current = rtc;
+          dialRejectRef.current = reject;
           // Don't hang forever dialing a peer that never answers (e.g. a stale
-          // server still listed in the room): fail the attempt after 15s.
-          const timer = setTimeout(() => {
+          // server still listed in the room): fail the attempt after 15s. A
+          // "pending" admission signal swaps this for a longer approval window.
+          dialTimerRef.current = setTimeout(() => {
             rtc.close();
             reject(new Error("connection timed out"));
           }, 15000);
           rtc.start().catch((err) => {
-            clearTimeout(timer);
+            if (dialTimerRef.current) clearTimeout(dialTimerRef.current);
             reject(err);
           });
         });
@@ -495,7 +552,7 @@ export function Discovery() {
       setResolving(null);
       recordConnect(server, room, openFolder);
     } catch {
-      setConnState("failed");
+      setConnState(deniedRef.current ? "denied" : "failed");
       // Undo the optimistic history entry we pushed. revertingRef makes the
       // resulting popstate a no-op so the "failed" card stays on the list.
       if (didPush) {
@@ -717,6 +774,12 @@ export function Discovery() {
   const onlineRooms = tokens.filter((t) => roomOpen[t]).length;
   const activeServer = allServers.find((x) => x.server.peerId === activePeerId)?.server;
 
+  // Other clients (browsers) across all joined rooms, deduped by peerId — the
+  // "In this room" roster, so you can spot a device that shouldn't hold a token.
+  const otherClients = Object.values(clientsByRoom)
+    .flat()
+    .filter((c, i, all) => all.findIndex((x) => x.peerId === c.peerId) === i);
+
   // Annotate each server with its mnemonic fake-tags (incl. its room label), then
   // filter. The room token is hashed to a short label — never rendered raw.
   const tagged = allServers.map(({ server: s, room }) => ({
@@ -764,10 +827,39 @@ export function Discovery() {
     <RoomClient
       key={t}
       token={t}
+      label={labelRef.current}
       onPeers={(peers) => setServersByRoom((m) => ({ ...m, [t]: peers }))}
+      onRoster={(clients, now) => {
+        setClientsByRoom((m) => ({ ...m, [t]: clients }));
+        if (now) setRoomNow(now);
+      }}
       onStatus={(open) => setRoomOpen((m) => ({ ...m, [t]: open }))}
       onSignal={(from, data) => {
-        if (from === activePeerRef.current) void rtcRef.current?.handleSignal(data);
+        if (from !== activePeerRef.current) return;
+        const kind = (data as { kind?: string } | null)?.kind;
+        if (kind === "pending") {
+          // Host is reviewing us — show "waiting" and stop the short dial timer
+          // from failing the attempt while a human decides.
+          setConnState("pending");
+          if (dialTimerRef.current) clearTimeout(dialTimerRef.current);
+          dialTimerRef.current = setTimeout(() => {
+            rtcRef.current?.close();
+            dialRejectRef.current?.(new Error("approval timed out"));
+          }, 120000);
+          return;
+        }
+        if (kind === "denied") {
+          // Denied while dialing, or kicked after connecting — set state directly
+          // so it covers both (the dial promise may already be settled).
+          deniedRef.current = true;
+          if (dialTimerRef.current) clearTimeout(dialTimerRef.current);
+          rtcRef.current?.close();
+          setIframeSrc(null);
+          setConnState("denied");
+          dialRejectRef.current?.(new Error("host denied the connection"));
+          return;
+        }
+        void rtcRef.current?.handleSignal(data);
       }}
       registerSender={(send) => {
         if (send) sendersRef.current.set(t, send);
@@ -1078,18 +1170,20 @@ export function Discovery() {
                           )}
                           <div style={styles.idLine}>peer {s.peerId.slice(0, 8)}</div>
                           {isActive && (
-                            <div style={styles.echo}>
+                            <div style={connState === "denied" ? styles.echoBad : styles.echo}>
                               {connState === "connecting" && "negotiating WebRTC…"}
+                              {connState === "pending" && "waiting for the host to approve you…"}
                               {connState === "failed" && "connection failed"}
+                              {connState === "denied" && "the host denied this connection"}
                             </div>
                           )}
                         </div>
                         <button
                           style={styles.connectBtn}
                           onClick={() => connectTo(s, room)}
-                          disabled={isActive && connState === "connecting"}
+                          disabled={isActive && (connState === "connecting" || connState === "pending")}
                         >
-                          {isActive && connState === "connecting" ? "…" : "Connect"}
+                          {isActive && (connState === "connecting" || connState === "pending") ? "…" : "Connect"}
                         </button>
                       </li>
                     );
@@ -1101,6 +1195,36 @@ export function Discovery() {
               <p style={styles.dim}>No workspace matches your filter.</p>
             )}
           </div>
+
+          {tokens.length > 0 && (
+            <section style={styles.rosterSection}>
+              <div style={styles.rosterHead}>
+                In this room · you{otherClients.length > 0 ? ` + ${otherClients.length} other ${otherClients.length === 1 ? "client" : "clients"}` : ""}
+              </div>
+              <ul style={styles.list}>
+                <li style={styles.personRow}>
+                  <span style={styles.personDot}>●</span>
+                  <span style={styles.personName}>{labelRef.current}</span>
+                  <span style={styles.dim}>you</span>
+                </li>
+                {otherClients.map((c) => {
+                  const age = relTime(c.since, roomNow);
+                  return (
+                    <li key={c.peerId} style={styles.personRow}>
+                      <span style={{ ...styles.personDot, color: "#dcb67a" }}>●</span>
+                      <span style={styles.personName}>{c.meta?.name ?? c.peerId.slice(0, 8)}</span>
+                      {age && <span style={styles.dim}>connected {age} ago</span>}
+                    </li>
+                  );
+                })}
+              </ul>
+              <p style={styles.rosterHint}>
+                Anyone holding a room's token can appear here and gets a full VS Code session
+                (terminal + file write). See a device you don't recognize? Rotate the token with{" "}
+                <code style={styles.code}>codehost setup --new-token</code>.
+              </p>
+            </section>
+          )}
         </main>
       </div>
     </>
@@ -1185,6 +1309,13 @@ const styles: Record<string, React.CSSProperties> = {
   cardSub: { display: "flex", gap: 12, fontSize: 12, color: "#888", marginTop: 2 },
   cwd: { fontFamily: "monospace" },
   echo: { marginTop: 6, fontSize: 12, color: "#4ec9b0", fontFamily: "monospace" },
+  echoBad: { marginTop: 6, fontSize: 12, color: "#f48771", fontFamily: "monospace" },
+  rosterSection: { marginTop: 28 },
+  rosterHead: { fontSize: 14, color: "#aaa", fontWeight: 600, margin: "0 0 12px" },
+  rosterHint: { margin: "10px 0 0", fontSize: 12, color: "#888" },
+  personRow: { display: "flex", alignItems: "center", gap: 10, background: "#252525", border: "1px solid #3d3d3d", borderRadius: 8, padding: "8px 14px", fontSize: 13 },
+  personDot: { color: "#4ec9b0", fontSize: 10 },
+  personName: { color: "#eee", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
   connectBtn: { background: "#0e639c", border: "none", color: "#fff", padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13 },
   shareBtn: { background: "transparent", border: "1px solid #3d3d3d", color: "#ccc", padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13 },
   provLog: { flex: 1, margin: 0, padding: "14px 18px", overflow: "auto", background: "#1e1e1e", color: "#ccc", fontFamily: "monospace", fontSize: 12.5, lineHeight: 1.5, whiteSpace: "pre-wrap" },

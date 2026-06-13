@@ -1,5 +1,5 @@
 import { SignalingClient } from "../shared/signaling-client";
-import type { PeerInfo } from "../shared/signaling";
+import { type PeerInfo, CLIENT_WIRE_ROLE } from "../shared/signaling";
 import type { RtcSignal } from "../shared/rtc";
 import { RtcClient } from "./rtc-client";
 import { TunnelClient } from "./tunnel-client";
@@ -44,7 +44,7 @@ export class CodehostRoom {
     this.signaling = new SignalingClient({
       url: opts.signalUrl ?? DEFAULT_SIGNAL_URL,
       token: opts.token,
-      role: "viewer",
+      role: CLIENT_WIRE_ROLE,
       onOpen: () => opts.onStatus?.(true),
       onClose: () => opts.onStatus?.(false),
       onPeers: (peers) => {

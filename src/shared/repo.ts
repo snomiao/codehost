@@ -219,7 +219,7 @@ export function resolveRepoTarget(
     .sort(
       (a, b) =>
         Number(prefers(b.meta, prefer)) - Number(prefers(a.meta, prefer)) ||
-        (b.meta?.cwd.length ?? 0) - (a.meta?.cwd.length ?? 0),
+        (b.meta?.cwd?.length ?? 0) - (a.meta?.cwd?.length ?? 0),
     );
 
   // A root that *enumerated* a matching checkout knows it exists on disk —
@@ -233,7 +233,7 @@ export function resolveRepoTarget(
   }
 
   const root = roots[0];
-  if (root && root.meta) {
+  if (root && root.meta?.cwd) {
     const folder = `${trimSlash(root.meta.cwd)}/${fillLayout(root.meta.layout || DEFAULT_LAYOUT, target)}`;
     return { peerId: root.peerId, folder };
   }
@@ -250,7 +250,7 @@ export function resolveRepoTarget(
 export function resolveDevTarget(servers: PeerInfo[], target: DevTarget): Resolution | null {
   const want = stripEnds(target.path);
   const hostOk = (meta: PeerMeta) => !target.host || meta.host === target.host;
-  const hit = servers.find((s) => s.meta && stripEnds(s.meta.cwd) === want && hostOk(s.meta));
+  const hit = servers.find((s) => s.meta?.cwd && stripEnds(s.meta.cwd) === want && hostOk(s.meta));
   if (hit) return { peerId: hit.peerId };
   for (const s of servers) {
     if (!s.meta || !hostOk(s.meta)) continue;

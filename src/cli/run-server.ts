@@ -1,7 +1,8 @@
 import { watch } from "node:fs";
 import { basename, dirname } from "node:path";
-import { type PeerMeta, newPeerId } from "../shared/signaling";
+import { type PeerMeta, isClientRole, newPeerId } from "../shared/signaling";
 import { SignalingClient } from "../shared/signaling-client";
+import { Approver, type ApprovePolicy } from "./approver";
 import { RtcDaemon } from "./rtc-daemon";
 import { type LocalRequest, Tunnel } from "./tunnel";
 import { handleProvision, isProvisionPath, type ProvisionDeps } from "./provision-server";
@@ -46,6 +47,10 @@ export interface RunServerOptions {
    *  host workspace registry). Watched via their parent directory so the file
    *  may not exist yet. */
   watchFiles?: string[];
+  /** Client admission policy (default "auto"). */
+  approve?: ApprovePolicy;
+  /** Label substrings auto-approved under the "confirm" policy. */
+  allow?: string[];
 }
 
 /** How often a daemon re-enumerates its workspaces (manual clones show up). */
@@ -53,7 +58,7 @@ const META_REFRESH_MS = 60_000;
 
 /**
  * Foreground server loop shared by `serve`, `dev`, and `expose`: register in the
- * signaling room with the given meta and bridge each viewer's data channel to a
+ * signaling room with the given meta and bridge each client's data channel to a
  * local server (VS Code for serve/dev, an arbitrary port for expose). Never
  * resolves.
  */
@@ -68,6 +73,23 @@ export async function runServer(opts: RunServerOptions): Promise<never> {
   const target = await opts.launch(basePath);
 
   let rtc: RtcDaemon;
+
+  // Track client labels from the room roster so approval prompts and the bridge
+  // log name *who* connected (a leaked-token tell), not just an opaque peerId.
+  const clientNames = new Map<string, string>();
+  const labelFor = (clientId: string) => clientNames.get(clientId) ?? "unknown client";
+
+  const approver = new Approver({
+    policy: opts.approve ?? "auto",
+    allow: opts.allow ?? [],
+    kick: (clientId) => {
+      // Tell the client why it's being cut off, then tear down the connection.
+      client.sendSignal(clientId, { kind: "denied" });
+      rtc.close(clientId);
+    },
+    notifyPending: (clientId) => client.sendSignal(clientId, { kind: "pending" }),
+  });
+
   const client = new SignalingClient({
     url: opts.signal,
     token: opts.token,
@@ -81,6 +103,12 @@ export async function runServer(opts: RunServerOptions): Promise<never> {
       // not the signaling server. Helps triage field reconnect storms.
       const detail = info ? ` (code ${info.code}${info.reason ? ` "${info.reason}"` : ""}, up ${info.ms}ms)` : "";
       console.log(`[codehost] disconnected from signaling${detail}, reconnecting…`);
+    },
+    onPeers: (peers) => {
+      clientNames.clear();
+      for (const p of peers) {
+        if (isClientRole(p.role) && p.meta?.name) clientNames.set(p.peerId, p.meta.name);
+      }
     },
     onSignal: (from, data) => rtc.handleSignal(from, data),
   });
@@ -107,13 +135,29 @@ export async function runServer(opts: RunServerOptions): Promise<never> {
         }
       : undefined;
 
+  // A client opens two data channels (interactive + bulk), so onChannel fires
+  // twice per connection — log/register "connected" only on the first.
+  const bridged = new Set<string>();
   rtc = new RtcDaemon({
     sendSignal: (to, data) => client.sendSignal(to, data),
-    onChannel: (viewerId, channel) => {
-      console.log(`[codehost] viewer ${viewerId.slice(0, 8)} connected; bridging to :${target.port}`);
+    admit: (clientId) => approver.admit(clientId, labelFor(clientId)),
+    onChannel: (clientId, channel) => {
+      if (!bridged.has(clientId)) {
+        bridged.add(clientId);
+        const who = labelFor(clientId);
+        console.log(`[codehost] ${who} (${clientId.slice(0, 8)}) connected; bridging to :${target.port}`);
+        approver.onConnected(clientId, who);
+      }
       new Tunnel(channel, target.port, target.stripBasePath, onLocal);
     },
+    onClose: (clientId) => {
+      bridged.delete(clientId);
+      approver.onDisconnected(clientId);
+    },
   });
+
+  approver.banner();
+  approver.start();
 
   client.connect();
   if (opts.refreshMeta) {
@@ -144,6 +188,7 @@ export async function runServer(opts: RunServerOptions): Promise<never> {
 
   const shutdown = () => {
     console.log("\n[codehost] shutting down");
+    approver.stop();
     rtc.closeAll();
     client.close();
     target.stop?.();

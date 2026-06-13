@@ -19,6 +19,8 @@ interface SetupArgs {
   name?: string;
   signal: string;
   port?: number;
+  approve: string;
+  allow: string[];
 }
 
 export const setupCommand: CommandModule<{}, SetupArgs> = {
@@ -42,7 +44,19 @@ export const setupCommand: CommandModule<{}, SetupArgs> = {
       })
       .option("name", { describe: "Display name for this server (defaults to hostname)", type: "string" })
       .option("signal", { describe: "Signaling server URL", type: "string", default: DEFAULT_SIGNAL_URL })
-      .option("port", { describe: "Fixed port for the local VS Code server", type: "number" }) as any,
+      .option("port", { describe: "Fixed port for the local VS Code server", type: "number" })
+      .option("approve", {
+        describe: "Client admission: 'auto' (anyone with the token) or 'confirm' (approve via --allow; the daemon has no terminal)",
+        type: "string",
+        choices: ["auto", "confirm"],
+        default: "auto",
+      })
+      .option("allow", {
+        describe: "Under --approve confirm, auto-approve clients whose label matches (repeatable)",
+        type: "string",
+        array: true,
+        default: [],
+      }) as any,
   handler: async (argv) => {
     // Explicit dir > a git cwd (serve THIS repo) > remembered root > ~/ws —
     // so a bare `codehost setup` (e.g. from the installer) lands on a sane
@@ -99,6 +113,8 @@ export const setupCommand: CommandModule<{}, SetupArgs> = {
       name: argv.name,
       port: argv.port,
       host,
+      approve: argv.approve,
+      allow: argv.allow,
     });
     if (!ok) process.exit(1);
 

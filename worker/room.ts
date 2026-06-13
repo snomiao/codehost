@@ -10,6 +10,8 @@ interface Attachment {
   peerId: string;
   role: Role;
   meta: PeerMeta | null;
+  /** Wall-clock ms when this socket joined (sent `hello`); for the room roster. */
+  since: number;
   /** Wall-clock ms of the last message from this socket (hello / ping / signal). */
   lastSeen: number;
 }
@@ -57,11 +59,13 @@ export class Room implements DurableObject {
     }
 
     if (msg.type === "hello") {
+      const now = Date.now();
       const att: Attachment = {
         peerId: msg.peerId,
         role: msg.role,
         meta: msg.meta ?? null,
-        lastSeen: Date.now(),
+        since: now,
+        lastSeen: now,
       };
       ws.serializeAttachment(att);
       this.send(ws, { type: "welcome", peerId: msg.peerId });
@@ -165,13 +169,13 @@ export class Room implements DurableObject {
     const peers: PeerInfo[] = [];
     for (const ws of this.state.getWebSockets()) {
       const att = this.attachment(ws);
-      if (att) peers.push({ peerId: att.peerId, role: att.role, meta: att.meta });
+      if (att) peers.push({ peerId: att.peerId, role: att.role, meta: att.meta, since: att.since });
     }
     return peers;
   }
 
   private broadcastPeers(): void {
-    const message: ServerMessage = { type: "peers", peers: this.peerList() };
+    const message: ServerMessage = { type: "peers", peers: this.peerList(), now: Date.now() };
     const payload = JSON.stringify(message);
     for (const ws of this.state.getWebSockets()) {
       try {

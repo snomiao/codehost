@@ -14,7 +14,7 @@ export interface SignalingClientOptions {
   role: Role;
   meta?: PeerMeta;
   peerId?: string;
-  onPeers?: (peers: PeerInfo[]) => void;
+  onPeers?: (peers: PeerInfo[], now?: number) => void;
   onSignal?: (from: string, data: unknown) => void;
   onOpen?: () => void;
   /** Called on every socket close. `info` carries the WebSocket close code,
@@ -192,7 +192,7 @@ export class SignalingClient {
       } catch {
         return;
       }
-      if (msg.type === "peers") this.opts.onPeers?.(msg.peers);
+      if (msg.type === "peers") this.opts.onPeers?.(msg.peers, msg.now);
       else if (msg.type === "signal") this.opts.onSignal?.(msg.from, msg.data);
     };
 
