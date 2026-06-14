@@ -1,3 +1,10 @@
+# [0.22.0](https://github.com/snomiao/codehost/compare/v0.21.0...v0.22.0) (2026-06-14)
+
+
+### Features
+
+* **web:** "Set up a machine" card on the home page ([c2cec58](https://github.com/snomiao/codehost/commit/c2cec580695cf759a986b18fc8fedd1494fc542f))
+
 # [0.21.0](https://github.com/snomiao/codehost/compare/v0.20.5...v0.21.0) (2026-06-13)
 
 
