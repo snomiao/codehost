@@ -196,6 +196,50 @@ function RoomClient(props: {
   return null;
 }
 
+/** A copy-to-clipboard command row: label, the command, and a Copy button. */
+function CopyCommand({ label, command }: { label: string; command: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(command);
+    } catch {
+      // clipboard blocked (insecure context / permission) — fall back to prompt
+      window.prompt("Copy this command:", command);
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+  return (
+    <div style={styles.cmdRow}>
+      <span style={styles.cmdLabel}>{label}</span>
+      <code style={styles.cmdCode}>{command}</code>
+      <button style={styles.cmdCopy} onClick={copy}>
+        {copied ? "Copied!" : "Copy"}
+      </button>
+    </div>
+  );
+}
+
+/**
+ * "Set up a machine" card: the one-liner that turns any machine into a codehost
+ * server. The script bootstraps everything (Bun, the CLI, VS Code, the daemon),
+ * so the user needs no prerequisites — not even Bun. setup.sh/.ps1 are aliases
+ * of install.* served by Pages (see public/_redirects).
+ */
+function SetupCard() {
+  return (
+    <div style={styles.setupCard}>
+      <div style={styles.setupHead}>Set up a machine</div>
+      <p style={styles.setupSub}>
+        Run this on a machine to serve it here. It installs everything — Bun, VS Code, and the
+        codehost daemon — no prerequisites, and it picks a token and opens the browser for you.
+      </p>
+      <CopyCommand label="macOS / Linux" command="curl -fsSL https://codehost.dev/setup.sh | sh" />
+      <CopyCommand label="Windows" command={'powershell -c "irm codehost.dev/setup.ps1 | iex"'} />
+    </div>
+  );
+}
+
 export function Discovery() {
   // Joined rooms — each token *is* a room id, and we keep one live signaling
   // client per room (see RoomClient). Seeded from the persisted room list plus
@@ -1070,12 +1114,10 @@ export function Discovery() {
               </span>
             )}
           </div>
-          {tokens.length === 0 && <p style={styles.dim}>Join a room to see your workspaces.</p>}
           {tokens.length > 0 && serverCount === 0 && (
-            <p style={styles.dim}>
-              No servers online. Run <code style={styles.code}>bunx codehost serve -t &lt;token&gt;</code> on a machine.
-            </p>
+            <p style={styles.dim}>No servers online in your rooms yet.</p>
           )}
+          {serverCount === 0 && <SetupCard />}
           {serverCount > 0 && (
             <>
               <input
@@ -1225,6 +1267,10 @@ export function Discovery() {
               </p>
             </section>
           )}
+
+          {/* When servers already exist the empty-state card is hidden, so keep an
+              "add another machine" affordance available down here. */}
+          {serverCount > 0 && <SetupCard />}
         </main>
       </div>
     </>
@@ -1312,6 +1358,13 @@ const styles: Record<string, React.CSSProperties> = {
   echoBad: { marginTop: 6, fontSize: 12, color: "#f48771", fontFamily: "monospace" },
   rosterSection: { marginTop: 28 },
   rosterHead: { fontSize: 14, color: "#aaa", fontWeight: 600, margin: "0 0 12px" },
+  setupCard: { marginTop: 20, background: "#252525", border: "1px solid #3d3d3d", borderRadius: 8, padding: "16px 18px" },
+  setupHead: { fontSize: 15, color: "#fff", fontWeight: 600, marginBottom: 6 },
+  setupSub: { fontSize: 13, color: "#aaa", margin: "0 0 14px", lineHeight: 1.5 },
+  cmdRow: { display: "flex", alignItems: "center", gap: 10, marginTop: 8 },
+  cmdLabel: { fontSize: 11, color: "#888", width: 88, flexShrink: 0 },
+  cmdCode: { flex: 1, minWidth: 0, background: "#1b1b1b", border: "1px solid #3d3d3d", borderRadius: 6, padding: "8px 10px", fontFamily: "monospace", fontSize: 12.5, color: "#dcdcaa", overflow: "auto", whiteSpace: "nowrap" },
+  cmdCopy: { flexShrink: 0, background: "#0e639c", border: "none", color: "#fff", padding: "8px 12px", borderRadius: 6, cursor: "pointer", fontSize: 12 },
   rosterHint: { margin: "10px 0 0", fontSize: 12, color: "#888" },
   personRow: { display: "flex", alignItems: "center", gap: 10, background: "#252525", border: "1px solid #3d3d3d", borderRadius: 8, padding: "8px 14px", fontSize: 13 },
   personDot: { color: "#4ec9b0", fontSize: 10 },
