@@ -1384,7 +1384,7 @@ const styles: Record<string, React.CSSProperties> = {
   cmdRowNarrow: { flexDirection: "column", alignItems: "stretch", gap: 6, marginTop: 12 },
   cmdLabel: { fontSize: 11, color: "#888", width: 88, flexShrink: 0 },
   cmdLabelNarrow: { width: "auto" },
-  cmdCode: { flex: 1, minWidth: 0, background: "#1b1b1b", border: "1px solid #3d3d3d", borderRadius: 6, padding: "8px 10px", fontFamily: "monospace", fontSize: 12.5, color: "#dcdcaa", overflow: "auto", whiteSpace: "nowrap" },
+  cmdCode: { flex: 1, minWidth: 0, background: "#1b1b1b", border: "1px solid #3d3d3d", borderRadius: 6, padding: "8px 10px", fontFamily: "monospace", fontSize: 12.5, color: "#dcdcaa", whiteSpace: "pre-wrap", overflowWrap: "anywhere" },
   cmdCopy: { flexShrink: 0, background: "#0e639c", border: "none", color: "#fff", padding: "8px 12px", borderRadius: 6, cursor: "pointer", fontSize: 12 },
   cmdCopyNarrow: { width: "100%", padding: "10px 12px" },
   rosterHint: { margin: "10px 0 0", fontSize: 12, color: "#888" },
