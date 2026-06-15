@@ -1,3 +1,10 @@
+## [0.22.1](https://github.com/snomiao/codehost/compare/v0.22.0...v0.22.1) (2026-06-15)
+
+
+### Bug Fixes
+
+* **web:** stack the setup-card command rows on narrow screens ([4348ef7](https://github.com/snomiao/codehost/commit/4348ef72d766aba4254ecf693277a6064b06d333))
+
 # [0.22.0](https://github.com/snomiao/codehost/compare/v0.21.0...v0.22.0) (2026-06-14)
 
 
