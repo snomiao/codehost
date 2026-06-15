@@ -196,9 +196,28 @@ function RoomClient(props: {
   return null;
 }
 
-/** A copy-to-clipboard command row: label, the command, and a Copy button. */
+/** Track a `(max-width: …)` media query so inline-styled components can go
+ *  responsive without a stylesheet. SSR-safe and listener-cleaned. */
+function useNarrow(maxWidth = 560): boolean {
+  const [narrow, setNarrow] = useState(
+    () => typeof window !== "undefined" && window.matchMedia(`(max-width:${maxWidth}px)`).matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width:${maxWidth}px)`);
+    const on = () => setNarrow(mq.matches);
+    on();
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, [maxWidth]);
+  return narrow;
+}
+
+/** A copy-to-clipboard command row: label, the command, and a Copy button. On
+ *  narrow screens the three stack vertically so the long command doesn't get
+ *  crushed between a fixed label and the button. */
 function CopyCommand({ label, command }: { label: string; command: string }) {
   const [copied, setCopied] = useState(false);
+  const narrow = useNarrow();
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(command);
@@ -210,10 +229,10 @@ function CopyCommand({ label, command }: { label: string; command: string }) {
     setTimeout(() => setCopied(false), 1500);
   };
   return (
-    <div style={styles.cmdRow}>
-      <span style={styles.cmdLabel}>{label}</span>
+    <div style={{ ...styles.cmdRow, ...(narrow ? styles.cmdRowNarrow : null) }}>
+      <span style={{ ...styles.cmdLabel, ...(narrow ? styles.cmdLabelNarrow : null) }}>{label}</span>
       <code style={styles.cmdCode}>{command}</code>
-      <button style={styles.cmdCopy} onClick={copy}>
+      <button style={{ ...styles.cmdCopy, ...(narrow ? styles.cmdCopyNarrow : null) }} onClick={copy}>
         {copied ? "Copied!" : "Copy"}
       </button>
     </div>
@@ -1362,9 +1381,12 @@ const styles: Record<string, React.CSSProperties> = {
   setupHead: { fontSize: 15, color: "#fff", fontWeight: 600, marginBottom: 6 },
   setupSub: { fontSize: 13, color: "#aaa", margin: "0 0 14px", lineHeight: 1.5 },
   cmdRow: { display: "flex", alignItems: "center", gap: 10, marginTop: 8 },
+  cmdRowNarrow: { flexDirection: "column", alignItems: "stretch", gap: 6, marginTop: 12 },
   cmdLabel: { fontSize: 11, color: "#888", width: 88, flexShrink: 0 },
+  cmdLabelNarrow: { width: "auto" },
   cmdCode: { flex: 1, minWidth: 0, background: "#1b1b1b", border: "1px solid #3d3d3d", borderRadius: 6, padding: "8px 10px", fontFamily: "monospace", fontSize: 12.5, color: "#dcdcaa", overflow: "auto", whiteSpace: "nowrap" },
   cmdCopy: { flexShrink: 0, background: "#0e639c", border: "none", color: "#fff", padding: "8px 12px", borderRadius: 6, cursor: "pointer", fontSize: 12 },
+  cmdCopyNarrow: { width: "100%", padding: "10px 12px" },
   rosterHint: { margin: "10px 0 0", fontSize: 12, color: "#888" },
   personRow: { display: "flex", alignItems: "center", gap: 10, background: "#252525", border: "1px solid #3d3d3d", borderRadius: 8, padding: "8px 14px", fontSize: 13 },
   personDot: { color: "#4ec9b0", fontSize: 10 },
