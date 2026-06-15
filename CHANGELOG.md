@@ -1,3 +1,10 @@
+# [0.23.0](https://github.com/snomiao/codehost/compare/v0.22.1...v0.23.0) (2026-06-15)
+
+
+### Features
+
+* **web:** show the serving user@host in the connected header, link the repo URL out ([a10c243](https://github.com/snomiao/codehost/commit/a10c2435d0b6b15572708696854ccf65c74a268e))
+
 ## [0.22.1](https://github.com/snomiao/codehost/compare/v0.22.0...v0.22.1) (2026-06-15)
 
 
