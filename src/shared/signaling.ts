@@ -69,6 +69,13 @@ export interface PeerMeta {
   /** Server only: hostname of the machine running the daemon. */
   host?: string;
   /**
+   * OS login name of whoever launched the daemon — the web UI shows it as the
+   * `user@host` label in front of the workspace URL, so you can tell which
+   * machine/account is actually serving a `codehost.dev/gh/...` link. Absent on
+   * older daemons (and in environments with no passwd entry) — fall back to `host`.
+   */
+  user?: string;
+  /**
    * Stable machine identity (UUID persisted in ~/.codehost/config.json). All
    * daemons on one machine share it, unlike the per-process peerId, so clients
    * can group peers by host and keep history across daemon restarts. Absent on
