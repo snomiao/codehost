@@ -1,10 +1,19 @@
+# dependencies
 node_modules/
-dist/
 bun.lock
-.portless/
+
+# build output
+dist/
+lib/
+.wrangler/
+
+# env & secrets
 .env.local
+
+# local tooling / runtime
+.agent-yes/
+.claude/
 .playwright-cli/
 .playwright-cli-multi-tab/
+.portless/
 tmp/
-.wrangler/
-lib/
