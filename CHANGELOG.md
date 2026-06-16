@@ -1,3 +1,10 @@
+## [0.23.1](https://github.com/snomiao/codehost/compare/v0.23.0...v0.23.1) (2026-06-16)
+
+
+### Performance Improvements
+
+* **signal:** exponential, unbounded backoff on the room sweep alarm ([fde1c43](https://github.com/snomiao/codehost/commit/fde1c43aa0dbc9274abb645ae43fc7cbd6712ee0))
+
 # [0.23.0](https://github.com/snomiao/codehost/compare/v0.22.1...v0.23.0) (2026-06-15)
 
 
