@@ -1,3 +1,10 @@
+## [0.23.2](https://github.com/snomiao/codehost/compare/v0.23.1...v0.23.2) (2026-06-16)
+
+
+### Performance Improvements
+
+* **cli:** throttle meta pushes to the signaling room ([654ee10](https://github.com/snomiao/codehost/commit/654ee1088bc88f95ca6b57545fa477ccb77b994f))
+
 ## [0.23.1](https://github.com/snomiao/codehost/compare/v0.23.0...v0.23.1) (2026-06-16)
 
 
