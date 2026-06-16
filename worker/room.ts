@@ -16,15 +16,32 @@ interface Attachment {
   lastSeen: number;
 }
 
-/** How often the room scans for dead sockets, and how long a socket may go
- *  silent before eviction. Clients heartbeat every ~25s (HEARTBEAT_MS in
- *  signaling-client.ts); allow ~2 misses, so a crashed peer drops out within
- *  ~65-85s. Every sweep alarm and every ping is a billable DO request, so both
- *  cadences are deliberately slow — a hidden Chrome tab's throttled timers
- *  (1/min) must still beat STALE_MS, or background tabs churn evict/reconnect
- *  cycles all day. */
-const SWEEP_MS = 20_000;
+/** How long a socket may go silent before eviction. Clients heartbeat every
+ *  ~25s (HEARTBEAT_MS in signaling-client.ts); allow ~2 misses, so a crashed
+ *  peer drops out within ~65s+. A hidden Chrome tab's throttled timers (1/min)
+ *  must still beat STALE_MS, or background tabs churn evict/reconnect all day. */
 const STALE_MS = 65_000;
+
+/** The sweep alarm scans for dead sockets, and every firing is a billable DO
+ *  request. A room with one always-on daemon never goes idle, so a fixed-cadence
+ *  sweep would wake the DO forever — the dominant signaling cost. Instead the
+ *  interval backs off exponentially with NO upper bound: it starts at
+ *  SWEEP_MIN_MS so a just-changed room evicts promptly, doubles after every no-op
+ *  sweep, and resets to the floor whenever a peer joins or a stale socket is
+ *  evicted. So a long-stable room's sweep cost trends to zero — past
+ *  SWEEP_STOP_MS it stops arming the alarm entirely. The trade-off: a
+ *  hard-killed peer can then linger until the edge notices the dead socket or
+ *  someone new joins the room (cosmetic — a graceful close still evicts
+ *  immediately via webSocketClose). The interval is persisted (DO storage) so it
+ *  survives hibernation between alarms. */
+const SWEEP_MIN_MS = 20_000;
+const SWEEP_MAX_MS = Infinity;
+/** Overflow/sanity guard for the unbounded backoff: once the doubled interval
+ *  passes a day, stop arming the sweep rather than hand setAlarm an ever-growing
+ *  (eventually non-finite) timestamp. A peer join revives sweeping at the floor
+ *  via ensureSweep, so phantom cleanup resumes whenever the room is used again. */
+const SWEEP_STOP_MS = 24 * 60 * 60 * 1000;
+const SWEEP_KEY = "sweepMs";
 
 /**
  * One Durable Object instance per token-room. Holds the live WebSocket
@@ -117,9 +134,17 @@ export class Room implements DurableObject {
       }
     }
     if (evicted) this.broadcastPeers();
-    // Keep sweeping while anyone is connected; let idle rooms go quiet.
-    if (this.state.getWebSockets().length > 0) {
-      await this.state.storage.setAlarm(now + SWEEP_MS);
+    // Idle room: stop sweeping and let the DO hibernate.
+    if (this.state.getWebSockets().length === 0) return;
+    // Stable sweep -> double the interval (capped); an eviction means the room is
+    // changing, so reset to the floor and stay vigilant.
+    const prev = (await this.state.storage.get<number>(SWEEP_KEY)) ?? SWEEP_MIN_MS;
+    const next = evicted ? SWEEP_MIN_MS : Math.min(prev * 2, SWEEP_MAX_MS);
+    await this.state.storage.put(SWEEP_KEY, next);
+    // Unbounded backoff: past the stop horizon, leave the alarm unset — a long
+    // stable room sweeps no more. A join (ensureSweep) or eviction revives it.
+    if (next <= SWEEP_STOP_MS) {
+      await this.state.storage.setAlarm(now + next);
     }
   }
 
@@ -151,11 +176,12 @@ export class Room implements DurableObject {
     return att;
   }
 
-  /** Arm the sweep alarm if one isn't already pending. */
+  /** (Re)arm the sweep at the floor cadence. Called when a peer joins: a roster
+   *  change should be re-checked promptly, so reset the backoff and pull the
+   *  alarm in even if a (backed-off) one is already pending. */
   private async ensureSweep(): Promise<void> {
-    if ((await this.state.storage.getAlarm()) == null) {
-      await this.state.storage.setAlarm(Date.now() + SWEEP_MS);
-    }
+    await this.state.storage.put(SWEEP_KEY, SWEEP_MIN_MS);
+    await this.state.storage.setAlarm(Date.now() + SWEEP_MIN_MS);
   }
 
   private findByPeerId(peerId: string): WebSocket | null {
