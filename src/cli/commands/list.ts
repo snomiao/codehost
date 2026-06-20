@@ -9,15 +9,17 @@ export const listCommand: CommandModule = {
   handler: async () => {
     const detached = listFallbackDaemons();
     if (detached.length) {
-      console.log("Detached daemons (no oxmgr):");
+      console.log("Managed daemons (no oxmgr):");
       for (const d of detached) {
-        console.log(`  ${d.name}  pid ${d.pid}  ${d.cwd}  (log: ${d.log})`);
+        const backend = d.pm2 ? "pm2" : d.task ? "task" : `pid ${d.pid}`;
+        console.log(`  ${d.name}  [${backend}]  ${d.cwd}  (log: ${d.log})`);
       }
       console.log("");
     }
-    // Only hit oxmgr if it's actually runnable — `hasOxmgr` doesn't self-heal,
-    // so a broken install won't re-download its binary on every `list`.
-    if (await hasOxmgr()) {
+    // Windows never uses oxmgr (it manages via pm2/schtasks), so don't poke it
+    // there. Elsewhere, only hit oxmgr if it's actually runnable — `hasOxmgr`
+    // doesn't self-heal, so a broken install won't re-download on every `list`.
+    if (process.platform !== "win32" && (await hasOxmgr())) {
       const shown = await listDaemons();
       // listDaemons returns the count of codehost daemons (>=0) or -1 if oxmgr
       // is unusable; only the latter is an error exit. It prints its own

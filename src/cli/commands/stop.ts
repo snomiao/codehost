@@ -23,6 +23,11 @@ export const stopCommand: CommandModule<{}, StopArgs> = {
       console.log(`[codehost] stopped ${full}`);
       process.exit(0);
     }
+    // Windows manages via pm2/schtasks only — don't fall through to oxmgr there.
+    if (process.platform === "win32") {
+      console.error(`[codehost] no daemon named ${full}`);
+      process.exit(1);
+    }
     process.exit(await stopDaemon(argv.name));
   },
 };
