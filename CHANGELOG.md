@@ -1,3 +1,11 @@
+## [0.23.3](https://github.com/snomiao/codehost/compare/v0.23.2...v0.23.3) (2026-06-20)
+
+
+### Bug Fixes
+
+* **cli:** expand an unexpanded %USERPROFILE% in TEMP/TMP on Windows ([d258ee8](https://github.com/snomiao/codehost/commit/d258ee80131880aa5bc0b2bd283474e65c289184))
+* **cli:** manage the Windows daemon with pm2 instead of oxmgr ([ebade2e](https://github.com/snomiao/codehost/commit/ebade2eb67868a6ace899bba52c47d9c64934dbb))
+
 ## [0.23.2](https://github.com/snomiao/codehost/compare/v0.23.1...v0.23.2) (2026-06-16)
 
 
