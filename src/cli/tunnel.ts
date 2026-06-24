@@ -124,7 +124,9 @@ export class Tunnel {
         this.wsConns.get(streamId)?.send(textDecoder.decode(this.wsRx.finish(streamId, payload)));
         break;
       case Op.WsBin:
-        this.wsConns.get(streamId)?.send(this.wsRx.finish(streamId, payload));
+        // finish() is widened to Uint8Array<ArrayBufferLike>; it's always
+        // ArrayBuffer-backed at runtime, so narrow it for the strict send() type.
+        this.wsConns.get(streamId)?.send(this.wsRx.finish(streamId, payload) as Uint8Array<ArrayBuffer>);
         break;
       case Op.WsClose:
         this.wsRx.drop(streamId);

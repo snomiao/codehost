@@ -4,7 +4,7 @@ import { mkdirSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { killProcessTree } from "./proc";
-import { hasPm2, pm2Delete, pm2Online, pm2Start } from "./pm2";
+import { pm2Available, pm2Delete, pm2Online, pm2Start } from "@snomiao/daemon-kit";
 
 // A non-oxmgr daemon manager: keeps a server running across the shell without
 // depending on oxmgr's flaky native binary. Backends, by platform:
@@ -97,7 +97,7 @@ export function startFallbackDaemon(opts: { name: string; argv: string[]; cwd: s
 
   if (!isWindows) return startUnixSupervisor(opts.name, log);
   // Windows: pm2 if available (hidden, restart + logon resurrect), else schtasks.
-  if (hasPm2() && startWindowsPm2(opts.name, opts.cwd, opts.argv, log)) return true;
+  if (pm2Available() && startWindowsPm2(opts.name, opts.cwd, opts.argv, log)) return true;
   return startWindowsTask(opts.name, log);
 }
 
