@@ -1,3 +1,10 @@
+## [0.23.4](https://github.com/snomiao/codehost/compare/v0.23.3...v0.23.4) (2026-06-24)
+
+
+### Bug Fixes
+
+* **cli:** wire daemon layer to @snomiao/daemon-kit; typecheck with tsgo ([e18f3f9](https://github.com/snomiao/codehost/commit/e18f3f92b4098453f9c4e71228529b1d95997b25))
+
 ## [0.23.3](https://github.com/snomiao/codehost/compare/v0.23.2...v0.23.3) (2026-06-20)
 
 
