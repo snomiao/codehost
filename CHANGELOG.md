@@ -1,3 +1,10 @@
+# [0.24.0](https://github.com/snomiao/codehost/compare/v0.23.4...v0.24.0) (2026-06-27)
+
+
+### Features
+
+* **provision:** add codehost/provision — the workspace-provisioning standard ([3440454](https://github.com/snomiao/codehost/commit/34404544fa5de2cbdbc02469d248f0e5f336d937))
+
 ## [0.23.4](https://github.com/snomiao/codehost/compare/v0.23.3...v0.23.4) (2026-06-24)
 
 
