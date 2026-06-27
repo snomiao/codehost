@@ -1,5 +1,5 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { homedir, userInfo } from "node:os";
 import { dirname, join } from "node:path";
 
 // Persistent CLI config under ~/.codehost (same root as the managed VS Code
@@ -37,6 +37,17 @@ export function writeConfig(config: CliConfig, file: string = CONFIG_FILE): void
  *  config, else ~/ws (created on demand by the caller). Never $HOME itself. */
 export function defaultRoot(file: string = CONFIG_FILE): string {
   return readConfig(file).root || join(homedir(), "ws");
+}
+
+/** This machine's OS login name, advertised so the web UI can show a
+ *  `user@host` label. Falls back to $USER/$USERNAME, then "unknown" —
+ *  os.userInfo() throws when the uid has no passwd entry (some containers). */
+export function currentUser(): string {
+  try {
+    return userInfo().username;
+  } catch {
+    return process.env.USER || process.env.USERNAME || "unknown";
+  }
 }
 
 /** This machine's persistent hostId, minting + saving it on first call. */

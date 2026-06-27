@@ -1,3 +1,39 @@
+## [0.23.4](https://github.com/snomiao/codehost/compare/v0.23.3...v0.23.4) (2026-06-24)
+
+
+### Bug Fixes
+
+* **cli:** wire daemon layer to @snomiao/daemon-kit; typecheck with tsgo ([e18f3f9](https://github.com/snomiao/codehost/commit/e18f3f92b4098453f9c4e71228529b1d95997b25))
+
+## [0.23.3](https://github.com/snomiao/codehost/compare/v0.23.2...v0.23.3) (2026-06-20)
+
+
+### Bug Fixes
+
+* **cli:** expand an unexpanded %USERPROFILE% in TEMP/TMP on Windows ([d258ee8](https://github.com/snomiao/codehost/commit/d258ee80131880aa5bc0b2bd283474e65c289184))
+* **cli:** manage the Windows daemon with pm2 instead of oxmgr ([ebade2e](https://github.com/snomiao/codehost/commit/ebade2eb67868a6ace899bba52c47d9c64934dbb))
+
+## [0.23.2](https://github.com/snomiao/codehost/compare/v0.23.1...v0.23.2) (2026-06-16)
+
+
+### Performance Improvements
+
+* **cli:** throttle meta pushes to the signaling room ([654ee10](https://github.com/snomiao/codehost/commit/654ee1088bc88f95ca6b57545fa477ccb77b994f))
+
+## [0.23.1](https://github.com/snomiao/codehost/compare/v0.23.0...v0.23.1) (2026-06-16)
+
+
+### Performance Improvements
+
+* **signal:** exponential, unbounded backoff on the room sweep alarm ([fde1c43](https://github.com/snomiao/codehost/commit/fde1c43aa0dbc9274abb645ae43fc7cbd6712ee0))
+
+# [0.23.0](https://github.com/snomiao/codehost/compare/v0.22.1...v0.23.0) (2026-06-15)
+
+
+### Features
+
+* **web:** show the serving user@host in the connected header, link the repo URL out ([a10c243](https://github.com/snomiao/codehost/commit/a10c2435d0b6b15572708696854ccf65c74a268e))
+
 ## [0.22.1](https://github.com/snomiao/codehost/compare/v0.22.0...v0.22.1) (2026-06-15)
 
 

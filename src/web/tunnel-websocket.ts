@@ -21,7 +21,7 @@ export function makeTunnelWebSocket(client: TunnelLike, basePath: string) {
     readonly CLOSED = 3;
 
     url: string;
-    readyState = 0;
+    readyState: 0 | 1 | 2 | 3 = 0;
     binaryType: BinaryType = "blob";
     protocol = "";
 

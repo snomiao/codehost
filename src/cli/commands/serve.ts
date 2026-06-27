@@ -6,7 +6,7 @@ import type { PeerMeta } from "../../shared/signaling";
 import type { ApprovePolicy } from "../approver";
 import { DEFAULT_LAYOUT, GITHUB_HOST, toPosixPath } from "../../shared/repo";
 import { TOKEN_REQUIREMENTS, validateToken } from "../../shared/token";
-import { defaultRoot, ensureHostId } from "../config";
+import { currentUser, defaultRoot, ensureHostId } from "../config";
 import { launchServeDaemon } from "../daemonize";
 import { announceConnect } from "../open-url";
 import { agentYesPlugin } from "../plugins/agent-yes";
@@ -200,6 +200,7 @@ export const serveCommand: CommandModule<{}, ServeArgs> = {
           // real OS path `dir` is still what we spawn VS Code in.
           cwd: toPosixPath(dir),
           host,
+          user: currentUser(),
           hostId: ensureHostId(),
           kind: "root",
           layout,

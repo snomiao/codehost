@@ -2,7 +2,7 @@ import { hostname } from "node:os";
 import type { CommandModule } from "yargs";
 import type { PeerMeta } from "../../shared/signaling";
 import { TOKEN_REQUIREMENTS, validateToken } from "../../shared/token";
-import { ensureHostId } from "../config";
+import { currentUser, ensureHostId } from "../config";
 import { launchServeDaemon } from "../daemonize";
 import { runServer } from "../run-server";
 import { DEFAULT_SIGNAL_URL } from "./serve";
@@ -79,6 +79,7 @@ export const exposeCommand: CommandModule<{}, ExposeArgs> = {
       name: argv.name ?? `localhost:${argv.port}`,
       cwd: `localhost:${argv.port}`,
       host,
+      user: currentUser(),
       hostId: ensureHostId(),
     };
 

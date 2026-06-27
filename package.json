@@ -1,6 +1,6 @@
 {
   "name": "codehost",
-  "version": "0.22.1",
+  "version": "0.23.4",
   "type": "module",
   "repository": {
     "type": "git",
@@ -27,10 +27,11 @@
     "deploy:pages": "vite build && wrangler pages deploy dist/public --project-name codehost",
     "start": "bun src/server.ts",
     "test": "bun test",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p src/web/tsconfig.sw.json && tsc --noEmit -p worker/tsconfig.json"
+    "typecheck": "tsgo --noEmit && tsgo --noEmit -p src/web/tsconfig.sw.json && tsgo --noEmit -p worker/tsconfig.json"
   },
   "dependencies": {
     "@parcel/watcher": "^2.5.6",
+    "@snomiao/daemon-kit": "^0.2.0",
     "@xterm/addon-clipboard": "^0.2.0",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-search": "^0.15.0",
@@ -56,6 +57,7 @@
     "@types/react-dom": "^19.1.7",
     "@types/yargs": "^17.0.33",
     "@cloudflare/workers-types": "^4.20250101.0",
+    "@typescript/native-preview": "^7.0.0-dev.20260124.1",
     "wrangler": "^4.95.0",
     "@vitejs/plugin-react": "^6.0.1",
     "concurrently": "^9.2.1",

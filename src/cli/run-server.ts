@@ -56,6 +56,13 @@ export interface RunServerOptions {
 /** How often a daemon re-enumerates its workspaces (manual clones show up). */
 const META_REFRESH_MS = 60_000;
 
+/** Floor between meta pushes to the room. `serve` re-evaluates meta every ~3s so
+ *  live agent titles stay fresh, but each push is a billable DO request that
+ *  fans out to every peer — so coalesce bursts (a churning agent title) into at
+ *  most one push per this interval. The first change in a quiet period goes out
+ *  immediately; rapid follow-ups ride a single trailing push. */
+const MIN_META_PUSH_MS = 15_000;
+
 /**
  * Foreground server loop shared by `serve`, `dev`, and `expose`: register in the
  * signaling room with the given meta and bridge each client's data channel to a
@@ -113,15 +120,36 @@ export async function runServer(opts: RunServerOptions): Promise<never> {
     onSignal: (from, data) => rtc.handleSignal(from, data),
   });
 
-  // Re-advertise when the workspace set changes (provision, manual clone).
-  let lastMeta = JSON.stringify(opts.meta);
+  // Re-advertise when the workspace set changes (provision, manual clone),
+  // throttled so a burst of changes is at most one room push per MIN_META_PUSH_MS.
+  let sentMeta = JSON.stringify(opts.meta); // last meta the room actually has
+  let lastPushAt = 0; // ms of the last updateMeta send (0 = none since connect)
+  let pushTimer: ReturnType<typeof setTimeout> | null = null;
+  const sendMeta = (meta: PeerMeta) => {
+    const s = JSON.stringify(meta);
+    if (s === sentMeta) return; // nothing new since the last push
+    sentMeta = s;
+    lastPushAt = Date.now();
+    client.updateMeta(meta);
+  };
   const refreshMeta = () => {
     if (!opts.refreshMeta) return;
     const meta = opts.refreshMeta();
-    const s = JSON.stringify(meta);
-    if (s === lastMeta) return;
-    lastMeta = s;
-    client.updateMeta(meta);
+    if (JSON.stringify(meta) === sentMeta) return; // unchanged — nothing to do
+    const wait = MIN_META_PUSH_MS - (Date.now() - lastPushAt);
+    if (wait <= 0) {
+      // Cooldown elapsed: push the leading change now, dropping any pending one.
+      if (pushTimer) clearTimeout(pushTimer);
+      pushTimer = null;
+      sendMeta(meta);
+    } else if (!pushTimer) {
+      // Within the cooldown: schedule one trailing push that re-reads the
+      // freshest meta when it fires, so coalesced changes all ship at once.
+      pushTimer = setTimeout(() => {
+        pushTimer = null;
+        sendMeta(opts.refreshMeta!());
+      }, wait);
+    }
   };
   const provision: ProvisionDeps | undefined = opts.provision
     ? { ...opts.provision, onProvisioned: refreshMeta }

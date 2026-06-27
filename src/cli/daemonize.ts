@@ -35,9 +35,11 @@ export interface ServeDaemonResult {
 /**
  * Launch a foreground `codehost serve` (without -d) so it survives the shell and
  * restarts on failure. Prefers oxmgr (which also adds login auto-start); when
- * oxmgr can't run here (e.g. broken native binary on Windows) it falls back to a
- * detached, self-restarting child instead of failing. `CODEHOST_NO_OXMGR=1`
- * forces the fallback. Shared by `serve -d` and `setup`.
+ * oxmgr can't run here it falls back to a managed daemon instead of failing —
+ * pm2 on Windows (hidden, restart + logon resurrect), a detached supervisor on
+ * POSIX. Windows skips oxmgr entirely (its native binary tends to hang/fail
+ * there) and goes straight to pm2. `CODEHOST_NO_OXMGR=1` forces the fallback on
+ * any platform. Shared by `serve -d` and `setup`.
  */
 export async function launchServeDaemon(opts: ServeDaemonOptions): Promise<ServeDaemonResult> {
   // Upgrade the global install (if that's how we're running) before spawning, so
@@ -49,7 +51,9 @@ export async function launchServeDaemon(opts: ServeDaemonOptions): Promise<Serve
   const name = daemonName(label);
   const argv = buildForegroundArgv(opts);
 
-  if (process.env.CODEHOST_NO_OXMGR !== "1") {
+  // Windows skips oxmgr (its native binary hangs/fails there) and uses pm2.
+  const useOxmgr = process.env.CODEHOST_NO_OXMGR !== "1" && process.platform !== "win32";
+  if (useOxmgr) {
     console.log(`[codehost] starting daemon "${name}" via oxmgr`);
     // startDaemon attempts to self-heal oxmgr once; false means it's unusable here.
     const ok = await startDaemon({ name, command: argv.map(quote).join(" "), cwd: opts.dir });
@@ -57,12 +61,13 @@ export async function launchServeDaemon(opts: ServeDaemonOptions): Promise<Serve
       console.log(`[codehost] daemon started. View: codehost list · Stop: codehost stop ${name}`);
       return { ok: true, name };
     }
-    console.warn("[codehost] oxmgr unavailable — falling back to a detached daemon (no login auto-start).");
+    console.warn("[codehost] oxmgr unavailable — falling back to a managed daemon.");
   }
 
+  console.log(`[codehost] starting daemon "${name}"…`);
   const ok = startFallbackDaemon({ name, argv, cwd: opts.dir });
   if (ok) {
-    console.log(`[codehost] detached daemon "${name}" started. View: codehost list · Stop: codehost stop ${name}`);
+    console.log(`[codehost] daemon "${name}" started. View: codehost list · Stop: codehost stop ${name}`);
   } else {
     console.error("[codehost] failed to start a detached daemon.");
   }

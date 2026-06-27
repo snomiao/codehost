@@ -4,15 +4,17 @@ import { mkdirSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { killProcessTree } from "./proc";
+import { pm2Available, pm2Delete, pm2Online, pm2Start } from "@snomiao/daemon-kit";
 
 // A non-oxmgr daemon manager: keeps a server running across the shell without
-// depending on oxmgr's flaky native binary. Two backends:
-//   - Windows: a Scheduled Task (`schtasks`) — built in, always runnable, and it
-//     also auto-starts the server at logon. Unref'd child processes don't
-//     survive their launcher exiting on Windows, so a task is required.
-//   - POSIX: a detached, unref'd supervisor child (reparents to init).
-// Both run the same `__supervise` loop (restart-on-failure) and read their serve
-// argv from this registry by name, so the task/launch command stays short.
+// depending on oxmgr's flaky native binary. Backends, by platform:
+//   - Windows: pm2 (preferred) — restart-on-failure + logon resurrect, launched
+//     hidden so no console window appears (see pm2.ts). If pm2 isn't installed we
+//     fall back to a Scheduled Task (`schtasks`), which is always available and
+//     also auto-starts at logon. Unref'd children don't survive their launcher on
+//     Windows, so one of these managers is required.
+//   - POSIX: a detached, unref'd supervisor child (reparents to init), running the
+//     `__supervise` restart loop and reading its serve argv from this registry.
 
 const ROOT = join(homedir(), ".codehost");
 const REGISTRY = join(ROOT, "daemons.json");
@@ -29,7 +31,9 @@ export interface FallbackDaemon {
   startedAt: number;
   /** POSIX: supervisor process pid. */
   pid?: number;
-  /** Windows: scheduled-task name (equals `name`). */
+  /** Windows (pm2 backend): pm2 process name (equals `name`). */
+  pm2?: string;
+  /** Windows (schtasks backend): scheduled-task name (equals `name`). */
   task?: string;
   /** Pid of the serve child the supervisor last spawned (for tree-kill on stop). */
   servePid?: number;
@@ -91,7 +95,18 @@ export function startFallbackDaemon(opts: { name: string; argv: string[]; cwd: s
   const log = join(LOG_DIR, `${opts.name}.log`);
   upsert({ name: opts.name, cwd: opts.cwd, argv: opts.argv, log, startedAt: Date.now() });
 
-  return isWindows ? startWindowsTask(opts.name, log) : startUnixSupervisor(opts.name, log);
+  if (!isWindows) return startUnixSupervisor(opts.name, log);
+  // Windows: pm2 if available (hidden, restart + logon resurrect), else schtasks.
+  if (pm2Available() && startWindowsPm2(opts.name, opts.cwd, opts.argv, log)) return true;
+  return startWindowsTask(opts.name, log);
+}
+
+/** Windows pm2 backend: pm2 runs the serve argv directly (no supervisor loop —
+ *  pm2 owns restart-on-failure), launched hidden. argv[0] is the bun runtime. */
+function startWindowsPm2(name: string, cwd: string, argv: string[], log: string): boolean {
+  const ok = pm2Start({ name, cwd, script: argv[0], args: argv.slice(1), log });
+  if (ok) patch(name, { pm2: name });
+  return ok;
 }
 
 /** POSIX: detached, unref'd supervisor child that survives as an orphan. */
@@ -130,7 +145,9 @@ function startWindowsTask(name: string, log: string): boolean {
  *  long as their task is still registered (a Ready task is a valid auto-start). */
 export function listFallbackDaemons(): FallbackDaemon[] {
   const list = readRegistry();
-  const alive = list.filter((d) => (d.task ? taskExists(d.task) : d.pid != null && isAlive(d.pid)));
+  const alive = list.filter((d) =>
+    d.pm2 ? pm2Online(d.pm2) : d.task ? taskExists(d.task) : d.pid != null && isAlive(d.pid),
+  );
   if (alive.length !== list.length) writeRegistry(alive);
   return alive;
 }
@@ -140,7 +157,9 @@ export function stopFallbackDaemon(name: string): boolean {
   const list = readRegistry();
   const hit = list.find((d) => d.name === name);
   if (!hit) return false;
-  if (hit.task) {
+  if (hit.pm2) {
+    pm2Delete(hit.pm2); // pm2 stops + removes the managed process (incl. its child tree)
+  } else if (hit.task) {
     schtasks(["/end", "/tn", hit.task]);
     schtasks(["/delete", "/tn", hit.task, "/f"]);
     // /end hard-terminates the task's top process; kill the serve subtree (VS

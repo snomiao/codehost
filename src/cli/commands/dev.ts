@@ -4,7 +4,7 @@ import type { CommandModule } from "yargs";
 import type { PeerMeta } from "../../shared/signaling";
 import type { ApprovePolicy } from "../approver";
 import { TOKEN_REQUIREMENTS, validateToken } from "../../shared/token";
-import { ensureHostId } from "../config";
+import { currentUser, ensureHostId } from "../config";
 import { launchServeDaemon } from "../daemonize";
 import { announceConnect } from "../open-url";
 import { runServer } from "../run-server";
@@ -137,6 +137,7 @@ export const devCommand: CommandModule<{}, DevArgs> = {
       // the real OS path for the local VS Code working dir.
       cwd: toPosixPath(dir),
       host,
+      user: currentUser(),
       hostId: ensureHostId(),
       kind: "repo",
       repo: id.repo,

@@ -102,6 +102,19 @@ function shareLabel(path: string | null): string | null {
   return path;
 }
 
+/** External URL for a repo-shaped share path, so the connected-view label can
+ *  link out to the real host: /gh/owner/repo/tree/x -> https://github.com/owner/repo/tree/x,
+ *  /git/<host>/… -> https://<host>/… . Null for non-repo paths (folder mounts),
+ *  which have no public URL. */
+function shareHref(path: string | null): string | null {
+  if (!path) return null;
+  const gh = path.match(/^\/gh\/(.+)$/);
+  if (gh) return `https://github.com/${gh[1]}`;
+  const git = path.match(/^\/git\/(.+)$/);
+  if (git) return `https://${git[1]}`;
+  return null;
+}
+
 /**
  * Find which of the user's saved rooms hosts a server matching a token-less deep
  * link. Opens a short-lived viewer connection to each candidate room in
@@ -960,16 +973,37 @@ export function Discovery() {
         <div style={styles.page}>
           <header style={styles.header}>
             <span style={styles.brand}>codehost</span>
-            <span style={styles.dim}>·</span>
-            <span
-              style={styles.cwd}
-              title={`${activeServer?.meta?.name ?? ""} ${activeServer?.meta?.cwd ?? ""}`.trim()}
-            >
-              {shareLabel(sharePathRef.current) ??
-                activeServer?.meta?.cwd ??
-                activeServer?.meta?.name ??
-                activePeerId?.slice(0, 8)}
-            </span>
+            {activeServer?.meta?.host ? (
+              // Which machine/account is actually serving this codehost.dev link.
+              <span style={styles.hostTag} title="machine serving this workspace">
+                [{activeServer.meta.user ? `${activeServer.meta.user}@` : ""}
+                {activeServer.meta.host}]
+              </span>
+            ) : (
+              <span style={styles.dim}>·</span>
+            )}
+            {shareHref(sharePathRef.current) ? (
+              // Repo-shaped link: clickable out to the real host (GitHub etc.).
+              <a
+                style={styles.cwdLink}
+                href={shareHref(sharePathRef.current) ?? undefined}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={shareHref(sharePathRef.current) ?? undefined}
+              >
+                {shareLabel(sharePathRef.current)}
+              </a>
+            ) : (
+              <span
+                style={styles.cwd}
+                title={`${activeServer?.meta?.name ?? ""} ${activeServer?.meta?.cwd ?? ""}`.trim()}
+              >
+                {shareLabel(sharePathRef.current) ??
+                  activeServer?.meta?.cwd ??
+                  activeServer?.meta?.name ??
+                  activePeerId?.slice(0, 8)}
+              </span>
+            )}
             {connPath && (
               <span
                 style={styles.dim}
@@ -1300,6 +1334,7 @@ const styles: Record<string, React.CSSProperties> = {
   page: { display: "flex", flexDirection: "column", height: "100%", background: "#1f1f1f", color: "#ccc", fontFamily: "system-ui, sans-serif" },
   header: { display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", background: "#2d2d2d", borderBottom: "1px solid #3d3d3d", fontSize: 13 },
   brand: { fontFamily: "monospace", fontWeight: 700, color: "#fff" },
+  hostTag: { fontFamily: "monospace", fontSize: 12, color: "#dcdcaa" },
   dim: { color: "#888", fontSize: 12 },
   status: { fontSize: 12 },
   // Wide cap + per-host card GRID below: a 4K monitor gets several columns of
@@ -1373,6 +1408,7 @@ const styles: Record<string, React.CSSProperties> = {
   cardName: { fontSize: 14, fontWeight: 600, color: "#fff" },
   cardSub: { display: "flex", gap: 12, fontSize: 12, color: "#888", marginTop: 2 },
   cwd: { fontFamily: "monospace" },
+  cwdLink: { fontFamily: "monospace", color: "#75beff", textDecoration: "none" },
   echo: { marginTop: 6, fontSize: 12, color: "#4ec9b0", fontFamily: "monospace" },
   echoBad: { marginTop: 6, fontSize: 12, color: "#f48771", fontFamily: "monospace" },
   rosterSection: { marginTop: 28 },

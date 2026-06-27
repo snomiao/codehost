@@ -1,4 +1,6 @@
 #!/usr/bin/env bun
+import "./tempenv"; // must be first: repair an unexpanded TEMP/TMP before any
+// native dep (node-datachannel/bun-pty) or child process reads it.
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import { setupCommand } from "./commands/setup";
