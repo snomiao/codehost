@@ -12,6 +12,10 @@
     "codehost": "./src/cli/index.ts",
     "ch": "./src/cli/index.ts"
   },
+  "exports": {
+    "./provision": "./src/provision/index.ts",
+    "./provision/watch": "./src/provision/watch.ts"
+  },
   "scripts": {
     "dev": "concurrently \"bun run dev:server\" \"vite --port 5173\"",
     "dev:server": "bun --watch src/server.ts",
@@ -26,6 +30,7 @@
     "typecheck": "tsgo --noEmit && tsgo --noEmit -p src/web/tsconfig.sw.json && tsgo --noEmit -p worker/tsconfig.json"
   },
   "dependencies": {
+    "@parcel/watcher": "^2.5.6",
     "@snomiao/daemon-kit": "^0.2.0",
     "@xterm/addon-clipboard": "^0.2.0",
     "@xterm/addon-fit": "^0.11.0",

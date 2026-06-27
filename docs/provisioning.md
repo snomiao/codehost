@@ -1,130 +1,107 @@
 # Workspace provisioning
 
-Status: **design / proposal** (not implemented). Captures the design discussed
-for "open a repo link → the workspace materializes on the host".
+Status: **implemented** — `codehost/provision` is the standard. The contract,
+the `~/ws/<owner>/<repo>/tree/<branch>` layout, the clone/fetch/ff-pull state
+machine, and the security rules all live in **`src/provision/`** and are
+exported for any consumer (the daemon, and external tools that spawn agents
+into freshly-provisioned worktrees).
 
-## Goal
-
-Opening a repo deep link should *materialize* the workspace on the serving host
-on demand — clone / worktree-add / install — instead of requiring it to already
-exist. Today, opening `/gh/<owner>/<repo>/tree/<branch>` when that worktree isn't
-present just fails (`serve-web` reports "workspace does not exist").
-
-The host owner stays in control: all provisioning is a **user-authored,
-idempotent script** on the host. codehost never invents commands.
-
-## Model
-
-`codehost serve` runs in a *home* directory (`$HOME_ROOT`):
-
-```
-$HOME_ROOT/
-├── .codehost/                  # config dir — edited in VS Code itself
-│   ├── config.yaml             # settings (workspace path template, allowlist…)
-│   ├── setup.sh / setup.bat    # idempotent provisioning, run on every open
-│   └── …                       # any other files the user keeps here
-└── ws/                         # default workspaces root (redefinable in config.yaml)
-    └── <owner>/<repo>/tree/<branch>/
+```jsonc
+// package.json
+"exports": {
+  "./provision": "./src/provision/index.ts",        // the core (node builtins + git/bun only)
+  "./provision/watch": "./src/provision/watch.ts"    // live status (native @parcel/watcher)
+}
 ```
 
-- `.codehost/` is the config folder. `ws/` is where github-shaped paths land.
-- Default layout: `ws/{owner}/{repo}/tree/{branch}` (the `tree/<branch>` worktree
-  convention — branches are real side-by-side directories).
-- The workspace path is redefinable in `config.yaml`.
+```ts
+import { provision, parseSource } from "codehost/provision";
 
-## Open flow
-
-```
-open /gh/<owner>/<repo>/tree/<branch>
-  → daemon runs .codehost/setup.sh with owner/repo/branch (+ host)
-       setup.sh decides: clone / git worktree add / pull / rebase / skip
-       (idempotent — the policy, incl. auto-upgrade/rebase, is the user's)
-  → VS Code opens the resulting workspace path
+const spec = parseSource("https://github.com/snomiao/codehost/tree/main");
+if (spec) {
+  const r = await provision(spec); // r.folder is the VS Code ?folder= target
+}
 ```
 
-Because `setup.sh` is idempotent and runs **every** time, codehost does not track
-clone state at all — the script clones if missing, fast-skips if present, and the
-user decides whether to auto-pull/rebase. This removes a lot of codehost logic.
+The **core** (`src/provision/index.ts`) imports only node builtins and shells
+out to `git`/`bun`. It deliberately pulls in **none** of codehost's native
+transport (`node-datachannel`), terminal (`bun-pty`), or UI (`react`, `hono`,
+`vite`) deps, so an agent spawner can depend on it cheaply. The live filesystem
+watcher needs the native `@parcel/watcher`, so it is split into
+`src/provision/watch.ts` (`codehost/provision/watch`) — import it only when you
+want a live status feed.
 
-## `setup.sh` contract
-
-- **Input** (env, never interpolated into a command string):
-  `CODEHOST_OWNER`, `CODEHOST_REPO`, `CODEHOST_BRANCH`, `CODEHOST_HOST`,
-  `CODEHOST_HOME` (the home root), `CODEHOST_WS` (the resolved default path from
-  the `config.yaml` template).
-- **Output**: the absolute workspace path on stdout (last line). If it prints
-  nothing, codehost uses `CODEHOST_WS` (the template default).
-- **Exit non-zero** → provisioning failed; surface the error to the browser.
-- Must be **idempotent** and fast on an already-provisioned path (skip).
-- **Windows**: `setup.bat` (or pwsh) with the same env contract.
-
-## `config.yaml` (sketch)
-
-```yaml
-workspace: "ws/{owner}/{repo}/tree/{branch}"   # path template, relative to home
-allowlist:                                      # which repos may auto-provision
-  - github.com/snomiao/*
-# …future: default branch, install hook, etc.
-```
-
-## Reuse VS Code for config (no custom UI)
-
-Editing config = open `$HOME_ROOT/.codehost/` in the **existing VS Code iframe**.
-A "Config" affordance in the header opens `?folder=<home>/.codehost`. No
-`/p/<peer-id>/` settings page, no re-invented editor. (Peer ids are ephemeral —
-they change on every daemon restart — so config is keyed by the host/home, not
-the peer.)
-
-## Create-from-GitHub input box
-
-On the workspace list page, an input: **paste a GitHub URL**.
+## Layout
 
 ```
-https://github.com/snomiao/codehost/tree/main
-  → parse → /gh/snomiao/codehost/tree/main → open (triggers provisioning)
+~/ws/<owner>/<repo>/tree/<branch>/
 ```
 
-One paste opens any GitHub repo on a connected host (= "create workspace from
-GitHub"). Accepts bare `github.com/<owner>/<repo>` and `…/tree/<branch>` forms.
+Each branch is an **independent clone** into its own `tree/<branch>` directory
+(not `git worktree add`), so branches are real side-by-side checkouts.
 
-## Provisioning UX
+The workspace root is **resolved at call time** by `resolveWsRoot(wsRoot?)`,
+precedence:
 
-- While `setup.sh` runs, show a **"provisioning…"** state with the script's
-  stdout/stderr **streamed over the tunnel** (clone/install can take a while).
-- Idempotent re-opens skip and are near-instant.
+1. an explicit argument — `provision(spec, { wsRoot })`, `createBranch(spec,
+   { wsRoot })`, `folderFor(spec, wsRoot)`, `statusOf(spec, wsRoot)`,
+   `watchStatus(spec, onChange, wsRoot)`;
+2. `process.env.CODEHOST_WS_ROOT`;
+3. `~/ws` (`WS_ROOT`, the default).
 
-## Security (the crux)
+All overrides are backward-compatible (omit them for `~/ws`). This lets a
+consumer point provisioning at a different layout — e.g. a machine that keeps
+repos under `/code/<owner>/<repo>/tree/<branch>` sets `CODEHOST_WS_ROOT=/code`
+or passes `{ wsRoot: "/code" }`.
 
-- **Commands are host-authored** (`setup.sh` lives on the host). The link/viewer
-  supplies only `owner/repo/branch` identity — never commands.
-- codehost **sanitizes** `owner/repo/branch` before handing them to `setup.sh`
-  (reject `;`, `$()`, backticks, newlines, `..`, path separators where not
-  expected) and passes them as **env**, not string-interpolated into a command.
-- **allowlist** (`config.yaml` / `setup.sh`) gates which repos auto-provision;
-  others prompt or are denied.
-- Any room member can trigger `setup.sh` with any identity, so the **room token
-  is the trust boundary** and `setup.sh`/allowlist owns repo policy. Editing
-  config (= changing what runs on the host) may warrant owner auth beyond the
-  room token — open question.
+## API (`src/provision/index.ts`)
 
-## Defaults / scaffolding
+- `parseSource(input): RepoSpec | null` — normalize any common reference into a
+  `RepoSpec`. Accepts `https://github.com/<o>/<r>/tree/<b>`,
+  `github.com/<o>/<r>/tree/<b>`, `<o>/<r>/tree/<b>`, `<o>/<r>@<branch>`, and bare
+  `<o>/<r>` (defaults branch `main`). Strips a trailing `.git` and `#`/`?` tails.
+  The branch may contain `/`.
+- `parseSpec(path): RepoSpec | null` — the canonical `<o>/<r>/tree/<b>` parser.
+- `folderFor(spec): string` — the absolute worktree path.
+- `statusOf(spec): Promise<GitStatus | null>` — git status, or null if the
+  worktree isn't provisioned.
+- `provision(spec): Promise<ProvisionResult>` — ensure the worktree exists and is
+  fresh. Never throws.
+- `createBranch(spec): Promise<ProvisionResult>` — clone the default branch and
+  `git switch -c <branch>` for a branch that doesn't exist on the remote yet.
+- `readStatus(dir)` — low-level porcelain reader (used by `watch`).
+- Types: `RepoSpec`, `GitStatus`, `ProvisionResult`, `FailReason`.
 
-- No `.codehost/setup.sh` → fall back to today's behavior (resolve to the layout
-  path, no clone).
-- `codehost init` scaffolds a starter `.codehost/` (`config.yaml` + a `setup.sh`
-  that does `gh repo clone` + `git worktree add` + the `ws/` convention).
+## State machine (`provision`)
 
-## Related fix (independent, same path)
+- **missing** → `git clone --branch <b> --single-branch --recurse-submodules`
+  into the worktree path.
+- **present** → return the current local status immediately, then in the
+  **background** `git fetch --prune` and `git pull --ff-only` **only if** the
+  worktree is clean, behind, not ahead, and has an upstream (never clobber local
+  work; a slow fetch never blocks the editor opening).
+- After a clone, branch creation, or a pull that **advanced** the checkout, run
+  the setup script. For a non-`main` branch, seed `.env.local` (seed-once) from
+  the sibling `tree/main` worktree.
 
-`resolveRepoTarget` picks the *first* root daemon without checking which one
-actually contains the repo, so with multiple roots it can pick the wrong one
-(observed live: it chose `/Users/sno` over the correct `/Users/sno/ws`, yielding
-a non-existent subpath). Prefer the **deepest matching root** (longest `cwd`
-prefix). Not part of provisioning, but it gates the same "open a repo" path.
+## `setup-repo.sh`
 
-## Open questions
+`src/provision/setup-repo.sh` ships as the **default** setup script and runs via
+Bun Shell (`bun setup-repo.sh`, cross-platform). It updates submodules and
+installs dependencies for whichever ecosystem(s) the repo uses (JS via its pinned
+lockfile, Rust, Go, Python, Ruby). Every step is `|| true` (fail-soft): a missing
+toolchain or one ecosystem's hiccup never aborts provisioning.
 
-1. Source of truth for the path: `setup.sh` stdout vs `config.yaml` template.
-   (Proposed: stdout wins; the template is the default handed in as `CODEHOST_WS`.)
-2. Owner auth for editing config beyond the room token?
-3. Log streaming transport: a new tunnel channel vs reuse of an existing one.
+**Future work:** a user-authored `.codehost/setup.sh` hook in the repo (or home)
+may override the default, so the host owner can define their own provisioning
+policy. The default ships so provisioning works out of the box.
+
+## Security
+
+- All git runs via `execFile` (argv array, **no shell**) — no command injection.
+- Every path segment (`owner`/`repo`/each `branch` part) is validated by
+  `isSafeSegment`: non-empty, not `.`/`..`, no leading `-` (option injection), no
+  path separators or control chars. A hostile input can't traverse or escape
+  `~/ws`. `parseSource` reuses this via `parseSpec`.
+- git error messages are forced to `LC_ALL=C` so `branch-not-found` /
+  `repo-not-found` classification is locale-stable.
