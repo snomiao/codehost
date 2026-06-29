@@ -1,3 +1,10 @@
+## [0.24.1](https://github.com/snomiao/codehost/compare/v0.24.0...v0.24.1) (2026-06-29)
+
+
+### Bug Fixes
+
+* **provision:** parseSpec returns null on malformed %-encoding instead of throwing ([#2](https://github.com/snomiao/codehost/issues/2)) ([c670ceb](https://github.com/snomiao/codehost/commit/c670cebb1b5692339abec414ece2e5334b892f28))
+
 # [0.24.0](https://github.com/snomiao/codehost/compare/v0.23.4...v0.24.0) (2026-06-27)
 
 
