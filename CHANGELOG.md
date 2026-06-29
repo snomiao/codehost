@@ -1,3 +1,10 @@
+# [0.25.0](https://github.com/snomiao/codehost/compare/v0.24.1...v0.25.0) (2026-06-29)
+
+
+### Features
+
+* **provision:** add forkWorktree — fork a worktree's branch carrying its WIP ([#3](https://github.com/snomiao/codehost/issues/3)) ([67e6123](https://github.com/snomiao/codehost/commit/67e612376273db8e5658de2946ea50f3a29890e2))
+
 ## [0.24.1](https://github.com/snomiao/codehost/compare/v0.24.0...v0.24.1) (2026-06-29)
 
 
