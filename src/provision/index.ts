@@ -89,7 +89,7 @@ export type ProvisionResult = {
   /** Absolute local worktree path (the VS Code `?folder=` target). */
   folder: string;
   existed: boolean;
-  action: "cloned" | "pulled" | "fetched" | "created" | "none" | "error";
+  action: "cloned" | "pulled" | "fetched" | "created" | "forked" | "none" | "error";
   git?: GitStatus;
   error?: string;
   reason?: FailReason;
@@ -437,5 +437,105 @@ export async function createBranch(
       error,
       reason: classifyError(error),
     };
+  }
+}
+
+/**
+ * Fork the worktree at `fromCwd` to a NEW branch in a sibling worktree,
+ * **carrying its uncommitted work**. Unlike `createBranch` (which branches off
+ * the remote default), this branches off `fromCwd`'s current HEAD via
+ * `git worktree add` — shared object store, **no clone** — then replays the
+ * source's tracked changes (`git stash create` → `stash apply`, so the source
+ * worktree is never touched) and copies its untracked, non-ignored files.
+ * Because the new worktree starts at the same HEAD, the WIP applies without
+ * conflict. owner/repo come from `fromCwd`'s `origin` remote, so the fork lands
+ * at `<wsRoot>/<owner>/<repo>/tree/<branch>` beside its siblings. Refuses if
+ * `fromCwd` isn't a git worktree with a github origin, the branch name is
+ * unsafe, or the target already exists. Never throws.
+ */
+export async function forkWorktree(opts: {
+  fromCwd: string;
+  branch: string;
+  wsRoot?: string;
+}): Promise<ProvisionResult> {
+  const { fromCwd, branch } = opts;
+  const wsRoot = resolveWsRoot(opts.wsRoot);
+  // Branch may contain `/`; validate each segment like `parseSpec` does.
+  const okBranch = branch.length > 0 && branch.split("/").every(isSafeSegment);
+
+  // Resolve owner/repo from the source's origin remote (never fetched — just
+  // parsed), so the fork is a sibling under the same `<owner>/<repo>/tree/*`.
+  let spec: RepoSpec | null = null;
+  try {
+    if (!existsSync(path.join(fromCwd, ".git"))) throw new Error("not a git worktree");
+    const { stdout } = await git(fromCwd, ["remote", "get-url", "origin"]);
+    const m = stdout.trim().match(/github\.com[:/]([^/]+)\/(.+?)(?:\.git)?\/?$/i);
+    if (m && okBranch && m[1] && m[2] && isSafeSegment(m[1]) && isSafeSegment(m[2]))
+      spec = { owner: m[1], repo: m[2], branch };
+  } catch {
+    spec = null;
+  }
+  if (!spec) {
+    return {
+      ok: false,
+      spec: { owner: "", repo: "", branch },
+      folder: "",
+      existed: false,
+      action: "error",
+      error: okBranch
+        ? `'${fromCwd}' is not a git worktree with a github origin remote`
+        : `invalid branch name: ${branch}`,
+    };
+  }
+
+  const folder = folderFor(spec, wsRoot);
+  const base = {
+    ok: false as boolean,
+    spec,
+    folder,
+    existed: existsSync(path.join(folder, ".git")),
+    action: "none" as ProvisionResult["action"],
+  };
+  if (base.existed) {
+    return { ...base, action: "error", error: "worktree already exists" };
+  }
+  try {
+    await mkdir(path.dirname(folder), { recursive: true });
+    // New worktree off the source's current HEAD — shared object store, no
+    // clone. `-b` creates the branch (errors if it already exists).
+    await git(fromCwd, ["worktree", "add", "-b", spec.branch, folder, "HEAD"]);
+
+    // Tracked WIP: `stash create` snapshots index+worktree into a commit without
+    // touching the source's working tree or stash list; the sibling worktree
+    // applies it (shared store, same HEAD → conflict-free).
+    const { stdout: stashSha } = await git(fromCwd, ["stash", "create"]);
+    const sha = stashSha.trim();
+    if (sha) await git(folder, ["stash", "apply", sha]);
+
+    // Untracked, non-ignored files (the stash above excludes them) — copied over.
+    const { stdout: untracked } = await git(fromCwd, [
+      "ls-files",
+      "--others",
+      "--exclude-standard",
+      "-z",
+    ]);
+    for (const rel of untracked.split("\0").filter(Boolean)) {
+      try {
+        const to = path.join(folder, rel);
+        await mkdir(path.dirname(to), { recursive: true });
+        await copyFile(path.join(fromCwd, rel), to);
+      } catch {
+        // best-effort per file (vanished mid-copy, permission, …)
+      }
+    }
+
+    await seedEnvLocal(spec, folder, wsRoot);
+    await runRepoSetup(folder);
+    const status = await readStatus(folder);
+    return { ...base, ok: true, action: "forked", git: status };
+  } catch (e: unknown) {
+    const err = e as { stderr?: string; message?: string };
+    const error = (err.stderr || err.message || String(e)).trim().slice(0, 600);
+    return { ...base, action: "error", error, reason: classifyError(error) };
   }
 }

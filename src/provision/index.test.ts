@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import {
   folderFor,
+  forkWorktree,
   parseSource,
   parseSpec,
   resolveWsRoot,
@@ -95,5 +100,77 @@ describe("workspace root override (call-time)", () => {
     process.env.CODEHOST_WS_ROOT = "/code";
     const s = parseSpec("snomiao/codehost/tree/main")!;
     expect(folderFor(s)).toBe("/code/snomiao/codehost/tree/main");
+  });
+});
+
+describe("forkWorktree (carries WIP)", () => {
+  const tmps: string[] = [];
+  const mk = (p: string) => {
+    const d = mkdtempSync(path.join(tmpdir(), p));
+    tmps.push(d);
+    return d;
+  };
+  const GIT_ENV = {
+    ...process.env,
+    GIT_AUTHOR_NAME: "t",
+    GIT_AUTHOR_EMAIL: "t@t",
+    GIT_COMMITTER_NAME: "t",
+    GIT_COMMITTER_EMAIL: "t@t",
+  };
+  const git = (cwd: string, ...a: string[]) => execFileSync("git", a, { cwd, env: GIT_ENV });
+  afterEach(() => {
+    for (const d of tmps.splice(0)) {
+      try {
+        rmSync(d, { recursive: true, force: true });
+      } catch {
+        // worktree links may resist rm; best-effort
+      }
+    }
+  });
+
+  const seedRepo = (prefix: string) => {
+    const src = mk(prefix);
+    git(src, "init", "-q", "-b", "main");
+    git(src, "remote", "add", "origin", "https://github.com/test/repo.git");
+    writeFileSync(path.join(src, "tracked.txt"), "base\n");
+    git(src, "add", ".");
+    git(src, "commit", "-qm", "init");
+    return src;
+  };
+
+  test("forks current HEAD into a sibling worktree carrying tracked + untracked WIP", async () => {
+    const src = seedRepo("ch-fork-src-");
+    const wsRoot = mk("ch-fork-ws-");
+    // dirty: modify a tracked file + add an untracked (non-ignored) file
+    writeFileSync(path.join(src, "tracked.txt"), "WIP change\n");
+    writeFileSync(path.join(src, "new.txt"), "new untracked\n");
+
+    const r = await forkWorktree({ fromCwd: src, branch: "feat-x", wsRoot });
+
+    expect(r.ok).toBe(true);
+    expect(r.action).toBe("forked");
+    expect(r.folder).toBe(path.join(wsRoot, "test", "repo", "tree", "feat-x"));
+    // uncommitted work made it across:
+    expect(readFileSync(path.join(r.folder, "tracked.txt"), "utf8")).toBe("WIP change\n");
+    expect(readFileSync(path.join(r.folder, "new.txt"), "utf8")).toBe("new untracked\n");
+    // source worktree is untouched (its WIP is still there):
+    expect(readFileSync(path.join(src, "tracked.txt"), "utf8")).toBe("WIP change\n");
+    expect(existsSync(path.join(src, "new.txt"))).toBe(true);
+  });
+
+  test("rejects an unsafe branch name", async () => {
+    const src = seedRepo("ch-fork-src2-");
+    const r = await forkWorktree({ fromCwd: src, branch: "../evil", wsRoot: mk("ch-fork-ws2-") });
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain("invalid branch");
+  });
+
+  test("errors when fromCwd is not a git worktree", async () => {
+    const r = await forkWorktree({
+      fromCwd: mk("ch-fork-nogit-"),
+      branch: "x",
+      wsRoot: mk("ch-fork-ws3-"),
+    });
+    expect(r.ok).toBe(false);
   });
 });
