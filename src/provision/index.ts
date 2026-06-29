@@ -104,7 +104,13 @@ function classifyError(msg: string): FailReason {
 
 /** Parse `<owner>/<repo>/tree/<branch>` (branch may contain slashes). */
 export function parseSpec(p: string): RepoSpec | null {
-  const clean = decodeURIComponent(p).replace(/^\/+/, "").replace(/\/+$/, "");
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(p);
+  } catch {
+    return null; // malformed percent-encoding (URIError) → not a spec
+  }
+  const clean = decoded.replace(/^\/+/, "").replace(/\/+$/, "");
   const m = clean.match(/^([^/]+)\/([^/]+)\/tree\/(.+)$/);
   if (!m) return null;
   const [, owner, repo, branch] = m;
