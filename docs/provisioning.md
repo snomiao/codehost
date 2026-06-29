@@ -37,8 +37,10 @@ want a live status feed.
 ~/ws/<owner>/<repo>/tree/<branch>/
 ```
 
-Each branch is an **independent clone** into its own `tree/<branch>` directory
-(not `git worktree add`), so branches are real side-by-side checkouts.
+`provision`/`createBranch` make each branch an **independent clone** into its own
+`tree/<branch>` directory, so branches are real side-by-side checkouts.
+(`forkWorktree` is the exception: a shared-object-store `git worktree add` off an
+existing checkout's HEAD — see the API below.)
 
 The workspace root is **resolved at call time** by `resolveWsRoot(wsRoot?)`,
 precedence:
@@ -69,6 +71,14 @@ or passes `{ wsRoot: "/code" }`.
   fresh. Never throws.
 - `createBranch(spec): Promise<ProvisionResult>` — clone the default branch and
   `git switch -c <branch>` for a branch that doesn't exist on the remote yet.
+- `forkWorktree({ fromCwd, branch, wsRoot? }): Promise<ProvisionResult>` — fork an
+  existing worktree to a NEW branch in a sibling worktree, **carrying its
+  uncommitted work**. `git worktree add -b <branch>` off `fromCwd`'s current HEAD
+  (shared object store, **no clone**), then replays the source's tracked changes
+  (`git stash create`→`stash apply`, leaving the source worktree untouched) and
+  copies its untracked, non-ignored files — conflict-free since the new worktree
+  starts at the same HEAD. owner/repo come from `fromCwd`'s `origin` remote.
+  `action: "forked"`. Distinct from `createBranch` (off the remote default).
 - `readStatus(dir)` — low-level porcelain reader (used by `watch`).
 - Types: `RepoSpec`, `GitStatus`, `ProvisionResult`, `FailReason`.
 
