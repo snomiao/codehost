@@ -71,14 +71,16 @@ or passes `{ wsRoot: "/code" }`.
   fresh. Never throws.
 - `createBranch(spec): Promise<ProvisionResult>` — clone the default branch and
   `git switch -c <branch>` for a branch that doesn't exist on the remote yet.
-- `forkWorktree({ fromCwd, branch, wsRoot? }): Promise<ProvisionResult>` — fork an
-  existing worktree to a NEW branch in a sibling worktree, **carrying its
-  uncommitted work**. `git worktree add -b <branch>` off `fromCwd`'s current HEAD
-  (shared object store, **no clone**), then replays the source's tracked changes
-  (`git stash create`→`stash apply`, leaving the source worktree untouched) and
-  copies its untracked, non-ignored files — conflict-free since the new worktree
-  starts at the same HEAD. owner/repo come from `fromCwd`'s `origin` remote.
-  `action: "forked"`. Distinct from `createBranch` (off the remote default).
+- `forkWorktree({ fromCwd, branch, wsRoot?, wip? }): Promise<ProvisionResult>` —
+  fork an existing worktree to a NEW branch in a sibling worktree off its current
+  HEAD. `git worktree add -b <branch>` off `fromCwd`'s current HEAD (shared object
+  store, **no clone**). By default the fork is **clean** — only committed work
+  crosses over, so the source's uncommitted changes stay put. Pass `wip: true` to
+  also carry the source's uncommitted work: replay tracked changes (`git stash
+  create`→`stash apply`, leaving the source worktree untouched) and copy untracked,
+  non-ignored files — conflict-free since the new worktree starts at the same HEAD.
+  owner/repo come from `fromCwd`'s `origin` remote. `action: "forked"`. Distinct
+  from `createBranch` (off the remote default).
 - `readStatus(dir)` — low-level porcelain reader (used by `watch`).
 - Types: `RepoSpec`, `GitStatus`, `ProvisionResult`, `FailReason`.
 
