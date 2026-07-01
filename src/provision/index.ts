@@ -441,22 +441,29 @@ export async function createBranch(
 }
 
 /**
- * Fork the worktree at `fromCwd` to a NEW branch in a sibling worktree,
- * **carrying its uncommitted work**. Unlike `createBranch` (which branches off
- * the remote default), this branches off `fromCwd`'s current HEAD via
- * `git worktree add` — shared object store, **no clone** — then replays the
- * source's tracked changes (`git stash create` → `stash apply`, so the source
- * worktree is never touched) and copies its untracked, non-ignored files.
- * Because the new worktree starts at the same HEAD, the WIP applies without
- * conflict. owner/repo come from `fromCwd`'s `origin` remote, so the fork lands
- * at `<wsRoot>/<owner>/<repo>/tree/<branch>` beside its siblings. Refuses if
- * `fromCwd` isn't a git worktree with a github origin, the branch name is
- * unsafe, or the target already exists. Never throws.
+ * Fork the worktree at `fromCwd` to a NEW branch in a sibling worktree off its
+ * current HEAD. Unlike `createBranch` (which branches off the remote default),
+ * this branches off `fromCwd`'s current HEAD via `git worktree add` — shared
+ * object store, **no clone** — so the fork starts from exactly the committed
+ * state the source is on. owner/repo come from `fromCwd`'s `origin` remote, so
+ * the fork lands at `<wsRoot>/<owner>/<repo>/tree/<branch>` beside its siblings.
+ *
+ * By default the fork is **clean**: only committed work crosses over, so the
+ * source's uncommitted changes stay put. Pass `wip: true` to also carry the
+ * source's uncommitted work — tracked changes are replayed via
+ * `git stash create` → `stash apply` (the source worktree is never touched) and
+ * untracked, non-ignored files are copied. Because the new worktree starts at
+ * the same HEAD, the WIP applies without conflict.
+ *
+ * Refuses if `fromCwd` isn't a git worktree with a github origin, the branch
+ * name is unsafe, or the target already exists. Never throws.
  */
 export async function forkWorktree(opts: {
   fromCwd: string;
   branch: string;
   wsRoot?: string;
+  /** Carry the source's uncommitted work into the fork. Default: false (clean fork). */
+  wip?: boolean;
 }): Promise<ProvisionResult> {
   const { fromCwd, branch } = opts;
   const wsRoot = resolveWsRoot(opts.wsRoot);
@@ -505,27 +512,31 @@ export async function forkWorktree(opts: {
     // clone. `-b` creates the branch (errors if it already exists).
     await git(fromCwd, ["worktree", "add", "-b", spec.branch, folder, "HEAD"]);
 
-    // Tracked WIP: `stash create` snapshots index+worktree into a commit without
-    // touching the source's working tree or stash list; the sibling worktree
-    // applies it (shared store, same HEAD → conflict-free).
-    const { stdout: stashSha } = await git(fromCwd, ["stash", "create"]);
-    const sha = stashSha.trim();
-    if (sha) await git(folder, ["stash", "apply", sha]);
+    // Opt-in WIP: by default the fork is clean (committed state only). When
+    // `wip` is set, carry the source's uncommitted work across.
+    if (opts.wip) {
+      // Tracked WIP: `stash create` snapshots index+worktree into a commit without
+      // touching the source's working tree or stash list; the sibling worktree
+      // applies it (shared store, same HEAD → conflict-free).
+      const { stdout: stashSha } = await git(fromCwd, ["stash", "create"]);
+      const sha = stashSha.trim();
+      if (sha) await git(folder, ["stash", "apply", sha]);
 
-    // Untracked, non-ignored files (the stash above excludes them) — copied over.
-    const { stdout: untracked } = await git(fromCwd, [
-      "ls-files",
-      "--others",
-      "--exclude-standard",
-      "-z",
-    ]);
-    for (const rel of untracked.split("\0").filter(Boolean)) {
-      try {
-        const to = path.join(folder, rel);
-        await mkdir(path.dirname(to), { recursive: true });
-        await copyFile(path.join(fromCwd, rel), to);
-      } catch {
-        // best-effort per file (vanished mid-copy, permission, …)
+      // Untracked, non-ignored files (the stash above excludes them) — copied over.
+      const { stdout: untracked } = await git(fromCwd, [
+        "ls-files",
+        "--others",
+        "--exclude-standard",
+        "-z",
+      ]);
+      for (const rel of untracked.split("\0").filter(Boolean)) {
+        try {
+          const to = path.join(folder, rel);
+          await mkdir(path.dirname(to), { recursive: true });
+          await copyFile(path.join(fromCwd, rel), to);
+        } catch {
+          // best-effort per file (vanished mid-copy, permission, …)
+        }
       }
     }
 

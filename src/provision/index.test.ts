@@ -103,7 +103,7 @@ describe("workspace root override (call-time)", () => {
   });
 });
 
-describe("forkWorktree (carries WIP)", () => {
+describe("forkWorktree", () => {
   const tmps: string[] = [];
   const mk = (p: string) => {
     const d = mkdtempSync(path.join(tmpdir(), p));
@@ -138,7 +138,7 @@ describe("forkWorktree (carries WIP)", () => {
     return src;
   };
 
-  test("forks current HEAD into a sibling worktree carrying tracked + untracked WIP", async () => {
+  test("forks current HEAD clean by default — uncommitted work does NOT cross over", async () => {
     const src = seedRepo("ch-fork-src-");
     const wsRoot = mk("ch-fork-ws-");
     // dirty: modify a tracked file + add an untracked (non-ignored) file
@@ -150,6 +150,25 @@ describe("forkWorktree (carries WIP)", () => {
     expect(r.ok).toBe(true);
     expect(r.action).toBe("forked");
     expect(r.folder).toBe(path.join(wsRoot, "test", "repo", "tree", "feat-x"));
+    // fork is clean: committed state only, no WIP carried:
+    expect(readFileSync(path.join(r.folder, "tracked.txt"), "utf8")).toBe("base\n");
+    expect(existsSync(path.join(r.folder, "new.txt"))).toBe(false);
+    // source worktree is untouched (its WIP is still there):
+    expect(readFileSync(path.join(src, "tracked.txt"), "utf8")).toBe("WIP change\n");
+    expect(existsSync(path.join(src, "new.txt"))).toBe(true);
+  });
+
+  test("carries tracked + untracked WIP when wip: true", async () => {
+    const src = seedRepo("ch-fork-wip-src-");
+    const wsRoot = mk("ch-fork-wip-ws-");
+    // dirty: modify a tracked file + add an untracked (non-ignored) file
+    writeFileSync(path.join(src, "tracked.txt"), "WIP change\n");
+    writeFileSync(path.join(src, "new.txt"), "new untracked\n");
+
+    const r = await forkWorktree({ fromCwd: src, branch: "feat-x", wsRoot, wip: true });
+
+    expect(r.ok).toBe(true);
+    expect(r.action).toBe("forked");
     // uncommitted work made it across:
     expect(readFileSync(path.join(r.folder, "tracked.txt"), "utf8")).toBe("WIP change\n");
     expect(readFileSync(path.join(r.folder, "new.txt"), "utf8")).toBe("new untracked\n");
