@@ -1,3 +1,10 @@
+# [0.26.0](https://github.com/snomiao/codehost/compare/v0.25.0...v0.26.0) (2026-07-01)
+
+
+### Features
+
+* **provision:** forkWorktree forks clean by default; opt into WIP with wip:true ([#5](https://github.com/snomiao/codehost/issues/5)) ([5091f57](https://github.com/snomiao/codehost/commit/5091f57909c617b7c8e8a7dd07a82a567994c88c))
+
 # [0.25.0](https://github.com/snomiao/codehost/compare/v0.24.1...v0.25.0) (2026-06-29)
 
 
