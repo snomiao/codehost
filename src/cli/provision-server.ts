@@ -1,6 +1,8 @@
-import { existsSync, readFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
+import { CONFIG_YAML, SETUP_PS1, SETUP_SH } from "./init";
+import type { LocalRequest } from "./tunnel";
 import { repoAllowed, resolveWorkspacePath, validateProvisionTarget, type ProvisionTarget } from "../shared/provision";
 import { fromPosixPath, repoKey, toPosixPath } from "../shared/repo";
 
@@ -61,6 +63,112 @@ function findSetupScript(homeDir: string): string[] | null {
   const sh = join(dir, "setup.sh");
   if (existsSync(sh)) return ["bash", sh];
   return null;
+}
+
+export const PROVISION_CONFIG_PATH = "/__codehost/provision-config";
+
+/** True for the provision-config route (ignoring the query string). */
+export function isProvisionConfigPath(path: string): boolean {
+  return path.split("?")[0] === PROVISION_CONFIG_PATH;
+}
+
+export interface ProvisionConfigDeps {
+  /** Real OS path of the served home root. */
+  homeDir: string;
+  /** Called after a save — lets the daemon re-enumerate + re-advertise (e.g. a
+   *  freshly-created `.codehost/` surfaces the "⚙ .codehost" workspace shortcut). */
+  onSaved?: () => void;
+}
+
+type SetupScriptName = "setup.sh" | "setup.bat" | "setup.ps1";
+
+/** Which setup script name/path applies on this daemon's platform, and whether
+ *  it currently exists. Mirrors `findSetupScript`'s priority (Windows:
+ *  setup.bat then setup.ps1; else setup.sh) but always returns a target path —
+ *  even when nothing exists yet — so the config route has somewhere to write
+ *  a newly-created script. When neither Windows script exists, setup.ps1 is
+ *  the create-target (scaffoldCodehost always writes both setup.sh/setup.ps1). */
+function setupScriptInfo(homeDir: string): { name: SetupScriptName; path: string; exists: boolean } {
+  const dir = join(homeDir, ".codehost");
+  if (process.platform === "win32") {
+    const bat = join(dir, "setup.bat");
+    if (existsSync(bat)) return { name: "setup.bat", path: bat, exists: true };
+    const ps1 = join(dir, "setup.ps1");
+    return { name: "setup.ps1", path: ps1, exists: existsSync(ps1) };
+  }
+  const sh = join(dir, "setup.sh");
+  return { name: "setup.sh", path: sh, exists: existsSync(sh) };
+}
+
+function defaultScriptBody(name: SetupScriptName): string {
+  return name === "setup.ps1" ? SETUP_PS1 : SETUP_SH; // setup.bat has no scaffold; SETUP_SH is the POSIX default
+}
+
+export interface ProvisionConfigGetBody {
+  configYaml: string;
+  configYamlExists: boolean;
+  setupScript: string;
+  setupScriptName: SetupScriptName;
+  setupScriptExists: boolean;
+}
+
+export interface ProvisionConfigPutBody {
+  configYaml?: string;
+  setupScript?: string;
+}
+
+/** Serve `GET/PUT /__codehost/provision-config`: view/edit a host's
+ *  `.codehost/config.yaml` and setup script from the web UI's settings page.
+ *  A missing file reads back as the default scaffold template (with
+ *  `*Exists: false`) so the UI can offer to create it pre-filled. Writable
+ *  over the same tunnel a connected client already has full terminal access
+ *  through, so this isn't a new privilege boundary — just a structured
+ *  shortcut to what the terminal can already do. */
+export async function handleProvisionConfig(req: LocalRequest, deps: ProvisionConfigDeps): Promise<Response> {
+  if (req.method === "GET") {
+    const configPath = join(deps.homeDir, ".codehost", "config.yaml");
+    const configYamlExists = existsSync(configPath);
+    const configYaml = configYamlExists ? readFileSync(configPath, "utf8") : CONFIG_YAML;
+    const info = setupScriptInfo(deps.homeDir);
+    const setupScript = info.exists ? readFileSync(info.path, "utf8") : defaultScriptBody(info.name);
+    const body: ProvisionConfigGetBody = {
+      configYaml,
+      configYamlExists,
+      setupScript,
+      setupScriptName: info.name,
+      setupScriptExists: info.exists,
+    };
+    return json(200, body);
+  }
+  if (req.method === "PUT") {
+    let body: ProvisionConfigPutBody;
+    try {
+      body = JSON.parse(new TextDecoder().decode(req.body ?? new Uint8Array()));
+    } catch {
+      return json(400, { error: "invalid JSON body" });
+    }
+    const dir = join(deps.homeDir, ".codehost");
+    mkdirSync(dir, { recursive: true });
+    if (typeof body.configYaml === "string") writeFileSync(join(dir, "config.yaml"), body.configYaml);
+    if (typeof body.setupScript === "string") {
+      const info = setupScriptInfo(deps.homeDir);
+      writeFileSync(info.path, body.setupScript);
+      if (info.name === "setup.sh") {
+        try {
+          chmodSync(info.path, 0o755);
+        } catch {
+          // non-POSIX fs — ignore
+        }
+      }
+    }
+    try {
+      deps.onSaved?.();
+    } catch {
+      // advertising is best-effort; never fail the save response
+    }
+    return json(200, { ok: true });
+  }
+  return json(405, { error: "method not allowed" });
 }
 
 // Per-workspace coalescing: a concurrent open of the same target waits for the

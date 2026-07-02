@@ -5,7 +5,14 @@ import { SignalingClient } from "../shared/signaling-client";
 import { Approver, type ApprovePolicy } from "./approver";
 import { RtcDaemon } from "./rtc-daemon";
 import { type LocalRequest, Tunnel } from "./tunnel";
-import { handleProvision, isProvisionPath, type ProvisionDeps } from "./provision-server";
+import {
+  handleProvision,
+  handleProvisionConfig,
+  isProvisionConfigPath,
+  isProvisionPath,
+  type ProvisionConfigDeps,
+  type ProvisionDeps,
+} from "./provision-server";
 import { type DaemonPlugin, routePlugins } from "./plugins/types";
 
 export interface LaunchResult {
@@ -154,11 +161,15 @@ export async function runServer(opts: RunServerOptions): Promise<never> {
   const provision: ProvisionDeps | undefined = opts.provision
     ? { ...opts.provision, onProvisioned: refreshMeta }
     : undefined;
+  const provisionConfig: ProvisionConfigDeps | undefined = opts.provision
+    ? { homeDir: opts.provision.homeDir, onSaved: refreshMeta }
+    : undefined;
   const plugins = opts.plugins ?? [];
   const onLocal =
-    provision || plugins.length > 0
+    provision || provisionConfig || plugins.length > 0
       ? (req: LocalRequest) => {
           if (provision && isProvisionPath(req.path)) return handleProvision(req.path, provision);
+          if (provisionConfig && isProvisionConfigPath(req.path)) return handleProvisionConfig(req, provisionConfig);
           return routePlugins(plugins, req);
         }
       : undefined;

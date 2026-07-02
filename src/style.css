@@ -4,10 +4,62 @@
   padding: 0;
 }
 
+/* Discovery page palette — light by default, dark when the OS prefers it
+   (`prefers-color-scheme`). Values are referenced via var(--ch-*) from
+   src/web/discovery.tsx's inline styles, so the whole app follows the OS
+   theme automatically. The dark values match the app's original hardcoded
+   palette, so dark-mode users see no change. */
+:root {
+  color-scheme: light dark;
+  --ch-bg: #ffffff;
+  --ch-bg-alt: #f5f5f5;
+  --ch-bg-panel: #f2f2f2;
+  --ch-bg-code: #f7f7f7;
+  --ch-bg-code-alt: #eef0f2;
+  --ch-border: #d7d7d7;
+  --ch-text: #24292f;
+  --ch-text-strong: #111111;
+  --ch-text-input: #1a1a1a;
+  --ch-text-secondary: #57606a;
+  --ch-text-dim: #6e7781;
+  --ch-text-dim2: #8c959f;
+  --ch-text-muted: #57606a;
+  --ch-accent-primary: #0969da;
+  --ch-accent-link: #0969da;
+  --ch-accent-teal: #0a7d5f;
+  --ch-accent-red: #cf222e;
+  --ch-accent-yellow: #8a6d1f;
+  --ch-accent-amber: #9a6a1f;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ch-bg: #1f1f1f;
+    --ch-bg-alt: #2d2d2d;
+    --ch-bg-panel: #252525;
+    --ch-bg-code: #1e1e1e;
+    --ch-bg-code-alt: #1b1b1b;
+    --ch-border: #3d3d3d;
+    --ch-text: #cccccc;
+    --ch-text-strong: #ffffff;
+    --ch-text-input: #eeeeee;
+    --ch-text-secondary: #aaaaaa;
+    --ch-text-dim: #888888;
+    --ch-text-dim2: #666666;
+    --ch-text-muted: #9aa4af;
+    --ch-accent-primary: #0e639c;
+    --ch-accent-link: #75beff;
+    --ch-accent-teal: #4ec9b0;
+    --ch-accent-red: #f48771;
+    --ch-accent-yellow: #dcdcaa;
+    --ch-accent-amber: #dcb67a;
+  }
+}
+
 html, body, #root {
   height: 100%;
   width: 100%;
   overflow: hidden;
-  background: #1f1f1f;
+  background: var(--ch-bg);
   font-family: system-ui, sans-serif;
 }

@@ -5,7 +5,7 @@ import { join } from "node:path";
 // (run on every repo open) plus a config.yaml. Provisioning is opt-in by these
 // files existing — `codehost init` is how you opt in.
 
-const CONFIG_YAML = `# codehost workspace config — see docs/provisioning.md
+export const CONFIG_YAML = `# codehost workspace config — see docs/provisioning.md
 
 # Where /gh/<owner>/<repo>/tree/<branch> lands, relative to this served root
 # (serve a dedicated workspace dir like ~/ws — never \$HOME itself).
@@ -18,7 +18,7 @@ workspace: "{owner}/{repo}/tree/{branch}"
 #   - github.com/snomiao/*
 `;
 
-const SETUP_SH = `#!/usr/bin/env bash
+export const SETUP_SH = `#!/usr/bin/env bash
 # codehost provisioning hook. Runs on every open of /gh/<owner>/<repo>/tree/<branch>
 # BEFORE the editor opens CODEHOST_WS. Keep it idempotent: clone/worktree if
 # missing, fast-skip if present. Edit freely (install deps, pull/rebase policy…).
@@ -59,7 +59,7 @@ git -C "$repo" worktree add "$ws" "$CODEHOST_BRANCH" \\
 echo "[setup] ready: $ws"
 `;
 
-const SETUP_PS1 = `# codehost provisioning hook (Windows). See setup.sh for the contract.
+export const SETUP_PS1 = `# codehost provisioning hook (Windows). See setup.sh for the contract.
 $ErrorActionPreference = "Stop"
 $ws = $env:CODEHOST_WS
 if (Test-Path (Join-Path $ws ".git")) { Write-Host "[setup] $ws already provisioned"; exit 0 }

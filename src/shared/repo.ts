@@ -33,6 +33,7 @@ export interface DevTarget {
 export type DeepLink =
   | { type: "repo"; target: RepoTarget }
   | { type: "dev"; target: DevTarget }
+  | { type: "hostSettings"; host: string }
   | null;
 
 /**
@@ -40,6 +41,7 @@ export type DeepLink =
  *   /gh/<owner>/<repo>(/tree/<branch>)            -> GitHub repo target
  *   /git/<host>/<owner>/<repo>(/tree/<branch>)    -> any-host repo target
  *   /host/<hostname>/<fs-path>                    -> host-scoped folder mount
+ *   /host/<hostname>                              -> that host's settings page
  *   /dev/<fs-path>                                -> legacy host-agnostic folder mount
  * Branch may contain slashes. Anything else -> null (normal app).
  */
@@ -65,6 +67,9 @@ export function parseDeepLink(pathname: string): DeepLink {
   if (host) {
     return { type: "dev", target: { host: host[1], path: `/${host[2].replace(/^\/+/, "")}` } };
   }
+  // Bare hostname, no path: that host's settings page.
+  const hostSettings = clean.match(/^\/host\/([^/]+)$/);
+  if (hostSettings) return { type: "hostSettings", host: hostSettings[1] };
   // Legacy host-agnostic folder mount.
   const dev = clean.match(/^\/dev\/(.+)$/);
   if (dev) {
@@ -258,6 +263,15 @@ export function resolveDevTarget(servers: PeerInfo[], target: DevTarget): Resolu
     if (ws) return { peerId: s.peerId, folder: ws.path, exact: true };
   }
   return null;
+}
+
+/** Pick the live root daemon (`serve`, kind "root") advertising this hostname —
+ *  the only kind with `.codehost` provisioning wired (see run-server.ts /
+ *  commands/serve.ts). A `dev`-kind daemon on the same host has no
+ *  provision-config route, so it's deliberately not matched here. */
+export function resolveHostTarget(servers: PeerInfo[], hostname: string): Resolution | null {
+  const root = servers.find((s) => s.meta?.host === hostname && s.meta?.kind === "root");
+  return root ? { peerId: root.peerId } : null;
 }
 
 /** A candidate room (its token) plus how the deep link resolved within it. */

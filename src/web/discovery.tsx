@@ -18,6 +18,7 @@ import {
   pickRoomMatch,
   repoKey,
   resolveDevTarget,
+  resolveHostTarget,
   resolveRepoTarget,
   shareableDeepLink,
 } from "../shared/repo";
@@ -27,6 +28,40 @@ import { deriveTags, matchQuery, shortRoomLabel, tagKey } from "../shared/tags";
 const TOKEN_KEY = "codehost.token";
 
 type ConnState = "idle" | "connecting" | "pending" | "provisioning" | "connected" | "failed" | "denied";
+
+/** What to do once `connectTo`'s RTC handshake finishes: run provisioning then
+ *  open the iframe (repo deep link), or fetch this host's provisioning files
+ *  and render the settings view (bare /host/<hostname> deep link). Undefined
+ *  just opens the iframe on the resolved/current folder. */
+type PostConnect = { kind: "repo"; target: RepoTarget } | { kind: "hostSettings"; host: string } | undefined;
+
+/** `connectTo`'s post-connect action for a parsed deep link. */
+function postConnectFor(dl: DeepLink): PostConnect {
+  if (dl?.type === "repo") return { kind: "repo", target: dl.target };
+  if (dl?.type === "hostSettings") return { kind: "hostSettings", host: dl.host };
+  return undefined;
+}
+
+type SetupScriptName = "setup.sh" | "setup.bat" | "setup.ps1";
+
+/** A host's fetched `.codehost/config.yaml` + setup script, and the in-progress
+ *  edit/save state for the settings view (`GET`/`PUT /__codehost/provision-config`). */
+type HostSettingsState =
+  | { status: "loading" }
+  | { status: "error"; message: string }
+  | {
+      status: "ready";
+      configYaml: string;
+      configYamlExists: boolean;
+      setupScript: string;
+      setupScriptName: SetupScriptName;
+      setupScriptExists: boolean;
+      configYamlDraft: string;
+      setupScriptDraft: string;
+      saving: boolean;
+      saveError: string | null;
+      savedAt: number | null;
+    };
 
 /** A server discovered in a specific room (its token routes the signaling). */
 type RoomedServer = { server: PeerInfo; room: string };
@@ -83,6 +118,7 @@ function tokenFromHash(): string {
 function deepLinkLabel(dl: DeepLink): string | null {
   if (!dl) return null;
   if (dl.type === "repo") return `${dl.target.owner}/${dl.target.name}`;
+  if (dl.type === "hostSettings") return `${dl.host} settings`;
   return dl.target.host ? `${dl.target.host}:${dl.target.path}` : dl.target.path;
 }
 
@@ -147,7 +183,9 @@ function findRoomForDeepLink(dl: DeepLink, tokens: string[], timeoutMs = 6000): 
         onPeers: (peers) => {
           const servers = peers.filter((p) => p.role === "server");
           const res =
-            dl.type === "repo" ? resolveRepoTarget(servers, dl.target) : resolveDevTarget(servers, dl.target);
+            dl.type === "repo" ? resolveRepoTarget(servers, dl.target)
+            : dl.type === "hostSettings" ? resolveHostTarget(servers, dl.host)
+            : resolveDevTarget(servers, dl.target);
           if (!res) return;
           if (!res.folder || res.exact) finish(tok); // exact match — take it now
           else if (!fallbacks.some((f) => f.token === tok)) fallbacks.push({ token: tok, resolution: res });
@@ -324,6 +362,15 @@ export function Discovery() {
   // Streamed setup.sh output shown while connState === "provisioning".
   const [provisionLog, setProvisionLog] = useState("");
 
+  // Host-settings view: set once connectTo resolves a `hostSettings` deep
+  // link, instead of an iframe. `hostSettings` holds the fetched/edited
+  // .codehost/config.yaml + setup script for `settingsHost`.
+  const [settingsHost, setSettingsHost] = useState<string | null>(null);
+  const [hostSettings, setHostSettings] = useState<HostSettingsState | null>(null);
+  // #provisioning is the only tab today; read once and kept in the URL (not
+  // stripped like #t=) so the convention supports more tabs later.
+  const [settingsTab, setSettingsTab] = useState<string>(() => window.location.hash.slice(1) || "provisioning");
+
   const rtcRef = useRef<RtcClient | null>(null);
   const activePeerRef = useRef<string | null>(null);
   const activeRoomRef = useRef<string | null>(null);
@@ -397,6 +444,10 @@ export function Discovery() {
       syncToUrl();
     };
     window.addEventListener("popstate", onPopState);
+    // Only #provisioning exists today, but keep settingsTab in sync with the
+    // hash so a second tab later just needs a new render case, no new plumbing.
+    const onHashChange = () => setSettingsTab(window.location.hash.slice(1) || "provisioning");
+    window.addEventListener("hashchange", onHashChange);
     // A valid token in the URL fragment (#t=<token>) joins the room and turns on
     // single-server auto-connect for it; consume it from the address bar after,
     // so the secret isn't left visible or re-applied on a manual reload.
@@ -427,7 +478,10 @@ export function Discovery() {
       }
     }
 
-    return () => window.removeEventListener("popstate", onPopState);
+    return () => {
+      window.removeEventListener("popstate", onPopState);
+      window.removeEventListener("hashchange", onHashChange);
+    };
   }, []);
 
   // Auto-connect once discovery turns up a match: a deep-link target across any
@@ -512,7 +566,7 @@ export function Discovery() {
     room: string,
     folder?: string,
     fromHistory = false,
-    repoTarget?: RepoTarget,
+    postConnect?: PostConnect,
   ) {
     const send = sendersRef.current.get(room);
     if (!send) return;
@@ -528,6 +582,8 @@ export function Discovery() {
       rtcRef.current?.close();
       rtcRef.current = null;
       setIframeSrc(null);
+      setSettingsHost(null);
+      setHostSettings(null);
       setActivePeerId(server.peerId);
       activePeerRef.current = server.peerId;
       activeRoomRef.current = room;
@@ -611,12 +667,22 @@ export function Discovery() {
       // and hand back the authoritative workspace path) before opening. Streams
       // the log under the "provisioning" state. Daemons without the route (older
       // builds) return no path → fall back to the browser-computed folder.
-      if (repoTarget) {
+      if (postConnect?.kind === "repo") {
         setConnState("provisioning");
         setProvisionLog("");
-        const ws = await runProvision(server.peerId, repoTarget);
+        const ws = await runProvision(server.peerId, postConnect.target);
         if (activePeerRef.current !== server.peerId) return; // cancelled/switched mid-provision
         if (ws) openFolder = ws;
+      }
+
+      // A host-settings deep link: no iframe, just fetch the provisioning
+      // files over the tunnel and render the settings view below.
+      if (postConnect?.kind === "hostSettings") {
+        setConnState("connected");
+        setResolving(null);
+        setSettingsHost(postConnect.host);
+        void loadHostSettings(server.peerId);
+        return;
       }
 
       setConnState("connected");
@@ -682,6 +748,64 @@ export function Discovery() {
     return ws;
   }
 
+  // Fetch a host's `.codehost/config.yaml` + setup script over the tunnel for
+  // the settings view. A missing file reads back as the daemon's default
+  // scaffold template (see provision-server.ts's handleProvisionConfig).
+  async function loadHostSettings(peerId: string) {
+    setHostSettings({ status: "loading" });
+    try {
+      const res = await connBroker.tunnelFor(peerId).fetch("GET", "/__codehost/provision-config", {});
+      if (!res.ok) throw new Error(`server returned ${res.status}`);
+      const data = (await res.json()) as {
+        configYaml: string;
+        configYamlExists: boolean;
+        setupScript: string;
+        setupScriptName: SetupScriptName;
+        setupScriptExists: boolean;
+      };
+      setHostSettings({
+        status: "ready",
+        ...data,
+        configYamlDraft: data.configYaml,
+        setupScriptDraft: data.setupScript,
+        saving: false,
+        saveError: null,
+        savedAt: null,
+      });
+    } catch (err) {
+      setHostSettings({ status: "error", message: String(err) });
+    }
+  }
+
+  async function saveHostSettings() {
+    if (hostSettings?.status !== "ready" || !activePeerId) return;
+    setHostSettings({ ...hostSettings, saving: true, saveError: null });
+    try {
+      const body = new TextEncoder().encode(
+        JSON.stringify({ configYaml: hostSettings.configYamlDraft, setupScript: hostSettings.setupScriptDraft }),
+      );
+      const res = await connBroker
+        .tunnelFor(activePeerId)
+        .fetch("PUT", "/__codehost/provision-config", { "content-type": "application/json" }, body);
+      if (!res.ok) throw new Error(`server returned ${res.status}`);
+      setHostSettings((s) =>
+        s?.status === "ready"
+          ? {
+              ...s,
+              saving: false,
+              configYaml: s.configYamlDraft,
+              configYamlExists: true,
+              setupScript: s.setupScriptDraft,
+              setupScriptExists: true,
+              savedAt: Date.now(),
+            }
+          : s,
+      );
+    } catch (err) {
+      setHostSettings((s) => (s?.status === "ready" ? { ...s, saving: false, saveError: String(err) } : s));
+    }
+  }
+
   // Shareable deep-link pathname for a server+folder, with no side effects (no
   // token — Share adds that). Keeps an existing deep-link path as-is; otherwise
   // derives /gh|/git|/dev from the server's repo identity or opened folder.
@@ -733,12 +857,14 @@ export function Discovery() {
     if (dl) {
       const peers = allServers.map((x) => x.server);
       const res =
-        dl.type === "repo" ? resolveRepoTarget(peers, dl.target, preferFor(dl)) : resolveDevTarget(peers, dl.target);
+        dl.type === "repo" ? resolveRepoTarget(peers, dl.target, preferFor(dl))
+        : dl.type === "hostSettings" ? resolveHostTarget(peers, dl.host)
+        : resolveDevTarget(peers, dl.target);
       if (!res) return;
       const match = allServers.find((x) => x.server.peerId === res.peerId);
       if (!match) return;
       resolvedRef.current = true;
-      void connectTo(match.server, match.room, res.folder, false, dl.type === "repo" ? dl.target : undefined);
+      void connectTo(match.server, match.room, res.folder, false, postConnectFor(dl));
       return;
     }
     // No deep link, but a token arrived via the URL: open that room's server
@@ -783,6 +909,8 @@ export function Discovery() {
     setConnState("idle");
     sharePathRef.current = null;
     pushedRef.current = false;
+    setSettingsHost(null);
+    setHostSettings(null);
   }
 
   // Resolve a workspace deep-link path to a live server across all joined rooms.
@@ -790,7 +918,9 @@ export function Discovery() {
     if (!dl) return null;
     const peers = allServersRef.current.map((x) => x.server);
     const res =
-      dl.type === "repo" ? resolveRepoTarget(peers, dl.target, preferFor(dl)) : resolveDevTarget(peers, dl.target);
+      dl.type === "repo" ? resolveRepoTarget(peers, dl.target, preferFor(dl))
+      : dl.type === "hostSettings" ? resolveHostTarget(peers, dl.host)
+      : resolveDevTarget(peers, dl.target);
     if (!res) return null;
     const match = allServersRef.current.find((x) => x.server.peerId === res.peerId);
     return match ? { ...match, folder: res.folder } : null;
@@ -810,7 +940,7 @@ export function Discovery() {
     const target = findServerForDeepLink(dl);
     if (!target) return; // its server isn't present (yet) — wait for it to appear
     if (activePeerRef.current === target.server.peerId && connStateRef.current === "connected") return;
-    void connectTo(target.server, target.room, target.folder, true, dl.type === "repo" ? dl.target : undefined);
+    void connectTo(target.server, target.room, target.folder, true, postConnectFor(dl));
   }
 
   // Open an enumerated checkout via its deep link, reusing the URL-driven
@@ -965,6 +1095,65 @@ export function Discovery() {
     );
   }
 
+  // Host settings view: view/edit .codehost/config.yaml + the setup script
+  // over the tunnel, instead of an iframe. `#provisioning` is the only tab.
+  if (settingsHost && connState === "connected") {
+    return (
+      <>
+        {roomClients}
+        <div style={styles.page}>
+          <header style={styles.header}>
+            <span style={styles.brand}>codehost</span>
+            <span style={styles.hostTag}>[{settingsHost}]</span>
+            <span style={styles.dim}>· settings</span>
+            <span style={{ flex: 1 }} />
+            <button style={styles.connectBtn} onClick={disconnect}>
+              Disconnect
+            </button>
+          </header>
+          <div style={styles.main}>
+            {hostSettings?.status === "loading" && <p style={styles.dim}>loading…</p>}
+            {hostSettings?.status === "error" && <p style={styles.tokenError}>{hostSettings.message}</p>}
+            {hostSettings?.status === "ready" && settingsTab === "provisioning" && (
+              <>
+                <label style={styles.settingsLabel}>
+                  config.yaml{!hostSettings.configYamlExists && " (not created yet — showing default)"}
+                </label>
+                <textarea
+                  style={styles.settingsArea}
+                  spellCheck={false}
+                  value={hostSettings.configYamlDraft}
+                  onChange={(e) =>
+                    setHostSettings((s) => (s?.status === "ready" ? { ...s, configYamlDraft: e.target.value } : s))
+                  }
+                />
+                <label style={styles.settingsLabel}>
+                  {hostSettings.setupScriptName}
+                  {!hostSettings.setupScriptExists && " (not created yet — showing default)"}
+                </label>
+                <textarea
+                  style={styles.settingsArea}
+                  spellCheck={false}
+                  value={hostSettings.setupScriptDraft}
+                  onChange={(e) =>
+                    setHostSettings((s) => (s?.status === "ready" ? { ...s, setupScriptDraft: e.target.value } : s))
+                  }
+                />
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 14 }}>
+                  <button style={styles.button} onClick={saveHostSettings} disabled={hostSettings.saving}>
+                    {hostSettings.saving ? "Saving…" : "Save"}
+                  </button>
+                  {hostSettings.saveError && <span style={styles.tokenError}>{hostSettings.saveError}</span>}
+                  {hostSettings.savedAt && <span style={styles.echo}>saved</span>}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </>
+    );
+  }
+
   // Connected view: VS Code in an iframe, served over the tunnel.
   if (iframeSrc && connState === "connected") {
     return (
@@ -1028,7 +1217,7 @@ export function Discovery() {
               Disconnect
             </button>
           </header>
-          <iframe title="VS Code" src={iframeSrc} style={{ flex: 1, border: "none", width: "100%", background: "#1e1e1e" }} />
+          <iframe title="VS Code" src={iframeSrc} style={{ flex: 1, border: "none", width: "100%", background: "var(--ch-bg-code)" }} />
         </div>
       </>
     );
@@ -1043,7 +1232,7 @@ export function Discovery() {
           <span style={styles.dim}>·</span>
           <span style={styles.dim}>{getSignalUrl()}</span>
           <span style={{ flex: 1 }} />
-          <span style={{ ...styles.status, color: onlineRooms > 0 ? "#4ec9b0" : "#888" }}>
+          <span style={{ ...styles.status, color: onlineRooms > 0 ? "var(--ch-accent-teal)" : "var(--ch-text-dim)" }}>
             {tokens.length === 0
               ? "○ no rooms"
               : `${onlineRooms > 0 ? "●" : "○"} ${onlineRooms}/${tokens.length} rooms`}
@@ -1055,7 +1244,7 @@ export function Discovery() {
               the full width. */}
           <div style={styles.controls}>
           {resolving && (
-            <p style={{ color: "#dcb67a", marginBottom: 12 }}>
+            <p style={{ color: "var(--ch-accent-amber)", marginBottom: 12 }}>
               Looking for <code style={styles.code}>{resolving}</code> in your rooms…{" "}
               {tokens.length > 0 ? "waiting for a live server" : "join the room's token below"}.
             </p>
@@ -1198,7 +1387,11 @@ export function Discovery() {
             </>
           )}
           <div>
-            {hostGroups.map((g) => (
+            {hostGroups.map((g) => {
+              // Only a live root daemon (`serve`) has provisioning wired — a group
+              // made up solely of `dev`-kind peers has no provision-config route.
+              const rootServer = g.items.find((x) => x.server.meta?.kind === "root" && x.server.meta?.host)?.server;
+              return (
               <section key={g.key}>
                 <div style={styles.hostHead}>
                   <span style={styles.hostName}>{g.label}</span>
@@ -1206,6 +1399,20 @@ export function Discovery() {
                     {g.items.length} workspace{g.items.length === 1 ? "" : "s"}
                     {g.agents.length > 0 && ` · ${g.agents.length} agent${g.agents.length === 1 ? "" : "s"}`}
                   </span>
+                  {rootServer && (
+                    <button
+                      style={styles.hostSettingsBtn}
+                      title="view/edit this host's .codehost provisioning files"
+                      onClick={() => {
+                        history.pushState(null, "", `/host/${rootServer.meta!.host}#provisioning`);
+                        setSettingsTab("provisioning");
+                        setResolving(null);
+                        syncToUrl();
+                      }}
+                    >
+                      ⚙ Settings
+                    </button>
+                  )}
                 </div>
                 {g.agents.length > 0 && (
                   <div style={styles.agentRow}>
@@ -1221,7 +1428,7 @@ export function Discovery() {
                         target="_blank"
                         rel="noopener"
                       >
-                        <span style={{ color: a.state === "active" ? "#4ec9b0" : "#777" }}>●</span> {a.tool}{" "}
+                        <span style={{ color: a.state === "active" ? "var(--ch-accent-teal)" : "var(--ch-text-dim)" }}>●</span> {a.tool}{" "}
                         {a.pid}
                         {a.title && <span style={styles.agentTitle}>{a.title}</span>}
                       </a>
@@ -1285,7 +1492,8 @@ export function Discovery() {
                   })}
                 </ul>
               </section>
-            ))}
+              );
+            })}
             {serverCount > 0 && filtered.length === 0 && (
               <p style={styles.dim}>No workspace matches your filter.</p>
             )}
@@ -1306,7 +1514,7 @@ export function Discovery() {
                   const age = relTime(c.since, roomNow);
                   return (
                     <li key={c.peerId} style={styles.personRow}>
-                      <span style={{ ...styles.personDot, color: "#dcb67a" }}>●</span>
+                      <span style={{ ...styles.personDot, color: "var(--ch-accent-amber)" }}>●</span>
                       <span style={styles.personName}>{c.meta?.name ?? c.peerId.slice(0, 8)}</span>
                       {age && <span style={styles.dim}>connected {age} ago</span>}
                     </li>
@@ -1330,12 +1538,17 @@ export function Discovery() {
   );
 }
 
+// Colors reference the var(--ch-*) custom properties defined in style.css,
+// which switch between a light default and a dark override on
+// `prefers-color-scheme` — so the whole page follows the OS theme. `#fff` is
+// left literal only for text sitting on an always-dark accent-colored button,
+// which needs white regardless of page theme.
 const styles: Record<string, React.CSSProperties> = {
-  page: { display: "flex", flexDirection: "column", height: "100%", background: "#1f1f1f", color: "#ccc", fontFamily: "system-ui, sans-serif" },
-  header: { display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", background: "#2d2d2d", borderBottom: "1px solid #3d3d3d", fontSize: 13 },
-  brand: { fontFamily: "monospace", fontWeight: 700, color: "#fff" },
-  hostTag: { fontFamily: "monospace", fontSize: 12, color: "#dcdcaa" },
-  dim: { color: "#888", fontSize: 12 },
+  page: { display: "flex", flexDirection: "column", height: "100%", background: "var(--ch-bg)", color: "var(--ch-text)", fontFamily: "system-ui, sans-serif" },
+  header: { display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", background: "var(--ch-bg-alt)", borderBottom: "1px solid var(--ch-border)", fontSize: 13 },
+  brand: { fontFamily: "monospace", fontWeight: 700, color: "var(--ch-text-strong)" },
+  hostTag: { fontFamily: "monospace", fontSize: 12, color: "var(--ch-accent-yellow)" },
+  dim: { color: "var(--ch-text-dim)", fontSize: 12 },
   status: { fontSize: 12 },
   // Wide cap + per-host card GRID below: a 4K monitor gets several columns of
   // workspaces instead of one skinny 760px strip. Inputs keep a readable
@@ -1343,36 +1556,36 @@ const styles: Record<string, React.CSSProperties> = {
   main: { flex: 1, overflow: "auto", padding: "20px 24px", maxWidth: 1560, width: "100%", margin: "0 auto", boxSizing: "border-box" },
   controls: { maxWidth: 760 },
   tokenForm: { display: "flex", alignItems: "center", gap: 8, marginBottom: 8 },
-  tokenHint: { margin: "0 0 20px", fontSize: 12, color: "#888" },
-  tokenError: { margin: "0 0 20px", fontSize: 12, color: "#f48771" },
-  label: { fontSize: 12, color: "#888" },
+  tokenHint: { margin: "0 0 20px", fontSize: 12, color: "var(--ch-text-dim)" },
+  tokenError: { margin: "0 0 20px", fontSize: 12, color: "var(--ch-accent-red)" },
+  label: { fontSize: 12, color: "var(--ch-text-dim)" },
   roomChips: { display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" },
-  roomChip: { display: "inline-flex", alignItems: "center", gap: 6, color: "#9aa4af" },
-  roomChipOn: { borderColor: "#0e639c", color: "#4ec9b0" },
+  roomChip: { display: "inline-flex", alignItems: "center", gap: 6, color: "var(--ch-text-muted)" },
+  roomChipOn: { borderColor: "var(--ch-accent-primary)", color: "var(--ch-accent-teal)" },
   roomChipX: { background: "transparent", border: "none", color: "inherit", cursor: "pointer", fontSize: 11, padding: 0, lineHeight: 1 },
-  input: { flex: 1, background: "#252525", border: "1px solid #3d3d3d", color: "#eee", padding: "8px 10px", borderRadius: 6, fontSize: 13, outline: "none" },
-  button: { background: "#0e639c", border: "none", color: "#fff", padding: "8px 16px", borderRadius: 6, cursor: "pointer", fontSize: 13 },
+  input: { flex: 1, background: "var(--ch-bg-panel)", border: "1px solid var(--ch-border)", color: "var(--ch-text-input)", padding: "8px 10px", borderRadius: 6, fontSize: 13, outline: "none" },
+  button: { background: "var(--ch-accent-primary)", border: "none", color: "#fff", padding: "8px 16px", borderRadius: 6, cursor: "pointer", fontSize: 13 },
   ghForm: { display: "flex", alignItems: "center", gap: 8, margin: "0 0 14px" },
   listHead: { display: "flex", alignItems: "baseline", gap: 10, margin: "0 0 12px" },
-  h2: { fontSize: 14, color: "#aaa", fontWeight: 600, margin: 0 },
-  count: { fontSize: 12, color: "#888", fontFamily: "monospace" },
+  h2: { fontSize: 14, color: "var(--ch-text-secondary)", fontWeight: 600, margin: 0 },
+  count: { fontSize: 12, color: "var(--ch-text-dim)", fontFamily: "monospace" },
   search: {
-    width: "100%", boxSizing: "border-box", background: "#252525", border: "1px solid #3d3d3d",
-    color: "#eee", padding: "8px 10px", borderRadius: 6, fontSize: 13, outline: "none",
+    width: "100%", boxSizing: "border-box", background: "var(--ch-bg-panel)", border: "1px solid var(--ch-border)",
+    color: "var(--ch-text-input)", padding: "8px 10px", borderRadius: 6, fontSize: 13, outline: "none",
     fontFamily: "monospace", marginBottom: 10,
   },
   chipRow: { display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 },
   chip: {
     fontFamily: "monospace", fontSize: 11.5, padding: "2px 8px", borderRadius: 999,
-    border: "1px solid #3d3d3d", background: "transparent", color: "#9aa4af", cursor: "pointer",
+    border: "1px solid var(--ch-border)", background: "transparent", color: "var(--ch-text-muted)", cursor: "pointer",
   },
-  chipActive: { background: "#0e639c", borderColor: "#0e639c", color: "#fff" },
+  chipActive: { background: "var(--ch-accent-primary)", borderColor: "var(--ch-accent-primary)", color: "#fff" },
   tagRow: { display: "flex", flexWrap: "wrap", gap: 5, marginTop: 6 },
   tag: {
     fontFamily: "monospace", fontSize: 11, padding: "1px 7px", borderRadius: 999,
-    border: "1px solid #3d3d3d", background: "transparent", color: "#9aa4af", cursor: "pointer",
+    border: "1px solid var(--ch-border)", background: "transparent", color: "var(--ch-text-muted)", cursor: "pointer",
   },
-  idLine: { fontFamily: "monospace", fontSize: 11, color: "#666", marginTop: 6 },
+  idLine: { fontFamily: "monospace", fontSize: 11, color: "var(--ch-text-dim2)", marginTop: 6 },
   // Workspace links flow into columns on wide screens (a busy root daemon can
   // advertise 50+ checkouts — a single column wasted the whole viewport).
   wsRow: {
@@ -1381,53 +1594,59 @@ const styles: Record<string, React.CSSProperties> = {
   },
   wsLink: {
     fontFamily: "monospace", fontSize: 12, padding: "2px 0", border: "none", background: "transparent",
-    color: "#75beff", cursor: "pointer", textAlign: "left",
+    color: "var(--ch-accent-link)", cursor: "pointer", textAlign: "left",
   },
-  code: { background: "#252525", padding: "2px 6px", borderRadius: 4, fontFamily: "monospace", fontSize: 12 },
+  code: { background: "var(--ch-bg-panel)", padding: "2px 6px", borderRadius: 4, fontFamily: "monospace", fontSize: 12 },
   list: {
     listStyle: "none", margin: "0 0 14px", padding: 0,
     display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: 8,
     alignItems: "start",
   },
   hostHead: { display: "flex", alignItems: "baseline", gap: 10, margin: "0 0 8px" },
-  hostName: { fontSize: 13, fontWeight: 600, color: "#dcdcaa", fontFamily: "monospace" },
+  hostName: { fontSize: 13, fontWeight: 600, color: "var(--ch-accent-yellow)", fontFamily: "monospace" },
+  hostSettingsBtn: {
+    fontFamily: "monospace", fontSize: 11, padding: "1px 8px", borderRadius: 999,
+    border: "1px solid var(--ch-border)", background: "transparent", color: "var(--ch-text-muted)", cursor: "pointer",
+  },
   agentRow: { display: "flex", flexWrap: "wrap", gap: 6, margin: "0 0 8px" },
   agentChip: {
     fontFamily: "monospace", fontSize: 11.5, padding: "2px 8px", borderRadius: 999,
-    border: "1px solid #3d3d3d", color: "#9aa4af", textDecoration: "none", cursor: "pointer",
+    border: "1px solid var(--ch-border)", color: "var(--ch-text-muted)", textDecoration: "none", cursor: "pointer",
     display: "inline-flex", alignItems: "baseline", gap: 4, maxWidth: 360,
   },
   // Live self-set agent title (daemon re-reads it from the PTY log and pushes
   // a meta update, so this re-renders as the agent renames itself).
   agentTitle: {
-    color: "#6e7681", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+    color: "var(--ch-text-dim2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
     minWidth: 0, flex: "0 1 auto",
   },
-  card: { display: "flex", alignItems: "center", gap: 12, background: "#252525", border: "1px solid #3d3d3d", borderRadius: 8, padding: "12px 14px" },
+  card: { display: "flex", alignItems: "center", gap: 12, background: "var(--ch-bg-panel)", border: "1px solid var(--ch-border)", borderRadius: 8, padding: "12px 14px" },
   cardMain: { flex: 1, minWidth: 0 },
-  cardName: { fontSize: 14, fontWeight: 600, color: "#fff" },
-  cardSub: { display: "flex", gap: 12, fontSize: 12, color: "#888", marginTop: 2 },
+  cardName: { fontSize: 14, fontWeight: 600, color: "var(--ch-text-strong)" },
+  cardSub: { display: "flex", gap: 12, fontSize: 12, color: "var(--ch-text-dim)", marginTop: 2 },
   cwd: { fontFamily: "monospace" },
-  cwdLink: { fontFamily: "monospace", color: "#75beff", textDecoration: "none" },
-  echo: { marginTop: 6, fontSize: 12, color: "#4ec9b0", fontFamily: "monospace" },
-  echoBad: { marginTop: 6, fontSize: 12, color: "#f48771", fontFamily: "monospace" },
+  cwdLink: { fontFamily: "monospace", color: "var(--ch-accent-link)", textDecoration: "none" },
+  echo: { marginTop: 6, fontSize: 12, color: "var(--ch-accent-teal)", fontFamily: "monospace" },
+  echoBad: { marginTop: 6, fontSize: 12, color: "var(--ch-accent-red)", fontFamily: "monospace" },
   rosterSection: { marginTop: 28 },
-  rosterHead: { fontSize: 14, color: "#aaa", fontWeight: 600, margin: "0 0 12px" },
-  setupCard: { marginTop: 20, background: "#252525", border: "1px solid #3d3d3d", borderRadius: 8, padding: "16px 18px" },
-  setupHead: { fontSize: 15, color: "#fff", fontWeight: 600, marginBottom: 6 },
-  setupSub: { fontSize: 13, color: "#aaa", margin: "0 0 14px", lineHeight: 1.5 },
+  rosterHead: { fontSize: 14, color: "var(--ch-text-secondary)", fontWeight: 600, margin: "0 0 12px" },
+  setupCard: { marginTop: 20, background: "var(--ch-bg-panel)", border: "1px solid var(--ch-border)", borderRadius: 8, padding: "16px 18px" },
+  setupHead: { fontSize: 15, color: "var(--ch-text-strong)", fontWeight: 600, marginBottom: 6 },
+  setupSub: { fontSize: 13, color: "var(--ch-text-secondary)", margin: "0 0 14px", lineHeight: 1.5 },
   cmdRow: { display: "flex", alignItems: "center", gap: 10, marginTop: 8 },
   cmdRowNarrow: { flexDirection: "column", alignItems: "stretch", gap: 6, marginTop: 12 },
-  cmdLabel: { fontSize: 11, color: "#888", width: 88, flexShrink: 0 },
+  cmdLabel: { fontSize: 11, color: "var(--ch-text-dim)", width: 88, flexShrink: 0 },
   cmdLabelNarrow: { width: "auto" },
-  cmdCode: { flex: 1, minWidth: 0, background: "#1b1b1b", border: "1px solid #3d3d3d", borderRadius: 6, padding: "8px 10px", fontFamily: "monospace", fontSize: 12.5, color: "#dcdcaa", whiteSpace: "pre-wrap", overflowWrap: "anywhere" },
-  cmdCopy: { flexShrink: 0, background: "#0e639c", border: "none", color: "#fff", padding: "8px 12px", borderRadius: 6, cursor: "pointer", fontSize: 12 },
+  cmdCode: { flex: 1, minWidth: 0, background: "var(--ch-bg-code-alt)", border: "1px solid var(--ch-border)", borderRadius: 6, padding: "8px 10px", fontFamily: "monospace", fontSize: 12.5, color: "var(--ch-accent-yellow)", whiteSpace: "pre-wrap", overflowWrap: "anywhere" },
+  cmdCopy: { flexShrink: 0, background: "var(--ch-accent-primary)", border: "none", color: "#fff", padding: "8px 12px", borderRadius: 6, cursor: "pointer", fontSize: 12 },
   cmdCopyNarrow: { width: "100%", padding: "10px 12px" },
-  rosterHint: { margin: "10px 0 0", fontSize: 12, color: "#888" },
-  personRow: { display: "flex", alignItems: "center", gap: 10, background: "#252525", border: "1px solid #3d3d3d", borderRadius: 8, padding: "8px 14px", fontSize: 13 },
-  personDot: { color: "#4ec9b0", fontSize: 10 },
-  personName: { color: "#eee", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
-  connectBtn: { background: "#0e639c", border: "none", color: "#fff", padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13 },
-  shareBtn: { background: "transparent", border: "1px solid #3d3d3d", color: "#ccc", padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13 },
-  provLog: { flex: 1, margin: 0, padding: "14px 18px", overflow: "auto", background: "#1e1e1e", color: "#ccc", fontFamily: "monospace", fontSize: 12.5, lineHeight: 1.5, whiteSpace: "pre-wrap" },
+  rosterHint: { margin: "10px 0 0", fontSize: 12, color: "var(--ch-text-dim)" },
+  personRow: { display: "flex", alignItems: "center", gap: 10, background: "var(--ch-bg-panel)", border: "1px solid var(--ch-border)", borderRadius: 8, padding: "8px 14px", fontSize: 13 },
+  personDot: { color: "var(--ch-accent-teal)", fontSize: 10 },
+  personName: { color: "var(--ch-text-input)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  connectBtn: { background: "var(--ch-accent-primary)", border: "none", color: "#fff", padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13 },
+  shareBtn: { background: "transparent", border: "1px solid var(--ch-border)", color: "var(--ch-text)", padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13 },
+  provLog: { flex: 1, margin: 0, padding: "14px 18px", overflow: "auto", background: "var(--ch-bg-code)", color: "var(--ch-text)", fontFamily: "monospace", fontSize: 12.5, lineHeight: 1.5, whiteSpace: "pre-wrap" },
+  settingsLabel: { display: "block", fontSize: 12, color: "var(--ch-text-secondary)", margin: "18px 0 6px", fontFamily: "monospace" },
+  settingsArea: { width: "100%", minHeight: 180, padding: "10px 12px", background: "var(--ch-bg-code)", color: "var(--ch-text)", border: "1px solid var(--ch-border)", borderRadius: 6, fontFamily: "monospace", fontSize: 12.5, lineHeight: 1.5, boxSizing: "border-box", resize: "vertical" },
 };
