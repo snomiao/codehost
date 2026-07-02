@@ -193,6 +193,10 @@ export const serveCommand: CommandModule<{}, ServeArgs> = {
           ...(id.branch ? { branch: id.branch } : {}),
         });
       }
+      // Cheap read (unlike the workspace walk above), so re-checked every
+      // call — flipping this in config.yaml takes effect on the next poll,
+      // no daemon restart needed.
+      const folderProvisioning = readCodehostConfig(dir).folderProvisioning === true;
       return withPluginMeta(
         {
           name: argv.name ?? host,
@@ -205,6 +209,7 @@ export const serveCommand: CommandModule<{}, ServeArgs> = {
           kind: "root",
           layout,
           workspaces,
+          ...(folderProvisioning ? { folderProvisioning: true } : {}),
         },
         plugins,
       );

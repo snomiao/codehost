@@ -53,9 +53,11 @@ type HostSettingsState =
       status: "ready";
       configYaml: string;
       configYamlExists: boolean;
+      configYamlDefault: string;
       setupScript: string;
       setupScriptName: SetupScriptName;
       setupScriptExists: boolean;
+      setupScriptDefault: string;
       configYamlDraft: string;
       setupScriptDraft: string;
       saving: boolean;
@@ -663,15 +665,34 @@ export function Discovery() {
         setTimeout(sample, 3000);
       }
 
+      // Switch to the connected iframe view on `folder`. Used both for the
+      // normal post-provision open and for a setup.sh that signals its
+      // workspace is ready early (via the ::codehost:ready sentinel) while
+      // still running in the background (e.g. installing deps afterward).
+      const openConnected = (folder?: string) => {
+        activeFolderRef.current = folder;
+        setIframeSrc(`/vs/${server.peerId}/${folderQuery(folder)}`);
+        setConnState("connected");
+        setResolving(null);
+        recordConnect(server, room, folder);
+      };
+
       // For a repo deep link, ask the daemon to provision (run .codehost/setup.sh
       // and hand back the authoritative workspace path) before opening. Streams
       // the log under the "provisioning" state. Daemons without the route (older
-      // builds) return no path → fall back to the browser-computed folder.
+      // builds) return no path → fall back to the browser-computed folder. The
+      // script may also open the editor early via `openEarly`, before it exits.
       if (postConnect?.kind === "repo") {
         setConnState("provisioning");
         setProvisionLog("");
-        const ws = await runProvision(server.peerId, postConnect.target);
+        let openedEarly = false;
+        const ws = await runProvision(server.peerId, postConnect.target, (path) => {
+          if (openedEarly || activePeerRef.current !== server.peerId) return;
+          openedEarly = true;
+          openConnected(path);
+        });
         if (activePeerRef.current !== server.peerId) return; // cancelled/switched mid-provision
+        if (openedEarly) return; // already opened via the ready sentinel
         if (ws) openFolder = ws;
       }
 
@@ -685,14 +706,28 @@ export function Discovery() {
         return;
       }
 
-      setConnState("connected");
+      // A folder-mount open (an explicit `folder`, not a bare root Connect,
+      // and not a repo/settings link) gets the same pre-open hook a repo open
+      // does, IF this host opted in (config.yaml's folderProvisioning) — the
+      // meta flag lets us skip the round-trip entirely when it isn't.
+      if (!postConnect && folder !== undefined && server.meta?.folderProvisioning) {
+        setConnState("provisioning");
+        setProvisionLog("");
+        let openedEarly = false;
+        const ws = await runFolderProvision(server.peerId, folder, (path) => {
+          if (openedEarly || activePeerRef.current !== server.peerId) return;
+          openedEarly = true;
+          openConnected(path);
+        });
+        if (activePeerRef.current !== server.peerId) return;
+        if (openedEarly) return;
+        if (ws) openFolder = ws;
+      }
+
       // The daemon no longer sets a default folder (current VS Code serve-web
       // dropped that flag), so open the served workspace from here: the
       // provisioned/deep-link folder if we have one, else the server's reported cwd.
-      activeFolderRef.current = openFolder;
-      setIframeSrc(`/vs/${server.peerId}/${folderQuery(openFolder)}`);
-      setResolving(null);
-      recordConnect(server, room, openFolder);
+      openConnected(openFolder);
     } catch {
       setConnState(deniedRef.current ? "denied" : "failed");
       // Undo the optimistic history entry we pushed. revertingRef makes the
@@ -710,7 +745,48 @@ export function Discovery() {
   // setup.sh's output into `provisionLog` and return the daemon-authoritative
   // path (the `x-codehost-workspace` header). Returns null when the daemon has
   // no provision route (older build) or the call fails — caller falls back.
-  async function runProvision(peerId: string, t: RepoTarget): Promise<string | null> {
+  // Stream a provisioning response's body into `provisionLog`, watching for
+  // an early `::codehost:ready={"path":...}` sentinel a script can emit
+  // before it exits. `onReady` fires at most once, as soon as it's seen —
+  // the caller can switch to the connected view immediately while this
+  // keeps draining the rest of the log in the background.
+  async function streamProvisionBody(res: Response, initialLog: string, onReady?: (path: string) => void) {
+    let buf = initialLog;
+    setProvisionLog(buf);
+    if (!res.body) return;
+    let readyFired = false;
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        if (!readyFired) {
+          const readyLine = buf.match(/^::codehost:ready=(.+)$/m);
+          if (readyLine) {
+            readyFired = true;
+            try {
+              const path = (JSON.parse(readyLine[1]) as { path?: string }).path;
+              if (path) onReady?.(path);
+            } catch {
+              // malformed sentinel — ignore, fall back to the header path at exit
+            }
+          }
+        }
+        // Hide the internal exit + ready sentinels from the displayed log.
+        setProvisionLog(buf.replace(/\n::codehost:exit=\d+\n?/, "\n").replace(/^::codehost:ready=.+$\n?/m, ""));
+      }
+    } catch {
+      // stream interrupted (channel closed) — caller falls back to the header path
+    }
+  }
+
+  async function runProvision(
+    peerId: string,
+    t: RepoTarget,
+    onReady?: (path: string) => void,
+  ): Promise<string | null> {
     const params = new URLSearchParams({
       owner: t.owner,
       repo: t.name,
@@ -728,23 +804,28 @@ export function Discovery() {
       await res.body?.cancel().catch(() => {});
       return null;
     }
-    let buf = `[codehost] provisioning ${t.owner}/${t.name}@${t.branch ?? DEFAULT_BRANCH}…\n`;
-    setProvisionLog(buf);
-    if (res.body) {
-      const reader = res.body.getReader();
-      const dec = new TextDecoder();
-      try {
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buf += dec.decode(value, { stream: true });
-          // Hide the internal exit sentinel from the displayed log.
-          setProvisionLog(buf.replace(/\n::codehost:exit=\d+\n?/, "\n"));
-        }
-      } catch {
-        // stream interrupted (channel closed) — return the path anyway
-      }
+    await streamProvisionBody(res, `[codehost] provisioning ${t.owner}/${t.name}@${t.branch ?? DEFAULT_BRANCH}…\n`, onReady);
+    return ws;
+  }
+
+  // Folder-mount provisioning: opt-in (server.meta?.folderProvisioning),
+  // gives a `/host/<hostname>/<path>` open the same pre-open hook a repo
+  // open gets. Older daemons (or hosts that haven't opted in) 403 — treated
+  // the same as "no route", falling straight back to opening the folder.
+  async function runFolderProvision(peerId: string, path: string, onReady?: (path: string) => void): Promise<string | null> {
+    const params = new URLSearchParams({ kind: "folder", path });
+    let res: Response;
+    try {
+      res = await connBroker.tunnelFor(peerId).fetch("GET", `/__codehost/provision?${params}`, {});
+    } catch {
+      return null;
     }
+    const ws = res.headers.get("x-codehost-workspace");
+    if (!ws) {
+      await res.body?.cancel().catch(() => {});
+      return null;
+    }
+    await streamProvisionBody(res, `[codehost] provisioning ${path}…\n`, onReady);
     return ws;
   }
 
@@ -759,9 +840,11 @@ export function Discovery() {
       const data = (await res.json()) as {
         configYaml: string;
         configYamlExists: boolean;
+        configYamlDefault: string;
         setupScript: string;
         setupScriptName: SetupScriptName;
         setupScriptExists: boolean;
+        setupScriptDefault: string;
       };
       setHostSettings({
         status: "ready",
@@ -1116,9 +1199,22 @@ export function Discovery() {
             {hostSettings?.status === "error" && <p style={styles.tokenError}>{hostSettings.message}</p>}
             {hostSettings?.status === "ready" && settingsTab === "provisioning" && (
               <>
-                <label style={styles.settingsLabel}>
-                  config.yaml{!hostSettings.configYamlExists && " (not created yet — showing default)"}
-                </label>
+                <div style={styles.settingsLabelRow}>
+                  <label style={styles.settingsLabel}>
+                    config.yaml{!hostSettings.configYamlExists && " (not created yet — showing default)"}
+                  </label>
+                  <button
+                    style={styles.resetBtn}
+                    title="Discard edits and reload the built-in starter template"
+                    onClick={() =>
+                      setHostSettings((s) =>
+                        s?.status === "ready" ? { ...s, configYamlDraft: s.configYamlDefault } : s,
+                      )
+                    }
+                  >
+                    Reset to default
+                  </button>
+                </div>
                 <textarea
                   style={styles.settingsArea}
                   spellCheck={false}
@@ -1127,10 +1223,29 @@ export function Discovery() {
                     setHostSettings((s) => (s?.status === "ready" ? { ...s, configYamlDraft: e.target.value } : s))
                   }
                 />
-                <label style={styles.settingsLabel}>
-                  {hostSettings.setupScriptName}
-                  {!hostSettings.setupScriptExists && " (not created yet — showing default)"}
-                </label>
+                <div style={styles.settingsLabelRow}>
+                  <label style={styles.settingsLabel}>
+                    {hostSettings.setupScriptName}
+                    {!hostSettings.setupScriptExists && " (not created yet — showing default)"}
+                  </label>
+                  <button
+                    style={styles.resetBtn}
+                    title="Discard edits and reload the built-in starter template"
+                    onClick={() =>
+                      setHostSettings((s) =>
+                        s?.status === "ready" ? { ...s, setupScriptDraft: s.setupScriptDefault } : s,
+                      )
+                    }
+                  >
+                    Reset to default
+                  </button>
+                </div>
+                <p style={styles.settingsHint}>
+                  Runs on repo open, before the editor opens the workspace — env in:
+                  CODEHOST_OWNER/REPO/BRANCH/HOST, CODEHOST_TARGET_KIND, CODEHOST_WS (the path
+                  the editor opens after this exits). Echo <code style={styles.code}>::codehost:ready={"{"}"path":"..."{"}"}</code> to
+                  open the editor early, before this script finishes.
+                </p>
                 <textarea
                   style={styles.settingsArea}
                   spellCheck={false}
@@ -1647,6 +1762,13 @@ const styles: Record<string, React.CSSProperties> = {
   connectBtn: { background: "var(--ch-accent-primary)", border: "none", color: "#fff", padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13 },
   shareBtn: { background: "transparent", border: "1px solid var(--ch-border)", color: "var(--ch-text)", padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13 },
   provLog: { flex: 1, margin: 0, padding: "14px 18px", overflow: "auto", background: "var(--ch-bg-code)", color: "var(--ch-text)", fontFamily: "monospace", fontSize: 12.5, lineHeight: 1.5, whiteSpace: "pre-wrap" },
-  settingsLabel: { display: "block", fontSize: 12, color: "var(--ch-text-secondary)", margin: "18px 0 6px", fontFamily: "monospace" },
+  settingsLabelRow: { display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, margin: "18px 0 6px" },
+  settingsLabel: { display: "block", fontSize: 12, color: "var(--ch-text-secondary)", fontFamily: "monospace" },
+  settingsHint: { fontSize: 11.5, color: "var(--ch-text-dim)", lineHeight: 1.5, margin: "0 0 8px" },
+  resetBtn: {
+    fontFamily: "monospace", fontSize: 11, padding: "1px 8px", borderRadius: 999,
+    border: "1px solid var(--ch-border)", background: "transparent", color: "var(--ch-text-muted)", cursor: "pointer",
+    flexShrink: 0,
+  },
   settingsArea: { width: "100%", minHeight: 180, padding: "10px 12px", background: "var(--ch-bg-code)", color: "var(--ch-text)", border: "1px solid var(--ch-border)", borderRadius: 6, fontFamily: "monospace", fontSize: 12.5, lineHeight: 1.5, boxSizing: "border-box", resize: "vertical" },
 };

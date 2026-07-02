@@ -105,6 +105,13 @@ export interface PeerMeta {
    */
   workspaces?: WorkspaceInfo[];
   /**
+   * root kind: this daemon's `config.yaml` has `folderProvisioning: true` —
+   * opening a `/host/<hostname>/<path>` link should also run the
+   * provisioning hook first, not just a repo link. Absent/false on older
+   * daemons and hosts that haven't opted in.
+   */
+  folderProvisioning?: boolean;
+  /**
    * Live agent CLI sessions on this machine (from the agent-yes plugin).
    * Advertised by root daemons; capped server-side.
    */

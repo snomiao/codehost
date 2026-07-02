@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { CONFIG_YAML, SETUP_PS1, SETUP_SH } from "./init";
 import type { LocalRequest } from "./tunnel";
-import { repoAllowed, resolveWorkspacePath, validateProvisionTarget, type ProvisionTarget } from "../shared/provision";
+import { repoAllowed, resolveWorkspacePath, validateProvisionTarget } from "../shared/provision";
 import { fromPosixPath, repoKey, toPosixPath } from "../shared/repo";
 
 // Daemon side of provisioning. A repo open hits `GET /__codehost/provision?...`
@@ -20,6 +20,9 @@ export interface ProvisionDeps {
   homeDir: string;
   /** Git host advertised by this daemon (default github.com). */
   host: string;
+  /** Room token — never passed to the script, only used to redact it out of
+   *  the streamed log if the script happens to echo it. */
+  token?: string;
   /** Called after a setup script finishes (any exit code) — lets the daemon
    *  re-enumerate + re-advertise its workspaces. */
   onProvisioned?: () => void;
@@ -28,6 +31,11 @@ export interface ProvisionDeps {
 export interface CodehostConfig {
   workspace?: string; // layout template, e.g. "ws/{owner}/{repo}/tree/{branch}"
   allowlist?: string[];
+  /** Opt-in: also run the provisioning hook (setup.sh) before opening a
+   *  `/host/<hostname>/<path>` folder-mount link, not just repo links. Off by
+   *  default — a folder-mount link means "open this already-served path"
+   *  today, and running a hook there is new behavior. */
+  folderProvisioning?: boolean;
 }
 
 /** True for the provision route (ignoring the query string). */
@@ -44,6 +52,7 @@ export function readCodehostConfig(homeDir: string): CodehostConfig {
       allowlist: Array.isArray(c.allowlist)
         ? c.allowlist.filter((x): x is string => typeof x === "string")
         : undefined,
+      folderProvisioning: c.folderProvisioning === true,
     };
   } catch {
     return {};
@@ -107,9 +116,15 @@ function defaultScriptBody(name: SetupScriptName): string {
 export interface ProvisionConfigGetBody {
   configYaml: string;
   configYamlExists: boolean;
+  /** The built-in starter template, always included (even when a real config
+   *  already exists) so the UI can offer a "reset to default" action. */
+  configYamlDefault: string;
   setupScript: string;
   setupScriptName: SetupScriptName;
   setupScriptExists: boolean;
+  /** The built-in starter script for this platform, same purpose as
+   *  `configYamlDefault`. */
+  setupScriptDefault: string;
 }
 
 export interface ProvisionConfigPutBody {
@@ -134,9 +149,11 @@ export async function handleProvisionConfig(req: LocalRequest, deps: ProvisionCo
     const body: ProvisionConfigGetBody = {
       configYaml,
       configYamlExists,
+      configYamlDefault: CONFIG_YAML,
       setupScript,
       setupScriptName: info.name,
       setupScriptExists: info.exists,
+      setupScriptDefault: defaultScriptBody(info.name),
     };
     return json(200, body);
   }
@@ -177,6 +194,8 @@ const inFlight = new Map<string, Promise<number>>();
 
 export async function handleProvision(rawPath: string, deps: ProvisionDeps): Promise<Response> {
   const url = new URL(`http://x${rawPath}`);
+  if (url.searchParams.get("kind") === "folder") return handleFolderProvision(url, deps);
+
   const v = validateProvisionTarget(
     url.searchParams.get("owner") ?? "",
     url.searchParams.get("repo") ?? "",
@@ -199,42 +218,126 @@ export async function handleProvision(rawPath: string, deps: ProvisionDeps): Pro
   const existing = inFlight.get(lockKey);
   const body = existing
     ? coalescedBody(existing) // a provision is already running for this workspace
-    : freshBody(cmd, deps, v.target, host, lockKey);
+    : runScriptBody(
+        cmd,
+        deps,
+        {
+          CODEHOST_OWNER: v.target.owner,
+          CODEHOST_REPO: v.target.repo,
+          CODEHOST_BRANCH: v.target.branch,
+          CODEHOST_HOST: host,
+          CODEHOST_HOME: deps.homeDir,
+          CODEHOST_WS: fromPosixPath(wsPosix),
+          CODEHOST_TARGET_KIND: "repo",
+          CODEHOST_REPO_KEY: key,
+        },
+        `[codehost] provisioning ${host}/${v.target.owner}/${v.target.repo}@${v.target.branch}\n`,
+        lockKey,
+      );
   return new Response(body, {
     status: 200,
     headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store", ...headers },
   });
 }
 
-/** Spawn the setup script, streaming merged stdout+stderr, ending with an exit
- *  sentinel the browser parses for success/failure. */
-function freshBody(
+/** Folder-mount provisioning (`?kind=folder&path=...`): opt-in per
+ *  `config.yaml`'s `folderProvisioning`. Unlike repo provisioning, the path
+ *  is already known (resolved client-side against an existing served
+ *  workspace) — this just gives it the same pre-open hook opportunity a repo
+ *  open gets, e.g. for a `git pull` or dependency install before editing. */
+async function handleFolderProvision(url: URL, deps: ProvisionDeps): Promise<Response> {
+  const cfg = readCodehostConfig(deps.homeDir);
+  if (!cfg.folderProvisioning) {
+    return json(403, { error: "folder provisioning is disabled (set folderProvisioning: true in config.yaml)" });
+  }
+  const rawPath = url.searchParams.get("path") ?? "";
+  if (!rawPath) return json(400, { error: "missing path" });
+  const wsPosix = rawPath.startsWith("/") ? rawPath : `/${rawPath}`;
+  const headers = { "x-codehost-workspace": wsPosix };
+
+  const cmd = findSetupScript(deps.homeDir);
+  if (!cmd) return json(200, { workspace: wsPosix }, headers); // no script: hand back the path
+
+  const lockKey = fromPosixPath(wsPosix);
+  const existing = inFlight.get(lockKey);
+  const body = existing
+    ? coalescedBody(existing)
+    : runScriptBody(
+        cmd,
+        deps,
+        {
+          CODEHOST_HOME: deps.homeDir,
+          CODEHOST_WS: fromPosixPath(wsPosix),
+          CODEHOST_TARGET_KIND: "folder",
+          CODEHOST_TARGET_PATH: fromPosixPath(wsPosix),
+        },
+        `[codehost] provisioning ${wsPosix}\n`,
+        lockKey,
+      );
+  return new Response(body, {
+    status: 200,
+    headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store", ...headers },
+  });
+}
+
+// Env var names whose values look secret-ish enough to redact out of the
+// streamed provisioning log (best-effort — see collectSecrets doc).
+const SECRET_ENV_NAME = /TOKEN|SECRET|PASSWORD|KEY|CREDENTIAL|AUTH/i;
+const MIN_SECRET_LEN = 6; // shorter values redact too eagerly (false positives on common substrings)
+
+/** Values to scrub from the streamed provisioning log before it reaches the
+ *  browser: the room token, plus every value of this process's own env vars
+ *  whose *name* looks secret-shaped (the exact set `Bun.spawn` inherits into
+ *  the child, so it's exactly what a script COULD echo, deliberately or via
+ *  `set -x`). This is a best-effort heuristic, not exhaustive redaction — an
+ *  arbitrary shell script's stdout can't be fully sanitized in general. */
+function collectSecrets(token: string | undefined): string[] {
+  const vals = new Set<string>();
+  if (token && token.length >= MIN_SECRET_LEN) vals.add(token);
+  for (const [k, v] of Object.entries(process.env)) {
+    if (v && v.length >= MIN_SECRET_LEN && SECRET_ENV_NAME.test(k)) vals.add(v);
+  }
+  return [...vals].sort((a, b) => b.length - a.length); // longest first, so a substring never masks its own superstring
+}
+
+const URL_CREDENTIAL_RE = /(https?:\/\/)[^/\s:@]+(:[^/\s@]*)?@/g;
+
+/** Redact known secret values (exact-match) plus `user:pass@`/`token@` URL
+ *  credential forms. Not a general secret scanner — only catches values we
+ *  already know to look for. */
+function redact(text: string, secrets: string[]): string {
+  let out = text;
+  for (const s of secrets) out = out.split(s).join("[redacted]");
+  return out.replace(URL_CREDENTIAL_RE, "$1[redacted]@");
+}
+
+/** Spawn the setup script, streaming merged stdout+stderr (secrets redacted,
+ *  line-buffered), ending with an exit sentinel the browser parses for
+ *  success/failure. The script may also emit `::codehost:ready={"path":...}`
+ *  on its own line at any point to signal the workspace is usable before it
+ *  exits — the browser watches for this and can open the editor early. Shared
+ *  by both repo and folder provisioning; `env` carries the mode-specific
+ *  `CODEHOST_*` vars. */
+function runScriptBody(
   cmd: string[],
   deps: ProvisionDeps,
-  target: ProvisionTarget,
-  host: string,
+  env: Record<string, string>,
+  announce: string,
   lockKey: string,
 ): ReadableStream<Uint8Array> {
   const enc = new TextEncoder();
+  const secrets = collectSecrets(deps.token);
   return new ReadableStream<Uint8Array>({
     async start(controller) {
       let resolveDone!: (code: number) => void;
       inFlight.set(lockKey, new Promise<number>((r) => (resolveDone = r)));
       const say = (s: string) => controller.enqueue(enc.encode(s));
-      say(`[codehost] provisioning ${host}/${target.owner}/${target.repo}@${target.branch}\n`);
+      say(announce);
       let code = 1;
       try {
         const proc = Bun.spawn(cmd, {
           cwd: deps.homeDir,
-          env: {
-            ...process.env,
-            CODEHOST_OWNER: target.owner,
-            CODEHOST_REPO: target.repo,
-            CODEHOST_BRANCH: target.branch,
-            CODEHOST_HOST: host,
-            CODEHOST_HOME: deps.homeDir,
-            CODEHOST_WS: fromPosixPath(lockKey),
-          },
+          env: { ...process.env, ...env },
           stdout: "pipe",
           stderr: "pipe",
         });
@@ -245,13 +348,25 @@ function freshBody(
             // already gone
           }
         }, TIMEOUT_MS);
+        // Line-buffer each stream independently (stdout/stderr interleave
+        // freely, but a redacted secret must never straddle a chunk boundary
+        // within its own stream) and redact before enqueueing.
         const pump = async (stream: ReadableStream<Uint8Array>) => {
           const reader = stream.getReader();
+          const dec = new TextDecoder();
+          let pending = "";
           for (;;) {
             const { done, value } = await reader.read();
             if (done) break;
-            controller.enqueue(value);
+            pending += dec.decode(value, { stream: true });
+            const lastNl = pending.lastIndexOf("\n");
+            if (lastNl === -1) continue;
+            const complete = pending.slice(0, lastNl + 1);
+            pending = pending.slice(lastNl + 1);
+            controller.enqueue(enc.encode(redact(complete, secrets)));
           }
+          pending += dec.decode();
+          if (pending) controller.enqueue(enc.encode(redact(pending, secrets)));
         };
         await Promise.all([pump(proc.stdout), pump(proc.stderr)]);
         code = await proc.exited;

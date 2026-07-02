@@ -159,7 +159,7 @@ export async function runServer(opts: RunServerOptions): Promise<never> {
     }
   };
   const provision: ProvisionDeps | undefined = opts.provision
-    ? { ...opts.provision, onProvisioned: refreshMeta }
+    ? { ...opts.provision, token: opts.token, onProvisioned: refreshMeta }
     : undefined;
   const provisionConfig: ProvisionConfigDeps | undefined = opts.provision
     ? { homeDir: opts.provision.homeDir, onSaved: refreshMeta }

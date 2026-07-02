@@ -25,6 +25,12 @@ export const SETUP_SH = `#!/usr/bin/env bash
 #
 # Env in:  CODEHOST_OWNER  CODEHOST_REPO  CODEHOST_BRANCH  CODEHOST_HOST
 #          CODEHOST_HOME (this dir)       CODEHOST_WS (the path the editor opens)
+#          CODEHOST_TARGET_KIND (repo | folder)  CODEHOST_REPO_KEY (host/owner/repo)
+#
+# Optional: echo ::codehost:ready={"path":"..."} once the workspace is usable
+# to have the editor open early — before this script finishes (e.g. before a
+# slow "bun install" below). Without it, the editor opens after this script
+# exits, at the path resolved from config.yaml's workspace layout.
 set -euo pipefail
 
 ws="$CODEHOST_WS"
@@ -59,7 +65,8 @@ git -C "$repo" worktree add "$ws" "$CODEHOST_BRANCH" \\
 echo "[setup] ready: $ws"
 `;
 
-export const SETUP_PS1 = `# codehost provisioning hook (Windows). See setup.sh for the contract.
+export const SETUP_PS1 = `# codehost provisioning hook (Windows). See setup.sh for the full contract
+# (env vars in, optional ::codehost:ready early-open sentinel).
 $ErrorActionPreference = "Stop"
 $ws = $env:CODEHOST_WS
 if (Test-Path (Join-Path $ws ".git")) { Write-Host "[setup] $ws already provisioned"; exit 0 }
