@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { type AgentInfo, type PeerInfo, type WorkspaceInfo, CLIENT_WIRE_ROLE, isClientRole } from "../shared/signaling";
+import { type PeerInfo, type WorkspaceInfo, CLIENT_WIRE_ROLE, isClientRole } from "../shared/signaling";
 import { TOKEN_REQUIREMENTS, validateToken } from "../shared/token";
 import { SignalingClient } from "../shared/signaling-client";
 import type { RtcSignal } from "../shared/rtc";
@@ -1081,22 +1081,19 @@ export function Discovery() {
   const filtered = tagged.filter((t) => matchQuery({ name: t.name, tags: t.tags }, query));
   // Group workspaces by machine: the stable hostId when the daemon advertises
   // one, else the hostname string (older daemons), else the peer stands alone.
-  // Agents are machine-level (advertised by the host's root daemon) — collect
-  // them per group, deduped by pid across peers, each remembering its room so
-  // a click can hand the agent-yes console the right token.
-  type RoomedAgent = AgentInfo & { room: string };
-  const hostGroups: { key: string; label: string; items: typeof filtered; agents: RoomedAgent[] }[] = [];
+  // Agents are machine-level (advertised by the host's root daemon) — just a
+  // deduped-by-pid count here; agent-yes.com is the place to actually browse
+  // and interact with them, so we don't duplicate that list on this page.
+  const hostGroups: { key: string; label: string; items: typeof filtered; agentPids: Set<number> }[] = [];
   for (const t of filtered) {
     const key = t.server.meta?.hostId ?? t.server.meta?.host ?? t.server.peerId;
     let group = hostGroups.find((g) => g.key === key);
     if (!group) {
-      group = { key, label: t.server.meta?.host ?? t.name, items: [], agents: [] };
+      group = { key, label: t.server.meta?.host ?? t.name, items: [], agentPids: new Set() };
       hostGroups.push(group);
     }
     group.items.push(t);
-    for (const a of t.server.meta?.agents ?? []) {
-      if (!group.agents.some((x) => x.pid === a.pid)) group.agents.push({ ...a, room: t.room });
-    }
+    for (const a of t.server.meta?.agents ?? []) group.agentPids.add(a.pid);
   }
   const toggleTag = (t: string) =>
     setActiveTags((a) => (a.includes(t) ? a.filter((x) => x !== t) : [...a, t]));
@@ -1512,7 +1509,7 @@ export function Discovery() {
                   <span style={styles.hostName}>{g.label}</span>
                   <span style={styles.count}>
                     {g.items.length} workspace{g.items.length === 1 ? "" : "s"}
-                    {g.agents.length > 0 && ` · ${g.agents.length} agent${g.agents.length === 1 ? "" : "s"}`}
+                    {g.agentPids.size > 0 && ` · ${g.agentPids.size} agent${g.agentPids.size === 1 ? "" : "s"}`}
                   </span>
                   {rootServer && (
                     <button
@@ -1529,27 +1526,6 @@ export function Discovery() {
                     </button>
                   )}
                 </div>
-                {g.agents.length > 0 && (
-                  <div style={styles.agentRow}>
-                    {g.agents.map((a) => (
-                      <a
-                        key={a.pid}
-                        style={styles.agentChip}
-                        title={`${a.cwd}${a.title ? `\n${a.title}` : ""}\nopen in the agent-yes console`}
-                        // Tail & send live in the agent-yes console — it joins
-                        // this same room as a viewer (token rides the fragment,
-                        // never sent to a server) and auto-selects the pid.
-                        href={`https://agent-yes.com/?pid=${a.pid}#ch:${encodeURIComponent(a.room)}`}
-                        target="_blank"
-                        rel="noopener"
-                      >
-                        <span style={{ color: a.state === "active" ? "var(--ch-accent-teal)" : "var(--ch-text-dim)" }}>●</span> {a.tool}{" "}
-                        {a.pid}
-                        {a.title && <span style={styles.agentTitle}>{a.title}</span>}
-                      </a>
-                    ))}
-                  </div>
-                )}
                 <ul style={styles.list}>
                   {g.items.map(({ server: s, room, name, tags }) => {
                     const isActive = s.peerId === activePeerId;
@@ -1722,18 +1698,6 @@ const styles: Record<string, React.CSSProperties> = {
   hostSettingsBtn: {
     fontFamily: "monospace", fontSize: 11, padding: "1px 8px", borderRadius: 999,
     border: "1px solid var(--ch-border)", background: "transparent", color: "var(--ch-text-muted)", cursor: "pointer",
-  },
-  agentRow: { display: "flex", flexWrap: "wrap", gap: 6, margin: "0 0 8px" },
-  agentChip: {
-    fontFamily: "monospace", fontSize: 11.5, padding: "2px 8px", borderRadius: 999,
-    border: "1px solid var(--ch-border)", color: "var(--ch-text-muted)", textDecoration: "none", cursor: "pointer",
-    display: "inline-flex", alignItems: "baseline", gap: 4, maxWidth: 360,
-  },
-  // Live self-set agent title (daemon re-reads it from the PTY log and pushes
-  // a meta update, so this re-renders as the agent renames itself).
-  agentTitle: {
-    color: "var(--ch-text-dim2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-    minWidth: 0, flex: "0 1 auto",
   },
   card: { display: "flex", alignItems: "center", gap: 12, background: "var(--ch-bg-panel)", border: "1px solid var(--ch-border)", borderRadius: 8, padding: "12px 14px" },
   cardMain: { flex: 1, minWidth: 0 },
