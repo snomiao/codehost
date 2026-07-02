@@ -1,3 +1,10 @@
+# [0.28.0](https://github.com/snomiao/codehost/compare/v0.27.0...v0.28.0) (2026-07-02)
+
+
+### Features
+
+* **provision:** add reset-to-default, redaction, early-open sentinel, and opt-in folder provisioning ([c370199](https://github.com/snomiao/codehost/commit/c3701996e502646a75fcb38d8c1e11c7641733bb))
+
 # [0.27.0](https://github.com/snomiao/codehost/compare/v0.26.0...v0.27.0) (2026-07-02)
 
 
