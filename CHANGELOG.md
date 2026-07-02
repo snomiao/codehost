@@ -1,3 +1,10 @@
+# [0.27.0](https://github.com/snomiao/codehost/compare/v0.26.0...v0.27.0) (2026-07-02)
+
+
+### Features
+
+* **web:** add per-host provisioning settings page at /host/<hostname> ([cd8d2c5](https://github.com/snomiao/codehost/commit/cd8d2c5262c73fb3631d23193ba2782c7e0d4503))
+
 # [0.26.0](https://github.com/snomiao/codehost/compare/v0.25.0...v0.26.0) (2026-07-01)
 
 
