@@ -1,3 +1,10 @@
+# [0.30.0](https://github.com/snomiao/codehost/compare/v0.29.1...v0.30.0) (2026-07-07)
+
+
+### Features
+
+* fetch workspace/agent lists over the tunnel instead of the CF room roster ([337f9b4](https://github.com/snomiao/codehost/commit/337f9b49813243114e6337393b1288a2aad2f68b))
+
 ## [0.29.1](https://github.com/snomiao/codehost/compare/v0.29.0...v0.29.1) (2026-07-07)
 
 
