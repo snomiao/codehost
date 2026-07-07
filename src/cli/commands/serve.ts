@@ -6,7 +6,7 @@ import type { PeerMeta } from "../../shared/signaling";
 import type { ApprovePolicy } from "../approver";
 import { DEFAULT_LAYOUT, GITHUB_HOST, toPosixPath } from "../../shared/repo";
 import { TOKEN_REQUIREMENTS, validateToken } from "../../shared/token";
-import { currentUser, defaultRoot, ensureHostId } from "../config";
+import { currentUser, ensureHostId, rememberedRoot, rememberRoot } from "../config";
 import { launchServeDaemon } from "../daemonize";
 import { announceConnect } from "../open-url";
 import { agentYesPlugin } from "../plugins/agent-yes";
@@ -78,7 +78,7 @@ export const serveCommand: CommandModule<{}, ServeArgs> = {
   builder: (y) =>
     y
       .positional("dir", {
-        describe: "Workspace root to serve (default: the remembered root, else ~/ws)",
+        describe: "Workspace root to serve (default: the remembered root, if any)",
         type: "string",
       })
       .option("token", {
@@ -127,12 +127,24 @@ export const serveCommand: CommandModule<{}, ServeArgs> = {
       process.exit(1);
     }
 
-    // Explicit dir > remembered root (config.json) > ~/ws. Bare `codehost
-    // serve` should land somewhere sane, never accidentally on $HOME/cwd.
-    const dir = argv.dir ? resolve(process.cwd(), argv.dir) : defaultRoot();
-    if (!argv.dir) {
+    // Explicit dir > remembered root (config.json). No implicit ~/ws fallback:
+    // a bare `codehost serve` with nothing remembered must be told the dir
+    // explicitly, once — never silently land on $HOME/cwd or a guessed path.
+    let dir: string;
+    if (argv.dir) {
+      dir = resolve(process.cwd(), argv.dir);
+      rememberRoot(dir);
+    } else {
+      const remembered = rememberedRoot();
+      if (!remembered) {
+        console.error("[codehost] no workspace root configured.");
+        console.error("[codehost] run: codehost serve /path/to/workspace");
+        console.error("[codehost] this path will be remembered for future `codehost serve` calls.");
+        process.exit(1);
+      }
+      dir = remembered;
       mkdirSync(dir, { recursive: true });
-      console.log(`[codehost] no dir given — serving workspace root ${dir}`);
+      console.log(`[codehost] no dir given — serving remembered workspace root ${dir}`);
     }
     if (!(await confirmRiskyRoot(dir))) {
       console.error("[codehost] aborted");

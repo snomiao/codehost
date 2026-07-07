@@ -363,6 +363,9 @@ export function Discovery() {
   const [iframeSrc, setIframeSrc] = useState<string | null>(null);
   // Streamed setup.sh output shown while connState === "provisioning".
   const [provisionLog, setProvisionLog] = useState("");
+  // Per-host-card free-text filter over its workspace chip list, keyed by
+  // peerId — only rendered once a card's list is long enough to need one.
+  const [wsFilter, setWsFilter] = useState<Record<string, string>>({});
 
   // Host-settings view: set once connectTo resolves a `hostSettings` deep
   // link, instead of an iframe. `hostSettings` holds the fetched/edited
@@ -1543,24 +1546,47 @@ export function Discovery() {
                               </button>
                             ))}
                           </div>
-                          {(s.meta?.workspaces?.length ?? 0) > 0 && (
-                            <div style={styles.wsRow}>
-                              {s.meta!.workspaces!.map((w) => (
-                                <button
-                                  key={w.path}
-                                  style={styles.wsLink}
-                                  onClick={() => openWorkspace(s, w)}
-                                  title={w.config ? `edit this host's provisioning config\n${w.path}` : w.path}
-                                >
-                                  {w.config
-                                    ? "⚙ .codehost (setup.sh, config.yaml)"
-                                    : w.repo
-                                      ? `${w.repo.split("/").slice(1).join("/")}${w.branch ? ` @${w.branch}` : ""}`
-                                      : w.path}
-                                </button>
-                              ))}
-                            </div>
-                          )}
+                          {(s.meta?.workspaces?.length ?? 0) > 0 && (() => {
+                            const all = s.meta!.workspaces!;
+                            // A busy root daemon can advertise 100+ checkouts — a
+                            // filter box only earns its keystroke below that.
+                            const q = (all.length > 8 ? wsFilter[s.peerId] : undefined)?.trim().toLowerCase();
+                            const list = !q
+                              ? all
+                              : all.filter((w) => {
+                                  const hay = w.config ? "codehost setup" : `${w.repo ?? w.path} ${w.branch ?? ""}`;
+                                  return hay.toLowerCase().includes(q);
+                                });
+                            return (
+                              <>
+                                {all.length > 8 && (
+                                  <input
+                                    style={styles.wsFilterInput}
+                                    placeholder={`filter ${all.length} repos…`}
+                                    value={wsFilter[s.peerId] ?? ""}
+                                    onChange={(e) => setWsFilter((f) => ({ ...f, [s.peerId]: e.target.value }))}
+                                  />
+                                )}
+                                <div style={styles.wsRow}>
+                                  {list.map((w) => (
+                                    <button
+                                      key={w.path}
+                                      style={styles.wsLink}
+                                      onClick={() => openWorkspace(s, w)}
+                                      title={w.config ? `edit this host's provisioning config\n${w.path}` : w.path}
+                                    >
+                                      {w.config
+                                        ? "⚙ .codehost (setup.sh, config.yaml)"
+                                        : w.repo
+                                          ? `${w.repo.split("/").slice(1).join("/")}${w.branch ? ` @${w.branch}` : ""}`
+                                          : w.path}
+                                    </button>
+                                  ))}
+                                </div>
+                                {q && list.length === 0 && <p style={styles.dim}>no repo matches "{q}"</p>}
+                              </>
+                            );
+                          })()}
                           <div style={styles.idLine}>peer {s.peerId.slice(0, 8)}</div>
                           {isActive && (
                             <div style={connState === "denied" ? styles.echoBad : styles.echo}>
@@ -1682,6 +1708,11 @@ const styles: Record<string, React.CSSProperties> = {
   wsRow: {
     display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
     gap: "2px 14px", marginTop: 8,
+  },
+  wsFilterInput: {
+    width: "100%", boxSizing: "border-box", background: "var(--ch-bg-panel)", border: "1px solid var(--ch-border)",
+    color: "var(--ch-text-input)", padding: "5px 8px", borderRadius: 5, fontSize: 12, outline: "none",
+    fontFamily: "monospace", marginTop: 8,
   },
   wsLink: {
     fontFamily: "monospace", fontSize: 12, padding: "2px 0", border: "none", background: "transparent",

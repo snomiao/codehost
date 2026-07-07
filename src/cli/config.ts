@@ -15,8 +15,9 @@ export interface CliConfig {
    *  this machine advertises it, so the web UI can group peers by host and
    *  history entries survive daemon restarts (peerIds are per-process). */
   hostId?: string;
-  /** Workspace root remembered from an explicit `codehost setup <dir>` —
-   *  reused when serve/setup run with no dir. Absent -> ~/ws. */
+  /** Workspace root remembered from an explicit `codehost serve <dir>` /
+   *  `codehost setup <dir>` — reused when serve/setup run with no dir.
+   *  Absent -> the caller must be given an explicit dir. */
   root?: string;
 }
 
@@ -34,9 +35,17 @@ export function writeConfig(config: CliConfig, file: string = CONFIG_FILE): void
 }
 
 /** The workspace root to use when no dir was given: the remembered root from
- *  config, else ~/ws (created on demand by the caller). Never $HOME itself. */
-export function defaultRoot(file: string = CONFIG_FILE): string {
-  return readConfig(file).root || join(homedir(), "ws");
+ *  config, or null if none is set yet. No implicit ~/ws fallback — a bare
+ *  `serve`/`setup` with nothing remembered must be told the dir explicitly,
+ *  once, so it's never accidentally pointed at the wrong directory. */
+export function rememberedRoot(file: string = CONFIG_FILE): string | null {
+  return readConfig(file).root || null;
+}
+
+/** Remember an explicitly chosen workspace root for future bare `serve`/
+ *  `setup` runs. */
+export function rememberRoot(dir: string, file: string = CONFIG_FILE): void {
+  writeConfig({ ...readConfig(file), root: dir }, file);
 }
 
 /** This machine's OS login name, advertised so the web UI can show a
