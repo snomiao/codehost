@@ -1,3 +1,10 @@
+## [0.29.1](https://github.com/snomiao/codehost/compare/v0.29.0...v0.29.1) (2026-07-07)
+
+
+### Bug Fixes
+
+* **worker:** trim oversized meta instead of crashing serializeAttachment ([3e22243](https://github.com/snomiao/codehost/commit/3e222433ff62439c1e1ed8506bc1849951c68dfc))
+
 # [0.29.0](https://github.com/snomiao/codehost/compare/v0.28.0...v0.29.0) (2026-07-07)
 
 
