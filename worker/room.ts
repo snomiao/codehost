@@ -84,7 +84,7 @@ export class Room implements DurableObject {
         since: now,
         lastSeen: now,
       };
-      ws.serializeAttachment(att);
+      this.serializeAttachmentSafe(ws, att);
       this.send(ws, { type: "welcome", peerId: msg.peerId });
       this.broadcastPeers();
       void this.ensureSweep();
@@ -100,7 +100,7 @@ export class Room implements DurableObject {
       const att = this.touch(ws);
       if (!att) return; // never said hello
       att.meta = msg.meta ?? null;
-      ws.serializeAttachment(att);
+      this.serializeAttachmentSafe(ws, att);
       this.broadcastPeers();
       return;
     }
@@ -174,6 +174,35 @@ export class Room implements DurableObject {
     att.lastSeen = Date.now();
     ws.serializeAttachment(att);
     return att;
+  }
+
+  /** `serializeAttachment` enforces a hard ~2KB cap (Durable Object WebSocket
+   *  hibernation API) and throws past it. A root daemon's `workspaces` list is
+   *  the only field that scales with the served tree (100+ checkouts easily
+   *  blows the budget) — so on overflow, halve it and retry rather than throw:
+   *  an uncaught error here would abort `webSocketMessage` before `welcome`/
+   *  `broadcastPeers` run, silently vanishing a well-behaved daemon from the
+   *  room (it believes it registered; the room never learned). Last resort
+   *  drops `workspaces` entirely — a peer missing that field still shows up
+   *  and stays connectable, just without the checkout chip list. */
+  private serializeAttachmentSafe(ws: WebSocket, att: Attachment): void {
+    let candidate = att;
+    for (;;) {
+      try {
+        ws.serializeAttachment(candidate);
+        return;
+      } catch {
+        const meta = candidate.meta;
+        const list = meta?.workspaces;
+        if (!meta || !list) {
+          // Nothing left to trim — give up quietly; roster/signaling for this
+          // peer stays broken, but we don't crash the DO's message handler.
+          return;
+        }
+        const workspaces = list.length > 0 ? list.slice(0, Math.ceil(list.length / 2)) : undefined;
+        candidate = { ...candidate, meta: { ...meta, workspaces } };
+      }
+    }
   }
 
   /** (Re)arm the sweep at the floor cadence. Called when a peer joins: a roster
