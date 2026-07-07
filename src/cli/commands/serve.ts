@@ -10,7 +10,7 @@ import { currentUser, ensureHostId, rememberedRoot, rememberRoot } from "../conf
 import { launchServeDaemon } from "../daemonize";
 import { announceConnect } from "../open-url";
 import { agentYesPlugin } from "../plugins/agent-yes";
-import { withPluginMeta } from "../plugins/types";
+import { type DaemonPlugin, withPluginMeta } from "../plugins/types";
 import { readCodehostConfig } from "../provision-server";
 import {
   clearDaemonPresence,
@@ -181,7 +181,7 @@ export const serveCommand: CommandModule<{}, ServeArgs> = {
     // and agents are cheap reads and stay fresh on every call.
     const WORKSPACE_WALK_TTL_MS = 30_000;
     let wsWalk: { at: number; list: ReturnType<typeof enumerateWorkspaces> } | null = null;
-    const buildMeta = (): PeerMeta => {
+    const buildFullMeta = (): PeerMeta => {
       // Layout-enumerated checkouts plus directories other `codehost dev` runs
       // registered with this host daemon (git-identified best-effort).
       if (!wsWalk || Date.now() - wsWalk.at > WORKSPACE_WALK_TTL_MS) {
@@ -227,6 +227,23 @@ export const serveCommand: CommandModule<{}, ServeArgs> = {
       );
     };
 
+    // The room roster (Durable Object) only holds a ~2KB-per-socket
+    // attachment — `workspaces`/`agents` scale with what's on disk and how
+    // many agent-yes sessions are running, easily blowing that budget on a
+    // busy root. Advertise identity-only fields to the room; the real lists
+    // are fetched by the browser over the tunnel (see the `meta` plugin
+    // below) only once it's actually opened a connection to this host.
+    const buildRoomMeta = (): PeerMeta => {
+      const { workspaces, agents, ...room } = buildFullMeta();
+      return room;
+    };
+    const metaPlugin: DaemonPlugin = {
+      name: "meta",
+      route: async () =>
+        new Response(JSON.stringify(buildFullMeta()), { headers: { "content-type": "application/json" } }),
+    };
+    plugins.push(metaPlugin);
+
     // Mark this process as the host daemon, so later `codehost dev` runs
     // register their directory with it instead of spawning a second peer.
     writeDaemonPresence({ pid: process.pid, root: dir, token: argv.token, startedAt: Date.now() });
@@ -236,8 +253,8 @@ export const serveCommand: CommandModule<{}, ServeArgs> = {
     await runServer({
       token: argv.token,
       signal: argv.signal,
-      meta: buildMeta(),
-      refreshMeta: buildMeta,
+      meta: buildRoomMeta(),
+      refreshMeta: buildRoomMeta,
       // Fast poll so agents' self-set titles go live on the site sidepanel;
       // per tick it's pid-liveness checks + log-tail stat()s (see liveTitle).
       metaRefreshMs: 3_000,

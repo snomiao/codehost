@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { type PeerInfo, type WorkspaceInfo, CLIENT_WIRE_ROLE, isClientRole } from "../shared/signaling";
+import { type AgentInfo, type PeerInfo, type WorkspaceInfo, CLIENT_WIRE_ROLE, isClientRole } from "../shared/signaling";
 import { TOKEN_REQUIREMENTS, validateToken } from "../shared/token";
 import { SignalingClient } from "../shared/signaling-client";
 import type { RtcSignal } from "../shared/rtc";
@@ -380,6 +380,14 @@ export function Discovery() {
   const activePeerRef = useRef<string | null>(null);
   const activeRoomRef = useRef<string | null>(null);
   const sendersRef = useRef<Map<string, (to: string, data: unknown) => void>>(new Map());
+  // Background "preview" connections: one per root-kind host, opened just to
+  // fetch its live workspace/agent list over the tunnel (see previewFor) —
+  // shared across tabs via connBroker's SharedWorker, same as the main
+  // session. Kept separate from rtcRef/activePeerRef so browsing the list
+  // never disturbs the one connection the user actually opened.
+  const previewRtcRef = useRef<Map<string, RtcClient>>(new Map());
+  const previewAttemptedRef = useRef<Set<string>>(new Set());
+  const [previewMeta, setPreviewMeta] = useState<Record<string, { workspaces?: WorkspaceInfo[]; agents?: AgentInfo[] }>>({});
   // Admission control: the host can hold ("pending") or reject ("denied") us.
   // `deniedRef` stops a trailing pc state change from overwriting the denied UI;
   // the timer/reject refs let a control signal extend or abort the dial attempt.
@@ -564,6 +572,46 @@ export function Discovery() {
       return n;
     });
     sendersRef.current.delete(t);
+  }
+
+  // Opens (or reuses, via connBroker's SharedWorker) a background connection
+  // to a root-kind host just to fetch its live workspace/agent list —
+  // the room roster only carries identity fields now (see worker/room.ts),
+  // so the chip list needs an actual peek instead of reading it off `meta`.
+  // At most one attempt per peerId per page load; errors are silent (the
+  // list just stays empty, same as an old daemon with no `meta` route).
+  function previewFor(peerId: string, room: string) {
+    if (previewAttemptedRef.current.has(peerId)) return;
+    previewAttemptedRef.current.add(peerId);
+    const establish = () =>
+      new Promise<{ channel: RTCDataChannel; bulk: RTCDataChannel | null }>((resolve, reject) => {
+        const send = sendersRef.current.get(room);
+        if (!send) {
+          reject(new Error("room not ready"));
+          return;
+        }
+        const rtc = new RtcClient({
+          sendSignal: (data: RtcSignal) => send(peerId, data),
+          onState: () => {},
+          onOpen: (channel) => resolve({ channel, bulk: rtc.bulkChannel }),
+          onClose: () => {},
+        });
+        previewRtcRef.current.set(peerId, rtc);
+        rtc.start().catch(reject);
+      });
+    connBroker
+      .connect(peerId, establish)
+      .then(() => connBroker.tunnelFor(peerId).fetch("GET", "/__codehost/meta", {}))
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { workspaces?: WorkspaceInfo[]; agents?: AgentInfo[] } | null) => {
+        if (data) setPreviewMeta((m) => ({ ...m, [peerId]: { workspaces: data.workspaces, agents: data.agents } }));
+      })
+      .catch(() => {
+        // Denied, offline, or an older daemon with no /__codehost/meta route —
+        // leave previewMeta unset; the UI falls back to whatever (if anything)
+        // the room roster still advertised.
+      })
+      .finally(() => previewRtcRef.current.delete(peerId));
   }
 
   async function connectTo(
@@ -1063,6 +1111,19 @@ export function Discovery() {
   allServersRef.current = allServers;
   connStateRef.current = connState;
   const serverCount = allServers.length;
+  // Root-kind peerIds seen so far, joined into a stable string so the effect
+  // below only re-runs when the actual set changes (allServers is a fresh
+  // array every render).
+  const rootServerKey = allServers
+    .filter((x) => x.server.meta?.kind === "root")
+    .map((x) => `${x.server.peerId}:${x.room}`)
+    .join(",");
+  useEffect(() => {
+    for (const { server, room } of allServersRef.current) {
+      if (server.meta?.kind === "root") previewFor(server.peerId, room);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rootServerKey]);
   const onlineRooms = tokens.filter((t) => roomOpen[t]).length;
   const activeServer = allServers.find((x) => x.server.peerId === activePeerId)?.server;
 
@@ -1096,7 +1157,10 @@ export function Discovery() {
       hostGroups.push(group);
     }
     group.items.push(t);
-    for (const a of t.server.meta?.agents ?? []) group.agentPids.add(a.pid);
+    // Room-advertised `agents` is gone (see worker/room.ts) — fall back to the
+    // live-fetched previewMeta once its background connection lands.
+    const agents = t.server.meta?.agents ?? previewMeta[t.server.peerId]?.agents ?? [];
+    for (const a of agents) group.agentPids.add(a.pid);
   }
   const toggleTag = (t: string) =>
     setActiveTags((a) => (a.includes(t) ? a.filter((x) => x !== t) : [...a, t]));
@@ -1124,7 +1188,12 @@ export function Discovery() {
       }}
       onStatus={(open) => setRoomOpen((m) => ({ ...m, [t]: open }))}
       onSignal={(from, data) => {
-        if (from !== activePeerRef.current) return;
+        if (from !== activePeerRef.current) {
+          // Not the active (visible) session — maybe a background preview
+          // connection fetching a host's workspace list (see previewFor).
+          void previewRtcRef.current.get(from)?.handleSignal(data);
+          return;
+        }
         const kind = (data as { kind?: string } | null)?.kind;
         if (kind === "pending") {
           // Host is reviewing us — show "waiting" and stop the short dial timer
@@ -1532,9 +1601,13 @@ export function Discovery() {
                 <ul style={styles.list}>
                   {g.items.map(({ server: s, room, name, tags }) => {
                     const isActive = s.peerId === activePeerId;
+                    // Room-advertised `workspaces` is gone (see worker/room.ts) —
+                    // fall back to the live-fetched previewMeta once its
+                    // background connection lands (previewFor, triggered above).
+                    const workspaces = s.meta?.workspaces ?? previewMeta[s.peerId]?.workspaces;
                     // A root daemon listing many checkouts gets the whole row,
                     // so its links can flow into columns.
-                    const wide = (s.meta?.workspaces?.length ?? 0) > 3;
+                    const wide = (workspaces?.length ?? 0) > 3;
                     return (
                       <li key={s.peerId} style={{ ...styles.card, ...(wide ? { gridColumn: "1 / -1" } : {}) }}>
                         <div style={styles.cardMain}>
@@ -1546,8 +1619,8 @@ export function Discovery() {
                               </button>
                             ))}
                           </div>
-                          {(s.meta?.workspaces?.length ?? 0) > 0 && (() => {
-                            const all = s.meta!.workspaces!;
+                          {(workspaces?.length ?? 0) > 0 && (() => {
+                            const all = workspaces!;
                             // A busy root daemon can advertise 100+ checkouts — a
                             // filter box only earns its keystroke below that.
                             const q = (all.length > 8 ? wsFilter[s.peerId] : undefined)?.trim().toLowerCase();
