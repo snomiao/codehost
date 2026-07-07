@@ -1,3 +1,10 @@
+# [0.29.0](https://github.com/snomiao/codehost/compare/v0.28.0...v0.29.0) (2026-07-07)
+
+
+### Features
+
+* **web:** require explicit workspace dir on first serve/setup; add per-host repo filter ([686201b](https://github.com/snomiao/codehost/commit/686201b7492c849f8b445e212bf0ab8ee21a38cd))
+
 # [0.28.0](https://github.com/snomiao/codehost/compare/v0.27.0...v0.28.0) (2026-07-02)
 
 
