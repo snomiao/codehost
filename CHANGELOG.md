@@ -1,3 +1,10 @@
+# [0.31.0](https://github.com/snomiao/codehost/compare/v0.30.1...v0.31.0) (2026-07-08)
+
+
+### Features
+
+* pin a repo deep link to one machine via ?machine=<hostname> ([7d24471](https://github.com/snomiao/codehost/commit/7d2447160e16e610a5d0799c380209e00fdf4bba))
+
 ## [0.30.1](https://github.com/snomiao/codehost/compare/v0.30.0...v0.30.1) (2026-07-08)
 
 
