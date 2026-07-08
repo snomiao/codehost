@@ -502,7 +502,11 @@ export function Discovery() {
   useEffect(() => {
     if (resolvedRef.current) return;
     tryAutoConnect();
-  }, [serversByRoom, tokens]);
+    // previewMeta: a repo deep link may only resolve to the exact matching
+    // host once that host's background preview connection lands (see
+    // withPreviewMeta) — retry when it changes, not just on roster churn.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serversByRoom, tokens, previewMeta]);
 
   // Mirror the open workspace into the tab title (GitHub-style URL), so tabs
   // read as "github.com/owner/repo/tree/main — codehost", not all "Codehost".
@@ -975,6 +979,21 @@ export function Discovery() {
     setTimeout(() => setCopied(false), 1500);
   }
 
+  // resolveRepoTarget/resolveDevTarget's "exact match against an already-
+  // enumerated checkout" branch reads server.meta.workspaces — but the room
+  // roster no longer carries that (see worker/room.ts); it only shows up once
+  // this peer's background preview connection lands (previewFor, above).
+  // Overlay it here, at every resolver call site, rather than teach the pure
+  // resolver in shared/repo.ts about browser-side lazy state. Replace, don't
+  // merge: a peer with a landed preview is fully described by it.
+  function withPreviewMeta(peers: PeerInfo[]): PeerInfo[] {
+    return peers.map((p) => {
+      const preview = previewMeta[p.peerId];
+      if (!preview || !p.meta) return p;
+      return { ...p, meta: { ...p.meta, workspaces: preview.workspaces ?? p.meta.workspaces, agents: preview.agents ?? p.meta.agents } };
+    });
+  }
+
   // The machine history says served this repo last — break resolution ties
   // toward it (stable hostId when recorded, hostname for older entries).
   function preferFor(dl: DeepLink): ResolvePrefs | undefined {
@@ -989,7 +1008,7 @@ export function Discovery() {
     if (resolvedRef.current) return;
     const dl = deepLinkRef.current;
     if (dl) {
-      const peers = allServers.map((x) => x.server);
+      const peers = withPreviewMeta(allServers.map((x) => x.server));
       const res =
         dl.type === "repo" ? resolveRepoTarget(peers, dl.target, preferFor(dl))
         : dl.type === "hostSettings" ? resolveHostTarget(peers, dl.host)
@@ -1050,7 +1069,7 @@ export function Discovery() {
   // Resolve a workspace deep-link path to a live server across all joined rooms.
   function findServerForDeepLink(dl: DeepLink): (RoomedServer & { folder?: string }) | null {
     if (!dl) return null;
-    const peers = allServersRef.current.map((x) => x.server);
+    const peers = withPreviewMeta(allServersRef.current.map((x) => x.server));
     const res =
       dl.type === "repo" ? resolveRepoTarget(peers, dl.target, preferFor(dl))
       : dl.type === "hostSettings" ? resolveHostTarget(peers, dl.host)
