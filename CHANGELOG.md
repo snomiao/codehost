@@ -1,3 +1,10 @@
+## [0.30.1](https://github.com/snomiao/codehost/compare/v0.30.0...v0.30.1) (2026-07-08)
+
+
+### Bug Fixes
+
+* **web:** restore exact-checkout deep-link resolution via previewMeta ([c141f14](https://github.com/snomiao/codehost/commit/c141f1404cef5d18f39e378cb628fa4a144be769))
+
 # [0.30.0](https://github.com/snomiao/codehost/compare/v0.29.1...v0.30.0) (2026-07-07)
 
 
