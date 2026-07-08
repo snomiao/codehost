@@ -19,6 +19,14 @@ export interface RepoTarget {
   name: string;
   /** Branch from the deep link, if present. */
   branch?: string;
+  /**
+   * Pin resolution to one machine (PeerMeta.host, e.g. "Mac"), from a
+   * `?machine=<hostname>` query param — deliberately not named `host` since
+   * that already means the *git* host above. When set, resolveRepoTarget only
+   * considers daemons on that machine and fails (null) rather than silently
+   * picking a different one — same repo, multiple machines, no ambiguity.
+   */
+  machine?: string;
 }
 
 /** A direct folder mount address: host-scoped `/host/<hostname>/<path>`, or the
@@ -44,21 +52,26 @@ export type DeepLink =
  *   /host/<hostname>                              -> that host's settings page
  *   /dev/<fs-path>                                -> legacy host-agnostic folder mount
  * Branch may contain slashes. Anything else -> null (normal app).
+ *
+ * `search` (the URL's query string, e.g. from location.search) is only
+ * consulted for a `machine=<hostname>` param on repo links — a `?`-suffixed
+ * pathname also works since everything after `?` is ignored by the path regexes.
  */
-export function parseDeepLink(pathname: string): DeepLink {
+export function parseDeepLink(pathname: string, search = ""): DeepLink {
   const clean = pathname.replace(/\/+$/, "");
+  const machine = new URLSearchParams(search).get("machine") || undefined;
   const gh = clean.match(/^\/gh\/([^/]+)\/([^/]+)(?:\/tree\/(.+))?$/);
   if (gh) {
     return {
       type: "repo",
-      target: { host: GITHUB_HOST, owner: gh[1], name: gh[2], branch: gh[3] },
+      target: { host: GITHUB_HOST, owner: gh[1], name: gh[2], branch: gh[3], machine },
     };
   }
   const git = clean.match(/^\/git\/([^/]+)\/([^/]+)\/([^/]+)(?:\/tree\/(.+))?$/);
   if (git) {
     return {
       type: "repo",
-      target: { host: git[1].toLowerCase(), owner: git[2], name: git[3], branch: git[4] },
+      target: { host: git[1].toLowerCase(), owner: git[2], name: git[3], branch: git[4], machine },
     };
   }
   // Host-scoped folder mount: first segment is the hostname, the rest is the
@@ -137,12 +150,17 @@ export function shareableDeepLink(opts: {
   branch?: string;
   folder?: string;
   host?: string;
+  /** Preserve a `?machine=<hostname>` pin (see RepoTarget.machine) across
+   *  URL canonicalization — repo links only; a folder mount is already
+   *  host-scoped via its path. */
+  machine?: string;
 }): string | null {
   if (opts.repo) {
     const [host, owner, name] = opts.repo.split("/");
     if (host && owner && name) {
       const base = host === GITHUB_HOST ? `/gh/${owner}/${name}` : `/git/${host}/${owner}/${name}`;
-      return opts.branch ? `${base}/tree/${opts.branch}` : base;
+      const path = opts.branch ? `${base}/tree/${opts.branch}` : base;
+      return opts.machine ? `${path}?machine=${encodeURIComponent(opts.machine)}` : path;
     }
   }
   if (opts.folder) {
@@ -206,20 +224,26 @@ function prefers(meta: PeerMeta | null | undefined, prefer?: ResolvePrefs): bool
  * /Users/sno and /Users/sno/ws both serving, the layout subfolder exists under
  * the deeper one (observed: /gh/snomiao/codehost belongs to /Users/sno/ws/...,
  * not /Users/sno/...). Returns null if nothing matches.
+ *
+ * `target.machine`, when set, pins resolution to that one machine — a
+ * daemon-on-a-different-host is not a candidate at all (not even as a
+ * fallback), so a pinned link fails loud instead of silently landing
+ * elsewhere.
  */
 export function resolveRepoTarget(
   servers: PeerInfo[],
   target: RepoTarget,
   prefer?: ResolvePrefs,
 ): Resolution | null {
+  const pool = target.machine ? servers.filter((s) => s.meta?.host === target.machine) : servers;
   const key = repoKey(target);
-  const repoMatches = servers.filter(
+  const repoMatches = pool.filter(
     (s) => s.meta?.kind !== "root" && s.meta?.repo === key && branchOk(s.meta, target),
   );
   const repoMatch = repoMatches.find((s) => prefers(s.meta, prefer)) ?? repoMatches[0];
   if (repoMatch) return { peerId: repoMatch.peerId };
 
-  const roots = servers
+  const roots = pool
     .filter((s) => s.meta?.kind === "root")
     .sort(
       (a, b) =>

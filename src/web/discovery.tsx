@@ -411,7 +411,7 @@ export function Discovery() {
 
   // Deep-link resolution (/gh/<owner>/<repo>/... or /dev/<path>): parse once,
   // auto-connect when a matching server appears, remember the opened folder.
-  const deepLinkRef = useRef<DeepLink>(parseDeepLink(window.location.pathname));
+  const deepLinkRef = useRef<DeepLink>(parseDeepLink(window.location.pathname, window.location.search));
   const resolvedRef = useRef(false);
   // A valid token in the URL fragment enables single-server auto-connect, scoped
   // to *that* room so unrelated joined rooms don't block it.
@@ -955,7 +955,7 @@ export function Discovery() {
     // matching the worktree fillLayout actually opened.
     if (dl?.type === "repo") {
       const branch = dl.target.branch ?? server.meta?.branch ?? DEFAULT_BRANCH;
-      return shareableDeepLink({ repo: repoKey(dl.target), branch });
+      return shareableDeepLink({ repo: repoKey(dl.target), branch, machine: dl.target.machine });
     }
     if (server.meta?.repo) {
       return shareableDeepLink({ repo: server.meta.repo, branch: server.meta.branch ?? DEFAULT_BRANCH });
@@ -1084,7 +1084,7 @@ export function Discovery() {
   // server it resolves to; the list URL ("/") drops the connection. Reads only
   // refs/window, so it's safe to call from the once-at-mount popstate handler.
   function syncToUrl() {
-    const dl = parseDeepLink(window.location.pathname);
+    const dl = parseDeepLink(window.location.pathname, window.location.search);
     if (!dl) {
       if (activePeerRef.current) teardownConn();
       return;

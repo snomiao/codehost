@@ -134,6 +134,13 @@ describe("parseDeepLink + repoKey round-trip", () => {
     expect(parseDeepLink("/")).toBeNull();
     expect(parseDeepLink("/settings")).toBeNull();
   });
+
+  test("?machine=<hostname> pins a repo link; absent by default", () => {
+    const pinned = parseDeepLink("/gh/snomiao/codehost", "?machine=Mac");
+    expect(pinned?.type === "repo" && pinned.target.machine).toBe("Mac");
+    const unpinned = parseDeepLink("/gh/snomiao/codehost");
+    expect(unpinned?.type === "repo" && unpinned.target.machine).toBeUndefined();
+  });
 });
 
 describe("resolveDevTarget host scoping", () => {
@@ -214,6 +221,26 @@ describe("resolveRepoTarget root selection", () => {
       { peerId: "exact", role: "server", meta: { name: "x", host: "Mac", cwd: "/x", repo: "github.com/snomiao/codehost" } },
     ];
     expect(resolveRepoTarget(servers, { host: "github.com", owner: "snomiao", name: "codehost" })?.peerId).toBe("exact");
+  });
+});
+
+describe("resolveRepoTarget machine pin", () => {
+  const target = { host: "github.com", owner: "snomiao", name: "codehost" };
+  const root = (peerId: string, host: string, cwd: string): PeerInfo => ({
+    peerId,
+    role: "server",
+    meta: { name: peerId, host, cwd, kind: "root" },
+  });
+
+  test("machine pin selects only that machine's daemon, even if another is a better match", () => {
+    const servers = [root("other", "Other", "/x"), root("mac", "Mac", "/Users/sno/ws")];
+    const res = resolveRepoTarget(servers, { ...target, machine: "Mac" });
+    expect(res?.peerId).toBe("mac");
+  });
+
+  test("machine pin with no live daemon on that machine fails loud (null), no silent fallback", () => {
+    const servers = [root("other", "Other", "/x")];
+    expect(resolveRepoTarget(servers, { ...target, machine: "Mac" })).toBeNull();
   });
 });
 
