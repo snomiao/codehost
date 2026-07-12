@@ -1,3 +1,10 @@
+# [0.32.0](https://github.com/snomiao/codehost/compare/v0.31.0...v0.32.0) (2026-07-12)
+
+
+### Features
+
+* **tunnel:** extract transport-agnostic tunnel protocol package ([#6](https://github.com/snomiao/codehost/issues/6)) ([efea619](https://github.com/snomiao/codehost/commit/efea6196e9dc53733c047d2662029ad2745dcd71))
+
 # [0.31.0](https://github.com/snomiao/codehost/compare/v0.30.1...v0.31.0) (2026-07-08)
 
 
