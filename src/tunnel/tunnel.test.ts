@@ -261,6 +261,77 @@ describe("backpressure", () => {
   });
 });
 
+describe("lane closure", () => {
+  test("close before head rejects pending fetches and closes WS handlers", async () => {
+    const [hostSide, clientSide] = memoryTransportPair();
+    // No host at all: requests park until the transport dies.
+    const client = new TunnelClient(clientSide);
+    const pending = client.fetch("GET", "/never", {});
+    pending.catch(() => {}); // observed again below — avoid unhandled-rejection noise
+    const wsClosed = new Promise<[number, string]>((resolve) => {
+      client.openWs("/ws", undefined, {
+        onOpenAck: () => {},
+        onText: () => {},
+        onBin: () => {},
+        onClose: (code, reason) => resolve([code, reason]),
+      });
+    });
+    hostSide.close();
+    await expect(pending).rejects.toThrow("tunnel closed");
+    expect(await wsClosed).toEqual([1006, "tunnel closed"]);
+  });
+
+  test("close mid-body errors the response stream", async () => {
+    const [hostSide, clientSide] = memoryTransportPair();
+    let firstChunkSent!: () => void;
+    const sent = new Promise<void>((r) => (firstChunkSent = r));
+    new TunnelHost(hostSide, {
+      port: 1,
+      onLocal: () =>
+        Promise.resolve(
+          new Response(
+            new ReadableStream<Uint8Array>({
+              start(c) {
+                c.enqueue(new Uint8Array(64));
+                firstChunkSent();
+                // never closes — the tunnel dying must error the client body
+              },
+            }),
+          ),
+        ),
+    });
+    const client = new TunnelClient(clientSide);
+    const res = await client.fetch("GET", "/stream", {});
+    await sent;
+    const reader = res.body!.getReader();
+    await reader.read(); // first chunk arrives
+    clientSide.close();
+    await expect(reader.read()).rejects.toThrow("tunnel closed");
+  });
+
+  test("bulk lane death fails only bulk-pinned requests", async () => {
+    const [hostA, clientA] = memoryTransportPair(); // interactive — no host: WS stays pending
+    const [hostB, clientB] = memoryTransportPair(); // bulk — no host: fetch parks
+    void hostA;
+    void hostB;
+    const client = new TunnelClient(clientA, clientB);
+    const pending = client.fetch("GET", "/never", {}); // pinned to bulk
+    pending.catch(() => {});
+    let wsClosed = false;
+    client.openWs("/ws", undefined, {
+      onOpenAck: () => {},
+      onText: () => {},
+      onBin: () => {},
+      onClose: () => {
+        wsClosed = true;
+      },
+    });
+    clientB.close();
+    await expect(pending).rejects.toThrow("tunnel closed");
+    expect(wsClosed).toBe(false); // interactive lane (and its WS) unaffected
+  });
+});
+
 describe("bulk lane", () => {
   test("http rides the bulk transport when open", async () => {
     const [hostA, clientA] = memoryTransportPair(); // interactive

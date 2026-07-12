@@ -46,6 +46,7 @@ export interface TunnelLike {
 export class TunnelClient implements TunnelLike {
   private nextStreamId = 1;
   private https = new Map<number, HttpWaiter>();
+  private httpLane = new Map<number, TunnelTransport>(); // which lane each request is pinned to
   private wss = new Map<number, TunnelWsHandlers>();
   private wsRx = new WsReassembler(); // reassembles host -> client WS messages
   private textEncoder = new TextEncoder();
@@ -64,6 +65,26 @@ export class TunnelClient implements TunnelLike {
   ) {
     transport.onFrame((data) => this.onFrame(data));
     bulk?.onFrame((data) => this.onFrame(data));
+    // Fail what a dead lane strands, instead of hanging its waiters forever:
+    // HTTP streams are pinned per lane; every WS rides the interactive lane.
+    transport.onClose(() => this.failLane(transport, true));
+    bulk?.onClose(() => this.failLane(bulk, false));
+  }
+
+  private failLane(lane: TunnelTransport, interactive: boolean): void {
+    for (const [streamId, waiter] of [...this.https]) {
+      if ((this.httpLane.get(streamId) ?? this.transport) !== lane) continue;
+      this.https.delete(streamId);
+      this.httpLane.delete(streamId);
+      waiter.onError("tunnel closed");
+    }
+    if (interactive) {
+      for (const [streamId, handlers] of [...this.wss]) {
+        this.wss.delete(streamId);
+        this.wsRx.drop(streamId);
+        handlers.onClose(1006, "tunnel closed");
+      }
+    }
   }
 
   private allocId(): number {
@@ -84,12 +105,14 @@ export class TunnelClient implements TunnelLike {
       case Op.HttpResEnd:
         this.https.get(streamId)?.onEnd();
         this.https.delete(streamId);
+        this.httpLane.delete(streamId);
         break;
       case Op.Error: {
         const waiter = this.https.get(streamId);
         if (waiter) {
           waiter.onError(payloadJson<{ message: string }>(payload).message);
           this.https.delete(streamId);
+          this.httpLane.delete(streamId);
         }
         break;
       }
@@ -187,6 +210,7 @@ export class TunnelClient implements TunnelLike {
       // lane, so a mid-request switch (e.g. bulk finishing its handshake)
       // would strand the stream across two hosts.
       const lane = this.bulk?.isOpen() ? this.bulk : this.transport;
+      this.httpLane.set(streamId, lane);
       this.sendOn(lane, encodeJson(Op.HttpReq, streamId, { method, path, headers: reqHeaders }));
       if (body && body.byteLength) {
         for (const part of chunk(body)) this.sendOn(lane, encodeFrame(Op.HttpReqBody, streamId, part));
