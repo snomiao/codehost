@@ -14,7 +14,10 @@
   },
   "exports": {
     "./provision": "./src/provision/index.ts",
-    "./provision/watch": "./src/provision/watch.ts"
+    "./provision/watch": "./src/provision/watch.ts",
+    "./tunnel": "./src/tunnel/index.ts",
+    "./tunnel/node-datachannel": "./src/tunnel/node-datachannel.ts",
+    "./tunnel/testing": "./src/tunnel/testing.ts"
   },
   "scripts": {
     "dev": "concurrently \"bun run dev:server\" \"vite --port 5173\"",
