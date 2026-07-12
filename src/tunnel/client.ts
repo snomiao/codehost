@@ -1,0 +1,253 @@
+import {
+  type HttpResHead,
+  Op,
+  WsReassembler,
+  chunk,
+  decodeFrame,
+  encodeFrame,
+  encodeJson,
+  payloadJson,
+  payloadText,
+  wsMessageFrames,
+} from "./protocol";
+import type { TunnelTransport } from "./transport";
+
+// Client half of the tunnel. Owns the transport(s) and multiplexes HTTP
+// requests (driven by the Service Worker) and WebSocket connections (driven
+// by the in-page TunnelWebSocket shim) over them by streamId.
+
+interface HttpWaiter {
+  onHead: (head: HttpResHead) => void;
+  onBody: (chunk: Uint8Array) => void;
+  onEnd: () => void;
+  onError: (message: string) => void;
+}
+
+export interface TunnelWsHandlers {
+  onOpenAck: (ok: boolean, protocol?: string) => void;
+  onText: (text: string) => void;
+  onBin: (data: Uint8Array) => void;
+  onClose: (code: number, reason: string) => void;
+}
+
+export interface TunnelWsHandle {
+  sendText: (text: string) => void;
+  sendBin: (data: Uint8Array) => void;
+  close: (code?: number, reason?: string) => void;
+}
+
+/** The subset of a tunnel the Service Worker glue and WS shim depend on. Both
+ *  the local {@link TunnelClient} and the cross-tab proxy implement it. */
+export interface TunnelLike {
+  fetch(method: string, path: string, headers: Record<string, string>, body?: Uint8Array): Promise<Response>;
+  openWs(path: string, protocols: string[] | undefined, handlers: TunnelWsHandlers): TunnelWsHandle;
+}
+
+export class TunnelClient implements TunnelLike {
+  private nextStreamId = 1;
+  private https = new Map<number, HttpWaiter>();
+  private httpLane = new Map<number, TunnelTransport>(); // which lane each request is pinned to
+  private wss = new Map<number, TunnelWsHandlers>();
+  private wsRx = new WsReassembler(); // reassembles host -> client WS messages
+  private textEncoder = new TextEncoder();
+
+  /**
+   * `transport` carries the interactive traffic (WebSocket frames — VS Code's
+   * remote protocol, terminals); `bulk`, when provided and open, carries HTTP
+   * request/response streams on its own lane so multi-MB asset bodies never
+   * head-of-line block a keystroke. The host runs one TunnelHost per lane, so
+   * each lane answers on itself and no demuxing is needed beyond listening on
+   * both.
+   */
+  constructor(
+    private transport: TunnelTransport,
+    private bulk: TunnelTransport | null = null,
+  ) {
+    transport.onFrame((data) => this.onFrame(data));
+    bulk?.onFrame((data) => this.onFrame(data));
+    // Fail what a dead lane strands, instead of hanging its waiters forever:
+    // HTTP streams are pinned per lane; every WS rides the interactive lane.
+    transport.onClose(() => this.failLane(transport, true));
+    bulk?.onClose(() => this.failLane(bulk, false));
+  }
+
+  private failLane(lane: TunnelTransport, interactive: boolean): void {
+    for (const [streamId, waiter] of [...this.https]) {
+      if ((this.httpLane.get(streamId) ?? this.transport) !== lane) continue;
+      this.https.delete(streamId);
+      this.httpLane.delete(streamId);
+      waiter.onError("tunnel closed");
+    }
+    if (interactive) {
+      for (const [streamId, handlers] of [...this.wss]) {
+        this.wss.delete(streamId);
+        this.wsRx.drop(streamId);
+        handlers.onClose(1006, "tunnel closed");
+      }
+    }
+  }
+
+  private allocId(): number {
+    const id = this.nextStreamId;
+    this.nextStreamId = (this.nextStreamId + 1) >>> 0 || 1;
+    return id;
+  }
+
+  private onFrame(data: Uint8Array): void {
+    const { op, streamId, payload } = decodeFrame(data);
+    switch (op) {
+      case Op.HttpResHead:
+        this.https.get(streamId)?.onHead(payloadJson<HttpResHead>(payload));
+        break;
+      case Op.HttpResBody:
+        this.https.get(streamId)?.onBody(payload.slice());
+        break;
+      case Op.HttpResEnd:
+        this.https.get(streamId)?.onEnd();
+        this.https.delete(streamId);
+        this.httpLane.delete(streamId);
+        break;
+      case Op.Error: {
+        const waiter = this.https.get(streamId);
+        if (waiter) {
+          waiter.onError(payloadJson<{ message: string }>(payload).message);
+          this.https.delete(streamId);
+          this.httpLane.delete(streamId);
+        }
+        break;
+      }
+      case Op.WsOpenAck: {
+        const info = payloadJson<{ ok: boolean; protocol?: string }>(payload);
+        this.wss.get(streamId)?.onOpenAck(info.ok, info.protocol);
+        break;
+      }
+      case Op.WsCont:
+        this.wsRx.cont(streamId, payload);
+        break;
+      case Op.WsText:
+        this.wss.get(streamId)?.onText(payloadText(this.wsRx.finish(streamId, payload)));
+        break;
+      case Op.WsBin:
+        this.wss.get(streamId)?.onBin(this.wsRx.finish(streamId, payload).slice());
+        break;
+      case Op.WsClose: {
+        const info = payloadJson<{ code?: number; reason?: string }>(payload);
+        this.wsRx.drop(streamId);
+        this.wss.get(streamId)?.onClose(info.code ?? 1000, info.reason ?? "");
+        this.wss.delete(streamId);
+        break;
+      }
+    }
+  }
+
+  /** Perform an HTTP request over the tunnel; resolves to a Response. */
+  fetch(method: string, path: string, headers: Record<string, string>, body?: Uint8Array): Promise<Response> {
+    const streamId = this.allocId();
+    return new Promise<Response>((resolve, reject) => {
+      let head: HttpResHead | null = null;
+      let controller: ReadableStreamDefaultController<Uint8Array> | null = null;
+      const stream = new ReadableStream<Uint8Array>({
+        start: (c) => {
+          controller = c;
+        },
+      });
+
+      // Tell the host we can inflate: it then passes the upstream's gzip
+      // bytes through untouched (3-4x fewer bytes over the channel) and we
+      // decompress here, once, for every consumer.
+      const reqHeaders =
+        typeof DecompressionStream !== "undefined"
+          ? { ...headers, "x-codehost-accept-gzip": "1" }
+          : headers;
+
+      this.https.set(streamId, {
+        onHead: (h) => {
+          head = h;
+          const resHeaders = new Headers(h.headers);
+          let bodyStream: ReadableStream<Uint8Array> = stream;
+          if (resHeaders.get("content-encoding") === "gzip") {
+            bodyStream = stream.pipeThrough(
+              new DecompressionStream("gzip") as unknown as ReadableWritablePair<Uint8Array, Uint8Array>,
+            );
+            resHeaders.delete("content-encoding");
+            resHeaders.delete("content-length");
+          }
+          resolve(
+            new Response(bodyStream, {
+              status: h.status === 204 || h.status === 304 ? h.status : h.status,
+              statusText: h.statusText,
+              headers: resHeaders,
+            }),
+          );
+        },
+        onBody: (b) => {
+          try {
+            controller?.enqueue(b);
+          } catch {
+            // stream already closed/cancelled (consumer went away mid-body)
+          }
+        },
+        onEnd: () => {
+          try {
+            controller?.close();
+          } catch {
+            // already closed
+          }
+          if (!head) reject(new Error("stream ended before head"));
+        },
+        onError: (msg) => {
+          try {
+            controller?.error(new Error(msg));
+          } catch {
+            // ignore
+          }
+          if (!head) reject(new Error(msg));
+        },
+      });
+
+      // HTTP rides the bulk lane. Pinned per request: every frame of this
+      // stream must hit the SAME lane — the host runs one TunnelHost per
+      // lane, so a mid-request switch (e.g. bulk finishing its handshake)
+      // would strand the stream across two hosts.
+      const lane = this.bulk?.isOpen() ? this.bulk : this.transport;
+      this.httpLane.set(streamId, lane);
+      this.sendOn(lane, encodeJson(Op.HttpReq, streamId, { method, path, headers: reqHeaders }));
+      if (body && body.byteLength) {
+        for (const part of chunk(body)) this.sendOn(lane, encodeFrame(Op.HttpReqBody, streamId, part));
+      }
+      this.sendOn(lane, encodeFrame(Op.HttpReqEnd, streamId));
+    });
+  }
+
+  /** Open a WebSocket stream over the tunnel; returns a sender handle. */
+  openWs(path: string, protocols: string[] | undefined, handlers: TunnelWsHandlers): TunnelWsHandle {
+    const streamId = this.allocId();
+    this.wss.set(streamId, handlers);
+    this.send(encodeJson(Op.WsOpen, streamId, { path, protocols }));
+    return {
+      sendText: (text: string) => {
+        for (const f of wsMessageFrames(Op.WsText, streamId, this.textEncoder.encode(text))) this.send(f);
+      },
+      sendBin: (data: Uint8Array) => {
+        for (const f of wsMessageFrames(Op.WsBin, streamId, data)) this.send(f);
+      },
+      close: (code?: number, reason?: string) => {
+        this.send(encodeJson(Op.WsClose, streamId, { code, reason }));
+        this.wss.delete(streamId);
+      },
+    };
+  }
+
+  /** Interactive-lane send (WS frames, control). */
+  private send(frame: Uint8Array): void {
+    this.sendOn(this.transport, frame);
+  }
+
+  private sendOn(t: TunnelTransport, frame: Uint8Array): void {
+    if (t.isOpen()) t.send(frame);
+  }
+
+  get ready(): boolean {
+    return this.transport.isOpen();
+  }
+}
