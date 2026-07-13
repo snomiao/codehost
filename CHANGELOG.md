@@ -1,3 +1,10 @@
+# [0.34.0](https://github.com/snomiao/codehost/compare/v0.33.0...v0.34.0) (2026-07-13)
+
+
+### Features
+
+* **preview:** WebSocket over the preview tunnel (Vite HMR) ([#8](https://github.com/snomiao/codehost/issues/8)) ([a15852c](https://github.com/snomiao/codehost/commit/a15852cb98175a7b62ab4667e030b7cf9ba4d6f4))
+
 # [0.33.0](https://github.com/snomiao/codehost/compare/v0.32.0...v0.33.0) (2026-07-13)
 
 
