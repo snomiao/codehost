@@ -10,6 +10,7 @@ import { currentUser, ensureHostId, rememberedRoot, rememberRoot } from "../conf
 import { launchServeDaemon } from "../daemonize";
 import { announceConnect } from "../open-url";
 import { agentYesPlugin } from "../plugins/agent-yes";
+import { previewPlugin } from "../plugins/preview";
 import { type DaemonPlugin, withPluginMeta } from "../plugins/types";
 import { readCodehostConfig } from "../provision-server";
 import {
@@ -174,7 +175,7 @@ export const serveCommand: CommandModule<{}, ServeArgs> = {
     // the same template provisioning uses (.codehost/config.yaml `workspace`),
     // so the advertised list and the provisioned paths agree.
     const layout = readCodehostConfig(dir).workspace || DEFAULT_LAYOUT;
-    const plugins = [agentYesPlugin()].filter((p) => p != null);
+    const plugins = [agentYesPlugin(), previewPlugin()].filter((p) => p != null);
     // buildMeta runs every AGENTS_META_POLL_MS so live agent titles propagate
     // (the room only sees a push when something changed). The filesystem walk
     // for checkouts is the expensive part — memoize it; registered workspaces
