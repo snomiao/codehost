@@ -1,3 +1,10 @@
+# [0.33.0](https://github.com/snomiao/codehost/compare/v0.32.0...v0.33.0) (2026-07-13)
+
+
+### Features
+
+* **plugins:** preview plugin — proxy /__codehost/port/<PORT>/* to a local port ([#7](https://github.com/snomiao/codehost/issues/7)) ([bb536db](https://github.com/snomiao/codehost/commit/bb536db07d575e63986e63260a7ed0b1b8a88c46))
+
 # [0.32.0](https://github.com/snomiao/codehost/compare/v0.31.0...v0.32.0) (2026-07-12)
 
 
