@@ -2,7 +2,7 @@ import { SignalingClient } from "../shared/signaling-client";
 import { type PeerInfo, CLIENT_WIRE_ROLE } from "../shared/signaling";
 import type { RtcSignal } from "../shared/rtc";
 import { RtcClient } from "./rtc-client";
-import { TunnelClient } from "./tunnel-client";
+import { TunnelClient, type TunnelWsHandlers, type TunnelWsHandle } from "./tunnel-client";
 
 // Embeddable codehost room client for OTHER sites (agent-yes.com first): join a
 // room as a viewer, watch the peer list (hosts advertise workspaces + agents in
@@ -67,6 +67,18 @@ export class CodehostRoom {
     const tunnel = await this.dial(peerId);
     const body = typeof init.body === "string" ? new TextEncoder().encode(init.body) : init.body;
     return tunnel.fetch(method, path, init.headers ?? {}, body);
+  }
+
+  /** Open a WebSocket to a server peer over its tunnel (WS frames ride the same
+   *  data channel). Used for e.g. tunneling a dev server's HMR socket. */
+  async openWs(
+    peerId: string,
+    path: string,
+    protocols: string[] | undefined,
+    handlers: TunnelWsHandlers,
+  ): Promise<TunnelWsHandle> {
+    const tunnel = await this.dial(peerId);
+    return tunnel.openWs(path, protocols, handlers);
   }
 
   private dial(peerId: string): Promise<TunnelClient> {

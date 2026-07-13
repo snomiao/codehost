@@ -223,8 +223,14 @@ export class TunnelHost {
 
   private openWs(streamId: number, info: { path: string; protocols?: string[] }): void {
     let ws: WebSocket;
+    // Preview WS (the `port` plugin's WS counterpart): a path under
+    // /__codehost/port/<PORT>/ targets that loopback port, so a proxied dev
+    // server's WebSocket (e.g. Vite HMR) rides the tunnel to 127.0.0.1:<PORT>.
+    let target = this.wsOrigin + this.localPath(info.path);
+    const pm = /^\/__codehost\/port\/(\d{1,5})(\/.*)?$/.exec(info.path);
+    if (pm) target = `ws://127.0.0.1:${pm[1]}${pm[2] || "/"}`;
     try {
-      ws = new WebSocket(this.wsOrigin + this.localPath(info.path), info.protocols);
+      ws = new WebSocket(target, info.protocols);
     } catch (err) {
       void this.send(encodeJson(Op.WsOpenAck, streamId, { ok: false, error: String(err) }));
       return;
