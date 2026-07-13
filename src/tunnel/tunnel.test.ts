@@ -224,6 +224,23 @@ describe("websocket over the tunnel", () => {
     expect(Buffer.from(ws.bins[0])).toEqual(Buffer.from(big));
   });
 
+  test("a /__codehost/port/<PORT>/ path targets that loopback port (preview WS)", async () => {
+    // Host is configured for a dead port (1); the preview prefix must override
+    // it and reach the real echo server on server.port.
+    const [hostSide, clientSide] = memoryTransportPair();
+    new TunnelHost(hostSide, { port: 1 });
+    const client = new TunnelClient(clientSide);
+    const echoed = await new Promise<string>((resolve, reject) => {
+      const handle = client.openWs(`/__codehost/port/${server.port}/ws`, undefined, {
+        onOpenAck: (ok) => (ok ? handle.sendText("hi-preview") : reject(new Error("open failed"))),
+        onText: resolve,
+        onBin: () => {},
+        onClose: (code, reason) => reject(new Error(`closed ${code} ${reason}`)),
+      });
+    });
+    expect(echoed).toBe("hi-preview");
+  });
+
   test("ws open against a dead upstream acks not-ok or closes", async () => {
     const [hostSide, clientSide] = memoryTransportPair();
     new TunnelHost(hostSide, { port: 1 });
