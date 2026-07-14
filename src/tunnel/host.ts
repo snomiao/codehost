@@ -188,9 +188,20 @@ export class TunnelHost {
             ...(wantsGzip ? ({ decompress: false } as RequestInit) : {}),
           });
 
+      // The body we forward is DECODED unless we're on the gzip-passthrough path
+      // (a client that opted in AND a direct upstream fetch with decompress:false).
+      // Everywhere else — the default fetch here, and every `onLocal` plugin
+      // (e.g. the port-preview proxy) — Bun already auto-inflated the bytes, so a
+      // stale `content-encoding: gzip` would make the client inflate plain bytes
+      // and blow up (Z_DATA_ERROR). Keep the header only when the bytes are still
+      // compressed on the wire.
+      const gzipPassthrough = wantsGzip && !local;
       const resHeaders: Record<string, string> = {};
       res.headers.forEach((v, k) => {
-        if (!HOP_BY_HOP.has(k.toLowerCase())) resHeaders[k] = v;
+        const lk = k.toLowerCase();
+        if (HOP_BY_HOP.has(lk)) return;
+        if (lk === "content-encoding" && !gzipPassthrough) return;
+        resHeaders[k] = v;
       });
 
       await this.send(

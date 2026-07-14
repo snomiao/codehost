@@ -1,0 +1,24 @@
+name: Test
+
+# Typecheck + run the bun test suite (tunnel conformance, preview proxy,
+# dev-server compat fixtures) on every push and PR. These guard the tunnel wire
+# and the arbitrary-dev-server proxy path that agent-yes's console preview and
+# `ay expose` depend on.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install
+      - run: bun run typecheck
+      - run: bun test
