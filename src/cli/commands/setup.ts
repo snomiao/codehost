@@ -97,7 +97,7 @@ export const setupCommand: CommandModule<{}, SetupArgs> = {
     console.log(`[codehost] using VS Code: ${codeBin}`);
 
     // 3. Batteries included: a workspace root gets its `.codehost/` scaffold
-    //    (config.yaml + clone/worktree setup hook) so /gh/<owner>/<repo> links
+    //    (config.yaml + clone/worktree setup hook) so /<git-host>/<owner>/<repo> links
     //    provision on demand out of the box. Existing files are never touched;
     //    no new trust — the room token already grants code execution.
     const root = !isGitRepo(dir);
