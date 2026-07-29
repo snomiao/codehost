@@ -17,7 +17,12 @@ type AnyMsg = Record<string, any>;
 
 /** Creates the RTCPeerConnection for a peer and resolves with its open
  *  interactive channel plus the (possibly still-connecting) bulk lane.
- *  Provided by the UI (discovery.tsx) and invoked only when this tab is owner. */
+ *  Provided by the UI (discovery.tsx) and invoked only when this tab is owner.
+ *
+ *  MUST settle (resolve or reject) within a bounded time. While it is pending,
+ *  the peer sits in `establishing`, which suppresses connect()'s fallback — so
+ *  an establish() that hangs forever leaves every later connect() for that peer
+ *  waiting on a `ready` that will never come, with no timeout and no failure. */
 export type Establish = () => Promise<{ channel: RTCDataChannel; bulk: RTCDataChannel | null }>;
 
 class ConnBroker {
@@ -75,6 +80,8 @@ class ConnBroker {
     this.post({ t: "acquire", peerId });
     // If the SharedWorker never assigns a role (silent/unsupported), don't hang
     // forever — open a direct connection so this tab still works on its own.
+    // Skipped while an establish() is in flight (see Establish): that one is
+    // required to settle, and its rejection unblocks our waiter.
     const fallback = setTimeout(() => {
       if (!this.locals.has(peerId) && !this.remoteReady.has(peerId) && !this.establishing.has(peerId)) {
         console.warn("[codehost] broker coordination timed out; opening direct connection");

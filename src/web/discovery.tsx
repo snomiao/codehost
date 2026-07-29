@@ -125,6 +125,10 @@ function deepLinkLabel(dl: DeepLink): string | null {
   return dl.target.host ? `${dl.target.host}:${dl.target.path}` : dl.target.path;
 }
 
+/** How long any WebRTC dial (foreground or background probe) may stay
+ *  unsettled before it's treated as failed. */
+const DIAL_TIMEOUT_MS = 15000;
+
 function folderQuery(folder?: string): string {
   return folder ? `?folder=${encodeURIComponent(folder)}` : "";
 }
@@ -605,14 +609,30 @@ export function Discovery() {
           reject(new Error("room not ready"));
           return;
         }
+        // Bound the probe like a real dial does. An establish() that never
+        // settles is worse than one that fails: the broker keeps the peer in
+        // `establishing` forever, and every later connect() for it then waits
+        // on a `ready` that can't come — no timeout, no failure, a Connect
+        // button stuck on "negotiating WebRTC…". A background probe must never
+        // be able to wedge the foreground.
+        let timer: ReturnType<typeof setTimeout> | null = null;
+        const settle = (fn: () => void) => {
+          if (timer) clearTimeout(timer);
+          timer = null;
+          fn();
+        };
         const rtc = new RtcClient({
           sendSignal: (data: RtcSignal) => send(peerId, data),
           onState: () => {},
-          onOpen: (channel) => resolve({ channel, bulk: rtc.bulkChannel }),
+          onOpen: (channel) => settle(() => resolve({ channel, bulk: rtc.bulkChannel })),
           onClose: () => {},
         });
         previewRtcRef.current.set(peerId, rtc);
-        rtc.start().catch(reject);
+        timer = setTimeout(() => {
+          rtc.close();
+          reject(new Error("preview connection timed out"));
+        }, DIAL_TIMEOUT_MS);
+        rtc.start().catch((err) => settle(() => reject(err)));
       });
     connBroker
       .connect(peerId, establish)
@@ -701,12 +721,13 @@ export function Discovery() {
           rtcRef.current = rtc;
           dialRejectRef.current = reject;
           // Don't hang forever dialing a peer that never answers (e.g. a stale
-          // server still listed in the room): fail the attempt after 15s. A
-          // "pending" admission signal swaps this for a longer approval window.
+          // server still listed in the room): fail the attempt after
+          // DIAL_TIMEOUT_MS. A "pending" admission signal swaps this for a
+          // longer approval window.
           dialTimerRef.current = setTimeout(() => {
             rtc.close();
             reject(new Error("connection timed out"));
-          }, 15000);
+          }, DIAL_TIMEOUT_MS);
           rtc.start().catch((err) => {
             if (dialTimerRef.current) clearTimeout(dialTimerRef.current);
             reject(err);
