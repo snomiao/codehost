@@ -1,3 +1,10 @@
+# [0.35.0](https://github.com/snomiao/codehost/compare/v0.34.0...v0.35.0) (2026-07-29)
+
+
+### Features
+
+* **links:** put the git host and machine in the path ([e0498f6](https://github.com/snomiao/codehost/commit/e0498f629272e5adb3049d042603e54f2dc56f61))
+
 # [0.34.0](https://github.com/snomiao/codehost/compare/v0.33.0...v0.34.0) (2026-07-13)
 
 
