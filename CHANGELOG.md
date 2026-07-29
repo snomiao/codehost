@@ -1,3 +1,10 @@
+## [0.35.1](https://github.com/snomiao/codehost/compare/v0.35.0...v0.35.1) (2026-07-29)
+
+
+### Bug Fixes
+
+* **web:** bound the background preview dial so it can't wedge Connect ([2a0bd9e](https://github.com/snomiao/codehost/commit/2a0bd9ec8e187d4a3a73dfafef152d0490415fd6))
+
 # [0.35.0](https://github.com/snomiao/codehost/compare/v0.34.0...v0.35.0) (2026-07-29)
 
 
