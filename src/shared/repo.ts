@@ -1,7 +1,22 @@
 // Shared helpers for git-shaped deep links and matching them to a daemon. Used
 // by the web resolver (src/web) and conceptually mirrors the daemon's repo
-// identity (src/cli/git.ts). Host-agnostic: GitHub gets the short `/gh/...`
-// form, any other host uses `/git/<host>/...`.
+// identity (src/cli/git.ts).
+//
+// One grammar, keyed off the first path segment:
+//   contains "@"  -> machine scope (`<user>@<machine>` or `@<machine>`)
+//   looks like a hostname (dotted) -> git host
+//   neither -> not a deep link (a normal app route)
+// A machine scope is followed by either a git coordinate or an absolute
+// filesystem path, decided by the same dotted-hostname test. So:
+//   /github.com/<owner>/<repo>/tree/<branch>            lookup, any machine
+//   /sno@Mac/github.com/<owner>/<repo>/tree/<branch>    pinned to Mac (provisions)
+//   /sno@Mac/Users/sno/ws                               folder mount on Mac
+// The git-coordinate form is exactly `repoKey()` (the `PeerMeta.repo` wire
+// value) with the branch appended — path and wire identity stay in step.
+//
+// The older `/gh/…`, `/git/…`, `/host/…`, `/dev/…` forms are still parsed
+// (live links, and daemons of many npm versions print them); only the emitted
+// form changed.
 
 import type { PeerInfo, PeerMeta } from "./signaling";
 
@@ -21,12 +36,20 @@ export interface RepoTarget {
   branch?: string;
   /**
    * Pin resolution to one machine (PeerMeta.host, e.g. "Mac"), from a
-   * `?machine=<hostname>` query param — deliberately not named `host` since
-   * that already means the *git* host above. When set, resolveRepoTarget only
-   * considers daemons on that machine and fails (null) rather than silently
-   * picking a different one — same repo, multiple machines, no ambiguity.
+   * `<user>@<machine>` path prefix or a legacy `?machine=<hostname>` query
+   * param — deliberately not named `host` since that already means the *git*
+   * host above. When set, resolveRepoTarget only considers daemons on that
+   * machine and fails (null) rather than silently picking a different one.
+   *
+   * It also flips the link's meaning from *lookup* to *provision*: pinned to a
+   * machine, "the repo isn't checked out there yet" is an instruction to clone
+   * it (the `.codehost/` setup hook, see src/cli/init.ts), not a miss.
    */
   machine?: string;
+  /** Optional account from a `<user>@<machine>` prefix (PeerMeta.user). A
+   *  disambiguating hint only — matching is by machine, since usernames change
+   *  and the stable identity is PeerMeta.hostId. */
+  user?: string;
 }
 
 /** A direct folder mount address: host-scoped `/host/<hostname>/<path>`, or the
@@ -35,6 +58,8 @@ export interface RepoTarget {
 export interface DevTarget {
   /** Hostname the workspace lives on; undefined for a legacy host-agnostic link. */
   host?: string;
+  /** Optional account from a `<user>@<machine>` prefix (see RepoTarget.user). */
+  user?: string;
   path: string;
 }
 
@@ -44,22 +69,51 @@ export type DeepLink =
   | { type: "hostSettings"; host: string }
   | null;
 
+/** A dotted, hostname-shaped segment: "github.com", "git.example.co.uk". Used to
+ *  tell a git host from a filesystem segment — a leading-dot name (".config") or
+ *  a Windows drive ("C:") deliberately fails. */
+const HOSTNAME_RE = /^[a-z0-9-]+(?:\.[a-z0-9-]+)+$/i;
+/** `<user>@<machine>` or `@<machine>` — the machine-scope sigil. */
+const MACHINE_RE = /^([^/@]*)@([^/@]+)$/;
+
 /**
- * Parse a deep-link pathname:
- *   /gh/<owner>/<repo>(/tree/<branch>)            -> GitHub repo target
- *   /git/<host>/<owner>/<repo>(/tree/<branch>)    -> any-host repo target
- *   /host/<hostname>/<fs-path>                    -> host-scoped folder mount
- *   /host/<hostname>                              -> that host's settings page
- *   /dev/<fs-path>                                -> legacy host-agnostic folder mount
+ * Parse a deep-link pathname. Current forms:
+ *   /<git-host>/<owner>/<repo>(/tree/<branch>)             -> repo lookup
+ *   /<user>@<machine>/<git-host>/<owner>/<repo>(/tree/…)   -> repo pinned to a machine
+ *   /<user>@<machine>/<fs-path>                            -> folder mount on a machine
+ *   /<user>@<machine>                                      -> that machine's settings page
+ * The `<user>` half may be empty ("/@Mac/…"). Legacy forms still parsed:
+ *   /gh/<owner>/<repo>(/tree/<branch>), /git/<host>/<owner>/<repo>(/tree/<branch>),
+ *   /host/<hostname>(/<fs-path>), /dev/<fs-path>
  * Branch may contain slashes. Anything else -> null (normal app).
  *
  * `search` (the URL's query string, e.g. from location.search) is only
- * consulted for a `machine=<hostname>` param on repo links — a `?`-suffixed
- * pathname also works since everything after `?` is ignored by the path regexes.
+ * consulted for a legacy `machine=<hostname>` param on repo links — a
+ * `?`-suffixed pathname also works since everything after `?` is ignored by the
+ * path regexes. A `<user>@<machine>` prefix wins over the query param.
  */
 export function parseDeepLink(pathname: string, search = ""): DeepLink {
   const clean = pathname.replace(/\/+$/, "");
   const machine = new URLSearchParams(search).get("machine") || undefined;
+
+  // Machine-scoped: peel the `<user>@<machine>` prefix, then re-run the
+  // git-host / fs-path decision on the remainder.
+  const scoped = clean.match(/^\/([^/]+)(?:\/(.*))?$/);
+  const mach = scoped && MACHINE_RE.exec(decodeURIComponent(scoped[1]));
+  if (scoped && mach) {
+    const user = mach[1] || undefined;
+    const host = mach[2];
+    const rest = scoped[2] ?? "";
+    if (!rest) return { type: "hostSettings", host };
+    const repo = matchRepoPath(rest);
+    if (repo) return { type: "repo", target: { ...repo, machine: host, user } };
+    return { type: "dev", target: { host, user, path: `/${rest.replace(/^\/+/, "")}` } };
+  }
+
+  // Unscoped git coordinate: /<git-host>/<owner>/<repo>(/tree/<branch>).
+  const bare = matchRepoPath(clean.replace(/^\/+/, ""));
+  if (bare) return { type: "repo", target: { ...bare, machine } };
+
   const gh = clean.match(/^\/gh\/([^/]+)\/([^/]+)(?:\/tree\/(.+))?$/);
   if (gh) {
     return {
@@ -89,6 +143,15 @@ export function parseDeepLink(pathname: string, search = ""): DeepLink {
     return { type: "dev", target: { path: `/${dev[1].replace(/^\/+/, "")}` } };
   }
   return null;
+}
+
+/** `<git-host>/<owner>/<repo>(/tree/<branch>)` (no leading slash) -> its repo
+ *  coordinate, or null when the first segment isn't a hostname — which is how a
+ *  filesystem path under a machine scope is told apart from a git coordinate. */
+function matchRepoPath(rest: string): Pick<RepoTarget, "host" | "owner" | "name" | "branch"> | null {
+  const m = rest.match(/^([^/]+)\/([^/]+)\/([^/]+)(?:\/tree\/(.+))?$/);
+  if (!m || !HOSTNAME_RE.test(m[1])) return null;
+  return { host: m[1].toLowerCase(), owner: m[2], name: m[3], branch: m[4] };
 }
 
 /** Normalized repo key, e.g. "github.com/owner/repo" — matches PeerMeta.repo. */
@@ -138,42 +201,52 @@ export function fillLayout(layout: string, t: RepoTarget): string {
 
 /**
  * Shareable deep-link pathname for a connected workspace. A git-identified
- * server renders `/gh/<owner>/<repo>` for GitHub or `/git/<host>/<owner>/<repo>`
- * for any other host (with `/tree/<branch>` when known); a non-git workspace is
- * addressed by its opened folder, scoped to its hostname as `/host/<host>/<path>`
- * (or the legacy `/dev/<path>` when no host is known). Round-trips through
- * parseDeepLink + resolve{Repo,Dev}Target so another room member opening it
- * lands here. Returns null when there's nothing addressable.
+ * server renders `/<git-host>/<owner>/<repo>` (with `/tree/<branch>` when
+ * known); a non-git workspace is addressed by its opened folder under its
+ * machine scope, `/<user>@<machine>/<path>` (or the legacy `/dev/<path>` when
+ * no machine is known). A repo link gains the same `<user>@<machine>` prefix
+ * only when `machine` is set — unpinned it resolves against whichever machine
+ * has the repo, pinned it says "this machine, cloning if need be".
+ * Round-trips through parseDeepLink + resolve{Repo,Dev}Target. Returns null
+ * when there's nothing addressable.
  */
 export function shareableDeepLink(opts: {
   repo?: string;
   branch?: string;
   folder?: string;
   host?: string;
-  /** Preserve a `?machine=<hostname>` pin (see RepoTarget.machine) across
-   *  URL canonicalization — repo links only; a folder mount is already
-   *  host-scoped via its path. */
+  /** Machine to pin to (see RepoTarget.machine). */
   machine?: string;
+  /** Account shown in the `<user>@<machine>` prefix (PeerMeta.user); the
+   *  machine alone is enough, so this is cosmetic. */
+  user?: string;
 }): string | null {
   if (opts.repo) {
     const [host, owner, name] = opts.repo.split("/");
     if (host && owner && name) {
-      const base = host === GITHUB_HOST ? `/gh/${owner}/${name}` : `/git/${host}/${owner}/${name}`;
+      const base = `/${host}/${owner}/${name}`;
       const path = opts.branch ? `${base}/tree/${opts.branch}` : base;
-      return opts.machine ? `${path}?machine=${encodeURIComponent(opts.machine)}` : path;
+      return opts.machine ? `/${machineScope(opts.machine, opts.user)}${path}` : path;
     }
   }
   if (opts.folder) {
     const path = opts.folder.replace(/^\/+/, "");
-    return opts.host ? `/host/${opts.host}/${path}` : `/dev/${path}`;
+    const machine = opts.machine ?? opts.host;
+    return machine ? `/${machineScope(machine, opts.user)}/${path}` : `/dev/${path}`;
   }
   return null;
 }
 
+/** The `<user>@<machine>` path segment; the user half is optional ("@Mac"). */
+function machineScope(machine: string, user?: string): string {
+  return `${encodeURIComponent(user ?? "")}@${encodeURIComponent(machine)}`;
+}
+
 /**
- * Turn a pasted git repo URL into a codehost deep-link path: github.com ->
- * `/gh/<owner>/<repo>`, any other host -> `/git/<host>/<owner>/<repo>`,
- * preserving `/tree/<branch>`. Accepts with or without a scheme, an `scp`-style
+ * Turn a pasted git repo URL into a codehost deep-link path — which, with the
+ * host in the path, is near-identity: strip the scheme and keep
+ * `<host>/<owner>/<repo>`, preserving `/tree/<branch>`. Accepts with or without
+ * a scheme, an `scp`-style
  * `git@host:owner/repo`, a trailing `.git`, query/hash, and a branch containing
  * slashes. Returns null when it isn't a recognizable repo URL — lets the "open a
  * GitHub URL" box reuse the same resolution as a typed deep link.

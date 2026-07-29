@@ -74,7 +74,58 @@ describe("parseGitRemote", () => {
 });
 
 describe("parseDeepLink + repoKey round-trip", () => {
-  test("/gh/owner/repo -> github.com key", () => {
+  test("/<git-host>/owner/repo -> that host's key", () => {
+    const dl = parseDeepLink("/github.com/snomiao/codehost/tree/main");
+    expect(dl?.type).toBe("repo");
+    if (dl?.type === "repo") {
+      expect(repoKey(dl.target)).toBe("github.com/snomiao/codehost");
+      expect(dl.target.branch).toBe("main");
+      expect(dl.target.machine).toBeUndefined();
+    }
+  });
+
+  test("/<user>@<machine>/<git-host>/owner/repo pins the machine", () => {
+    const dl = parseDeepLink("/sno@Mac/github.com/snomiao/codehost/tree/main");
+    expect(dl?.type).toBe("repo");
+    if (dl?.type === "repo") {
+      expect(repoKey(dl.target)).toBe("github.com/snomiao/codehost");
+      expect(dl.target.machine).toBe("Mac");
+      expect(dl.target.user).toBe("sno");
+      expect(dl.target.branch).toBe("main");
+    }
+  });
+
+  test("the user half is optional (/@Mac/...)", () => {
+    const dl = parseDeepLink("/@Mac/github.com/snomiao/codehost");
+    expect(dl?.type === "repo" && dl.target.machine).toBe("Mac");
+    expect(dl?.type === "repo" && dl.target.user).toBeUndefined();
+  });
+
+  test("/<user>@<machine>/<fs-path> -> folder mount on that machine", () => {
+    const dl = parseDeepLink("/sno@Mac/Users/sno/ws");
+    expect(dl?.type === "dev" && dl.target.host).toBe("Mac");
+    expect(dl?.type === "dev" && dl.target.user).toBe("sno");
+    expect(dl?.type === "dev" && dl.target.path).toBe("/Users/sno/ws");
+  });
+
+  test("a Windows drive path under a machine scope isn't mistaken for a git host", () => {
+    const path = shareableDeepLink({ folder: toPosixPath("C:\\ws"), machine: "Win", user: "sno" })!;
+    expect(path).toBe("/sno@Win/C:/ws");
+    const dl = parseDeepLink(path);
+    expect(dl?.type === "dev" && dl.target.path).toBe("/C:/ws");
+  });
+
+  test("a dotfile path segment isn't mistaken for a git host", () => {
+    const dl = parseDeepLink("/sno@Mac/.config/codehost");
+    expect(dl?.type === "dev" && dl.target.path).toBe("/.config/codehost");
+  });
+
+  test("/<user>@<machine> alone -> that machine's settings page", () => {
+    const dl = parseDeepLink("/sno@Mac");
+    expect(dl?.type === "hostSettings" && dl.host).toBe("Mac");
+  });
+
+  test("legacy /gh/owner/repo -> github.com key", () => {
     const dl = parseDeepLink("/gh/snomiao/codehost");
     expect(dl?.type).toBe("repo");
     if (dl?.type === "repo") {
@@ -83,12 +134,12 @@ describe("parseDeepLink + repoKey round-trip", () => {
     }
   });
 
-  test("/gh/owner/repo/tree/branch keeps the branch (slashes allowed)", () => {
+  test("legacy /gh/owner/repo/tree/branch keeps the branch (slashes allowed)", () => {
     const dl = parseDeepLink("/gh/snomiao/codehost/tree/feat/x");
     expect(dl?.type === "repo" && dl.target.branch).toBe("feat/x");
   });
 
-  test("/git/<host>/owner/repo -> that host's key", () => {
+  test("legacy /git/<host>/owner/repo -> that host's key", () => {
     const dl = parseDeepLink("/git/gitlab.com/group/proj/tree/dev");
     expect(dl?.type).toBe("repo");
     if (dl?.type === "repo") {
@@ -97,7 +148,7 @@ describe("parseDeepLink + repoKey round-trip", () => {
     }
   });
 
-  test("/dev/<path> -> dev target with leading slash", () => {
+  test("legacy /dev/<path> -> dev target with leading slash", () => {
     const dl = parseDeepLink("/dev/Users/sno/ws");
     expect(dl?.type === "dev" && dl.target.path).toBe("/Users/sno/ws");
   });
@@ -105,20 +156,20 @@ describe("parseDeepLink + repoKey round-trip", () => {
   test("/dev/<Windows drive path> round-trips (colon in a non-leading segment)", () => {
     // shareableDeepLink -> address bar -> parseDeepLink must preserve /C:/ws.
     const path = shareableDeepLink({ folder: toPosixPath("C:\\ws") })!;
-    expect(path).toBe("/dev/C:/ws");
+    expect(path).toBe("/dev/C:/ws"); // no machine known -> legacy host-agnostic form
     const dl = parseDeepLink(path);
     expect(dl?.type === "dev" && dl.target.path).toBe("/C:/ws");
   });
 
-  test("/host/<hostname>/<path> -> host-scoped dev target", () => {
+  test("legacy /host/<hostname>/<path> -> host-scoped dev target", () => {
     const dl = parseDeepLink("/host/Mac/Users/taku");
     expect(dl?.type === "dev" && dl.target.host).toBe("Mac");
     expect(dl?.type === "dev" && dl.target.path).toBe("/Users/taku");
   });
 
-  test("/host/<hostname>/<Windows drive path> round-trips", () => {
+  test("a machine-scoped Windows drive path round-trips", () => {
     const path = shareableDeepLink({ folder: "/C:/ws", host: "EC2AMAZ-PH8C4K1" })!;
-    expect(path).toBe("/host/EC2AMAZ-PH8C4K1/C:/ws");
+    expect(path).toBe("/@EC2AMAZ-PH8C4K1/C:/ws");
     const dl = parseDeepLink(path);
     expect(dl?.type === "dev" && dl.target.host).toBe("EC2AMAZ-PH8C4K1");
     expect(dl?.type === "dev" && dl.target.path).toBe("/C:/ws");
@@ -135,7 +186,7 @@ describe("parseDeepLink + repoKey round-trip", () => {
     expect(parseDeepLink("/settings")).toBeNull();
   });
 
-  test("?machine=<hostname> pins a repo link; absent by default", () => {
+  test("legacy ?machine=<hostname> pins a repo link; absent by default", () => {
     const pinned = parseDeepLink("/gh/snomiao/codehost", "?machine=Mac");
     expect(pinned?.type === "repo" && pinned.target.machine).toBe("Mac");
     const unpinned = parseDeepLink("/gh/snomiao/codehost");
@@ -172,22 +223,35 @@ describe("resolveDevTarget host scoping", () => {
 });
 
 describe("shareableDeepLink", () => {
-  test("GitHub repo -> /gh sugar", () => {
+  test("repo -> /<git-host>/<owner>/<repo>, host in the path", () => {
     expect(shareableDeepLink({ repo: "github.com/snomiao/codehost", branch: "main" })).toBe(
-      "/gh/snomiao/codehost/tree/main",
+      "/github.com/snomiao/codehost/tree/main",
     );
-    expect(shareableDeepLink({ repo: "github.com/snomiao/codehost" })).toBe("/gh/snomiao/codehost");
-  });
-
-  test("other host -> /git/<host>/...", () => {
+    expect(shareableDeepLink({ repo: "github.com/snomiao/codehost" })).toBe(
+      "/github.com/snomiao/codehost",
+    );
     expect(shareableDeepLink({ repo: "gitlab.com/group/proj", branch: "dev" })).toBe(
-      "/git/gitlab.com/group/proj/tree/dev",
+      "/gitlab.com/group/proj/tree/dev",
     );
   });
 
-  test("no repo -> /dev/<folder> (Windows drive path preserved)", () => {
+  test("a pinned repo gains the <user>@<machine> prefix", () => {
+    expect(
+      shareableDeepLink({
+        repo: "github.com/snomiao/codehost",
+        branch: "main",
+        machine: "Mac",
+        user: "sno",
+      }),
+    ).toBe("/sno@Mac/github.com/snomiao/codehost/tree/main");
+  });
+
+  test("no repo -> machine-scoped folder, or /dev/<folder> when no machine is known", () => {
     expect(shareableDeepLink({ folder: "/C:/ws" })).toBe("/dev/C:/ws");
     expect(shareableDeepLink({ folder: "/Users/sno/ws" })).toBe("/dev/Users/sno/ws");
+    expect(shareableDeepLink({ folder: "/Users/sno/ws", host: "Mac", user: "sno" })).toBe(
+      "/sno@Mac/Users/sno/ws",
+    );
   });
 
   test("nothing addressable -> null", () => {
@@ -241,6 +305,19 @@ describe("resolveRepoTarget machine pin", () => {
   test("machine pin with no live daemon on that machine fails loud (null), no silent fallback", () => {
     const servers = [root("other", "Other", "/x")];
     expect(resolveRepoTarget(servers, { ...target, machine: "Mac" })).toBeNull();
+  });
+
+  test("pinned to a machine that hasn't checked the repo out -> the layout path to provision into", () => {
+    // The point of /<user>@<machine>/<git-host>/…: not "who already has this
+    // repo?" but "put it on this machine" — the root daemon's setup hook clones
+    // into the synthesized layout path.
+    const res = resolveRepoTarget([root("mac", "Mac", "/Users/sno/ws")], {
+      ...target,
+      branch: "main",
+      machine: "Mac",
+      user: "sno",
+    });
+    expect(res).toEqual({ peerId: "mac", folder: "/Users/sno/ws/snomiao/codehost/tree/main" });
   });
 });
 
@@ -354,19 +431,19 @@ describe("resolveRepoTarget machine preference (history)", () => {
 });
 
 describe("gitUrlToPath", () => {
-  test("github URLs -> /gh, preserving branch (incl. slashes)", () => {
-    expect(gitUrlToPath("https://github.com/snomiao/codehost")).toBe("/gh/snomiao/codehost");
-    expect(gitUrlToPath("https://github.com/snomiao/codehost/tree/main")).toBe("/gh/snomiao/codehost/tree/main");
-    expect(gitUrlToPath("github.com/snomiao/codehost")).toBe("/gh/snomiao/codehost");
-    expect(gitUrlToPath("https://github.com/snomiao/codehost.git")).toBe("/gh/snomiao/codehost");
-    expect(gitUrlToPath("https://github.com/snomiao/codehost/tree/feat/x")).toBe("/gh/snomiao/codehost/tree/feat/x");
-    expect(gitUrlToPath("https://github.com/snomiao/codehost/")).toBe("/gh/snomiao/codehost");
-    expect(gitUrlToPath("https://github.com/snomiao/codehost?tab=readme#x")).toBe("/gh/snomiao/codehost");
+  test("a repo URL is near-identity: drop the scheme, keep the host", () => {
+    expect(gitUrlToPath("https://github.com/snomiao/codehost")).toBe("/github.com/snomiao/codehost");
+    expect(gitUrlToPath("https://github.com/snomiao/codehost/tree/main")).toBe("/github.com/snomiao/codehost/tree/main");
+    expect(gitUrlToPath("github.com/snomiao/codehost")).toBe("/github.com/snomiao/codehost");
+    expect(gitUrlToPath("https://github.com/snomiao/codehost.git")).toBe("/github.com/snomiao/codehost");
+    expect(gitUrlToPath("https://github.com/snomiao/codehost/tree/feat/x")).toBe("/github.com/snomiao/codehost/tree/feat/x");
+    expect(gitUrlToPath("https://github.com/snomiao/codehost/")).toBe("/github.com/snomiao/codehost");
+    expect(gitUrlToPath("https://github.com/snomiao/codehost?tab=readme#x")).toBe("/github.com/snomiao/codehost");
   });
 
-  test("other hosts + scp form -> /git/<host>/...", () => {
-    expect(gitUrlToPath("https://gitlab.com/group/proj/tree/dev")).toBe("/git/gitlab.com/group/proj/tree/dev");
-    expect(gitUrlToPath("git@github.com:snomiao/codehost.git")).toBe("/gh/snomiao/codehost");
+  test("other hosts + scp form keep their host too", () => {
+    expect(gitUrlToPath("https://gitlab.com/group/proj/tree/dev")).toBe("/gitlab.com/group/proj/tree/dev");
+    expect(gitUrlToPath("git@github.com:snomiao/codehost.git")).toBe("/github.com/snomiao/codehost");
   });
 
   test("non-repo / junk -> null", () => {

@@ -1,6 +1,6 @@
 // Persists which rooms you've joined and which repo opened where, so a deep
-// link (/gh/<owner>/<repo>/...) can resolve to the right room + server without
-// re-entering a token. Keyed by repoKey ("gh/owner/repo").
+// link (/<git-host>/<owner>/<repo>/...) can resolve to the right room + server
+// without re-entering a token. Keyed by repoKey ("github.com/owner/repo").
 
 const ROOMS_KEY = "codehost.rooms";
 const HISTORY_KEY = "codehost.history";

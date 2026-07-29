@@ -2,9 +2,9 @@ import { spawnSync } from "node:child_process";
 
 // Derive a normalized, host-agnostic repo identity ("<host>/<owner>/<repo>") +
 // branch from a git working tree, so a `codehost dev` daemon can be addressed by
-// deep links (/gh/<owner>/<repo> for GitHub, /git/<host>/<owner>/<repo> for any
-// other host). Best-effort: returns undefined fields off git / off a recognized
-// remote.
+// deep links (/<git-host>/<owner>/<repo>, optionally machine-scoped as
+// /<user>@<machine>/<git-host>/<owner>/<repo>). Best-effort: returns undefined
+// fields off git / off a recognized remote.
 
 export interface RepoIdentity {
   /** Normalized identity, e.g. "github.com/snomiao/codehost". */

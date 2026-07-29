@@ -9,6 +9,7 @@ import { registerTunnelHost } from "./tunnel-host";
 import { connBroker } from "./conn-broker";
 import {
   DEFAULT_BRANCH,
+  GITHUB_HOST,
   type DeepLink,
   type RepoTarget,
   type ResolvePrefs,
@@ -129,28 +130,37 @@ function folderQuery(folder?: string): string {
 }
 
 /** Human label for a connected workspace: its GitHub-style URL when the share
- *  path is repo-shaped (/gh/owner/repo -> github.com/owner/repo, /git/<host>/…
- *  -> <host>/…), else the deep-link path as-is. */
+ *  path is repo-shaped (/github.com/owner/repo, or a machine-scoped
+ *  /sno@Mac/github.com/owner/repo), else the deep-link path as-is. */
 function shareLabel(path: string | null): string | null {
   if (!path) return null;
-  const gh = path.match(/^\/gh\/(.+)$/);
-  if (gh) return `github.com/${gh[1]}`;
-  const git = path.match(/^\/git\/(.+)$/);
-  if (git) return git[1];
+  const repo = repoPathOf(path);
+  if (repo) return repo;
   return path;
 }
 
+/** The `<git-host>/<owner>/<repo>(/tree/<branch>)` tail of a share path, with any
+ *  `<user>@<machine>` scope prefix dropped — null for folder mounts. Also reads
+ *  the legacy /gh/ and /git/ forms so old links still label/link out. */
+function repoPathOf(path: string): string | null {
+  const rest = path.replace(/^\/[^/]*@[^/]+/, "");
+  const gh = rest.match(/^\/gh\/(.+)$/);
+  if (gh) return `${GITHUB_HOST}/${gh[1]}`;
+  const git = rest.match(/^\/git\/(.+)$/);
+  if (git) return git[1];
+  const dl = parseDeepLink(rest);
+  if (dl?.type !== "repo") return null;
+  return rest.replace(/^\//, "");
+}
+
 /** External URL for a repo-shaped share path, so the connected-view label can
- *  link out to the real host: /gh/owner/repo/tree/x -> https://github.com/owner/repo/tree/x,
- *  /git/<host>/… -> https://<host>/… . Null for non-repo paths (folder mounts),
- *  which have no public URL. */
+ *  link out to the real host: /github.com/owner/repo/tree/x ->
+ *  https://github.com/owner/repo/tree/x. Null for non-repo paths (folder
+ *  mounts), which have no public URL. */
 function shareHref(path: string | null): string | null {
   if (!path) return null;
-  const gh = path.match(/^\/gh\/(.+)$/);
-  if (gh) return `https://github.com/${gh[1]}`;
-  const git = path.match(/^\/git\/(.+)$/);
-  if (git) return `https://${git[1]}`;
-  return null;
+  const repo = repoPathOf(path);
+  return repo ? `https://${repo}` : null;
 }
 
 /**
@@ -341,8 +351,8 @@ export function Discovery() {
   const [editingToken, setEditingToken] = useState(false);
   const [tokenError, setTokenError] = useState<string | null>(null);
 
-  // "Open a GitHub repo" box: paste a github.com URL -> navigate to its /gh/
-  // deep link, which resolves/opens (and, once provisioning lands, materializes)
+  // "Open a GitHub repo" box: paste a github.com URL -> navigate to its
+  // /<git-host>/<owner>/<repo> deep link, which resolves/opens (and, once provisioning lands, materializes)
   // the workspace.
   const [ghUrl, setGhUrl] = useState("");
   const [ghError, setGhError] = useState<string | null>(null);
@@ -409,7 +419,8 @@ export function Discovery() {
   const allServersRef = useRef<RoomedServer[]>([]);
   const connStateRef = useRef<ConnState>("idle");
 
-  // Deep-link resolution (/gh/<owner>/<repo>/... or /dev/<path>): parse once,
+  // Deep-link resolution (/<git-host>/<owner>/<repo>/..., /<user>@<machine>/...):
+  // parse once,
   // auto-connect when a matching server appears, remember the opened folder.
   const deepLinkRef = useRef<DeepLink>(parseDeepLink(window.location.pathname, window.location.search));
   const resolvedRef = useRef(false);
@@ -955,13 +966,20 @@ export function Discovery() {
     // matching the worktree fillLayout actually opened.
     if (dl?.type === "repo") {
       const branch = dl.target.branch ?? server.meta?.branch ?? DEFAULT_BRANCH;
-      return shareableDeepLink({ repo: repoKey(dl.target), branch, machine: dl.target.machine });
+      return shareableDeepLink({
+        repo: repoKey(dl.target),
+        branch,
+        machine: dl.target.machine,
+        user: dl.target.user ?? server.meta?.user,
+      });
     }
     if (server.meta?.repo) {
       return shareableDeepLink({ repo: server.meta.repo, branch: server.meta.branch ?? DEFAULT_BRANCH });
     }
     // Folder mount: keep the deep-link path as-is, else derive the host-scoped one.
-    return dl ? window.location.pathname : shareableDeepLink({ folder, host: server.meta?.host });
+    return dl
+      ? window.location.pathname
+      : shareableDeepLink({ folder, host: server.meta?.host, user: server.meta?.user });
   }
 
   async function shareLink() {
@@ -1102,7 +1120,7 @@ export function Discovery() {
   function openWorkspace(server: PeerInfo, w: WorkspaceInfo) {
     const path = w.repo
       ? shareableDeepLink({ repo: w.repo, branch: w.branch })
-      : shareableDeepLink({ folder: w.path, host: server.meta?.host });
+      : shareableDeepLink({ folder: w.path, host: server.meta?.host, user: server.meta?.user });
     if (!path) return;
     history.pushState(null, "", path);
     setResolving(deepLinkLabel(parseDeepLink(path)));

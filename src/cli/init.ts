@@ -7,7 +7,7 @@ import { join } from "node:path";
 
 export const CONFIG_YAML = `# codehost workspace config — see docs/provisioning.md
 
-# Where /gh/<owner>/<repo>/tree/<branch> lands, relative to this served root
+# Where /<git-host>/<owner>/<repo>/tree/<branch> lands, relative to this served root
 # (serve a dedicated workspace dir like ~/ws — never \$HOME itself).
 workspace: "{owner}/{repo}/tree/{branch}"
 
@@ -19,7 +19,7 @@ workspace: "{owner}/{repo}/tree/{branch}"
 `;
 
 export const SETUP_SH = `#!/usr/bin/env bash
-# codehost provisioning hook. Runs on every open of /gh/<owner>/<repo>/tree/<branch>
+# codehost provisioning hook. Runs on every open of a repo deep link
 # BEFORE the editor opens CODEHOST_WS. Keep it idempotent: clone/worktree if
 # missing, fast-skip if present. Edit freely (install deps, pull/rebase policy…).
 #

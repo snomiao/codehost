@@ -20,7 +20,7 @@ export const openCommand: CommandModule<{}, OpenArgs> = {
     y
       .positional("target", {
         describe:
-          "What to open: a repo (owner/repo, a git URL, or gh/git/host/dev path) or a full URL. Omit to use the git repo in the current directory.",
+          "What to open: a repo (owner/repo, a git URL, or a deep-link path like <user>@<machine>/github.com/<owner>/<repo>) or a full URL. Omit to use the git repo in the current directory.",
         type: "string",
       })
       .option("token", {
@@ -72,7 +72,7 @@ function buildUrl(argv: OpenArgs): string {
 function pathFromTarget(target: string): string {
   const clean = target.replace(/^\/+/, "");
   // Already a known deep-link shape — pass through.
-  if (/^(gh|git|host|dev)\//.test(clean)) return `/${clean}`;
+  if (/^(gh|git|host|dev)\//.test(clean) || /^[^/]*@[^/@]+(\/|$)/.test(clean)) return `/${clean}`;
   // A git URL / scp / host/owner/repo (dotted host), incl. /tree/<branch>.
   const fromUrl = gitUrlToPath(target);
   if (fromUrl) return fromUrl;

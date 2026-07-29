@@ -71,7 +71,7 @@ export interface PeerMeta {
   /**
    * OS login name of whoever launched the daemon — the web UI shows it as the
    * `user@host` label in front of the workspace URL, so you can tell which
-   * machine/account is actually serving a `codehost.dev/gh/...` link. Absent on
+   * machine/account is actually serving a `codehost.dev/<git-host>/<owner>/<repo>` link. Absent on
    * older daemons (and in environments with no passwd entry) — fall back to `host`.
    */
   user?: string;
