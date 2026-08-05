@@ -1,3 +1,10 @@
+## [0.35.2](https://github.com/snomiao/codehost/compare/v0.35.1...v0.35.2) (2026-08-05)
+
+
+### Bug Fixes
+
+* **daemon:** pass propagated flags as --flag=value so a leading-dash token works ([652bd66](https://github.com/snomiao/codehost/commit/652bd66b0aa746a78fc8b8b1a8c375f6b4d3c48a))
+
 ## [0.35.1](https://github.com/snomiao/codehost/compare/v0.35.0...v0.35.1) (2026-07-29)
 
 
