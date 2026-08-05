@@ -92,7 +92,9 @@ export async function startDaemon(opts: DaemonizeOptions): Promise<boolean> {
 
   const ok =
     ox(
-      ["start", opts.command, "--name", opts.name, "--cwd", opts.cwd, "--restart", "on-failure"],
+      // `--flag=value` for the same reason as buildForegroundArgv: oxmgr's clap
+      // parser would read a value starting with "-" as another flag.
+      [`start`, opts.command, `--name=${opts.name}`, `--cwd=${opts.cwd}`, `--restart=on-failure`],
       { stdio: "inherit" },
     ) === 0;
   if (ok) enableStartup();

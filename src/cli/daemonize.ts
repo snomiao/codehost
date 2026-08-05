@@ -79,19 +79,26 @@ export async function launchServeDaemon(opts: ServeDaemonOptions): Promise<Serve
  * array. Uses the same runtime + entry script that launched us, so it works both
  * for `bunx codehost` and local `bun src/cli/index.ts`. oxmgr takes a shell
  * string (we quote+join); the fallback spawns the argv directly.
+ *
+ * Exported for the regression test in daemonize.test.ts.
  */
-function buildForegroundArgv(opts: ServeDaemonOptions): string[] {
-  const parts = [process.execPath, process.argv[1], opts.command ?? "serve", opts.arg ?? opts.dir, "-t", opts.token, "--signal", opts.signal];
-  if (opts.name) parts.push("--name", opts.name);
-  if (opts.port) parts.push("--port", String(opts.port));
+export function buildForegroundArgv(opts: ServeDaemonOptions): string[] {
+  // `--flag=value`, not `--flag value`: tokens are nanoid-style and may start
+  // with "-", which yargs would otherwise parse as a cluster of short flags —
+  // the value vanishes, the required --token is missing, and the daemon exits
+  // printing help before oxmgr ever sees it run. Same latent trap for --name
+  // (a hostname) and --allow (a pattern).
+  const parts = [process.execPath, process.argv[1], opts.command ?? "serve", opts.arg ?? opts.dir, `--token=${opts.token}`, `--signal=${opts.signal}`];
+  if (opts.name) parts.push(`--name=${opts.name}`);
+  if (opts.port) parts.push(`--port=${opts.port}`);
   // An oxmgr-managed `dev` must stay a real daemon across restarts/reboots —
   // never collapse into register-with-the-host-daemon-and-exit (oxmgr would
   // see an instant exit and thrash).
   if ((opts.command ?? "serve") === "dev") parts.push("--standalone");
   // A backgrounded daemon has no terminal, so "confirm" can only admit clients
   // that match an --allow pattern; we still propagate it so that works.
-  if (opts.approve && opts.approve !== "auto") parts.push("--approve", opts.approve);
-  for (const pat of opts.allow ?? []) parts.push("--allow", pat);
+  if (opts.approve && opts.approve !== "auto") parts.push(`--approve=${opts.approve}`);
+  for (const pat of opts.allow ?? []) parts.push(`--allow=${pat}`);
   return parts;
 }
 

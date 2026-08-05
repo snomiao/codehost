@@ -112,7 +112,9 @@ function startWindowsPm2(name: string, cwd: string, argv: string[], log: string)
 /** POSIX: detached, unref'd supervisor child that survives as an orphan. */
 function startUnixSupervisor(name: string, log: string): boolean {
   const fd = openSync(log, "a");
-  const proc = spawn([process.execPath, process.argv[1], "__supervise", "--name", name], {
+  // `--name=` (not `--name <v>`): a name starting with "-" would otherwise be
+  // parsed as flags by the supervisor's yargs, same trap as buildForegroundArgv.
+  const proc = spawn([process.execPath, process.argv[1], `__supervise`, `--name=${name}`], {
     stdin: "ignore",
     stdout: fd,
     stderr: fd,
