@@ -40,6 +40,11 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { GIT_NO_PROMPT_ENV, hasGitCredentials } from "./git-auth";
 
+// Auth probes/hints are part of the provision surface: consumers (agent-yes's
+// `ay ws`, embedders) need the same "is this a private repo or a missing
+// login?" diagnosis the daemon streams.
+export { GIT_AUTH_ERROR_RE, GIT_NO_PROMPT_ENV, gitAuthHint, hasGhCli, hasGitCredentials } from "./git-auth";
+
 const execFileP = promisify(execFile);
 
 /** Default workspace root when nothing else is configured (`~/ws`). */
