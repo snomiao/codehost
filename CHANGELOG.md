@@ -1,3 +1,10 @@
+## [0.35.3](https://github.com/snomiao/codehost/compare/v0.35.2...v0.35.3) (2026-08-06)
+
+
+### Bug Fixes
+
+* **daemon:** install the oxmgr login service before starting, not after ([d5d0d29](https://github.com/snomiao/codehost/commit/d5d0d29fd821fcd9cfff3e5187d6b242bde352e5))
+
 ## [0.35.2](https://github.com/snomiao/codehost/compare/v0.35.1...v0.35.2) (2026-08-05)
 
 
