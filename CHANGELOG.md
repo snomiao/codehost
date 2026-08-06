@@ -1,3 +1,10 @@
+# [0.37.0](https://github.com/snomiao/codehost/compare/v0.36.0...v0.37.0) (2026-08-06)
+
+
+### Features
+
+* **web:** present rooms as Hosts, disambiguating name collisions minimally ([7490ad4](https://github.com/snomiao/codehost/commit/7490ad4926aee0afc0f61ca13b95d27104f7160e))
+
 # [0.36.0](https://github.com/snomiao/codehost/compare/v0.35.3...v0.36.0) (2026-08-06)
 
 
