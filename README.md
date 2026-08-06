@@ -123,6 +123,25 @@ bun run build        # builds dist/public (app + /sw.js)
 In local dev the page (on `localhost`) auto-targets `ws://localhost:8787`;
 override the signaling URL anytime via `localStorage["codehost.signal"]`.
 
+### Local page at https://codehost.localhost (optional)
+
+If you iterate on the page a lot, [portless](https://npmjs.com/package/portless)
+gives the dev server a stable, port-free HTTPS URL — same-origin storage that
+survives vite picking a different port, and no `:5173` to remember:
+
+```bash
+npm i -g portless
+sudo portless proxy start --https   # one-time: HTTPS proxy on 443 (sudo for the port + local CA trust)
+portless service install            # optional: auto-start the proxy on login
+portless run                        # runs `bun run dev`, routes https://codehost.localhost → vite
+```
+
+Then open `https://codehost.localhost/#t=<your-token>`. To point the local page
+at production signaling (so it sees your real daemons), set
+`localStorage.setItem("codehost.signal", "wss://signal.codehost.dev")` in the
+console and reload. Note a push to `main` deploys codehost.dev via CI — do the
+look-and-feel QA here first, and push when it's right.
+
 ## Deploy
 
 ```bash

@@ -20,6 +20,7 @@ import {
   writeDaemonPresence,
 } from "../registry";
 import { repoIdentity } from "../git";
+import { hasGitCredentials } from "../../provision/git-auth";
 import { runServer } from "../run-server";
 import { launchVscode } from "../vscode";
 import { enumerateWorkspaces } from "../workspaces";
@@ -182,6 +183,18 @@ export const serveCommand: CommandModule<{}, ServeArgs> = {
     // and agents are cheap reads and stay fresh on every call.
     const WORKSPACE_WALK_TTL_MS = 30_000;
     let wsWalk: { at: number; list: ReturnType<typeof enumerateWorkspaces> } | null = null;
+    // GitHub credential readiness, advertised so the page can tell users to
+    // `gh auth login` on THIS host before a private clone fails. Memoized —
+    // the probe shells out to `git credential fill`, too heavy for the 3s
+    // meta poll; 5 min staleness is fine for a login that rarely changes.
+    const GITHUB_AUTH_TTL_MS = 5 * 60_000;
+    let ghAuth: { at: number; ok: boolean } | null = null;
+    const githubAuthState = (): { ok: boolean } => {
+      if (!ghAuth || Date.now() - ghAuth.at > GITHUB_AUTH_TTL_MS) {
+        ghAuth = { at: Date.now(), ok: hasGitCredentials() };
+      }
+      return { ok: ghAuth.ok };
+    };
     const buildFullMeta = (): PeerMeta => {
       // Layout-enumerated checkouts plus directories other `codehost dev` runs
       // registered with this host daemon (git-identified best-effort).
@@ -221,6 +234,7 @@ export const serveCommand: CommandModule<{}, ServeArgs> = {
           hostId: ensureHostId(),
           kind: "root",
           layout,
+          githubAuth: githubAuthState(),
           workspaces,
           ...(folderProvisioning ? { folderProvisioning: true } : {}),
         },

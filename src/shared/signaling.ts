@@ -88,6 +88,13 @@ export interface PeerMeta {
    * Absent is treated as "repo" for backward compatibility.
    */
   kind?: "repo" | "root";
+  /**
+   * Whether git on this host can produce github.com credentials without
+   * prompting — i.e. whether provisioning a private repo can succeed. Probed
+   * with a memoized `git credential fill`. Additive; absent on older daemons
+   * (treat as unknown, not as missing).
+   */
+  githubAuth?: { ok: boolean };
   /** repo kind: host-agnostic identity, e.g. "github.com/snomiao/codehost". */
   repo?: string;
   /** repo kind: current branch, e.g. "main". */

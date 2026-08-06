@@ -38,6 +38,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { GIT_NO_PROMPT_ENV, hasGitCredentials } from "./git-auth";
 
 const execFileP = promisify(execFile);
 
@@ -81,7 +82,7 @@ export type GitStatus = {
  *   - "repo-not-found": the remote repo itself is missing/inaccessible.
  *   - "other": anything else (network, auth, disk, …).
  */
-export type FailReason = "branch-not-found" | "repo-not-found" | "other";
+export type FailReason = "branch-not-found" | "repo-not-found" | "auth-missing" | "other";
 
 export type ProvisionResult = {
   ok: boolean;
@@ -97,8 +98,15 @@ export type ProvisionResult = {
 
 function classifyError(msg: string): FailReason {
   if (/remote branch .* not found/i.test(msg)) return "branch-not-found";
-  if (/repository .* not found|could not read from remote/i.test(msg))
-    return "repo-not-found";
+  // With prompts disabled, a missing-credentials clone fails on the username
+  // read — unambiguously an auth gap, not a bad URL.
+  if (/could not read Username|terminal prompts disabled/i.test(msg)) return "auth-missing";
+  if (/repository .* not found|could not read from remote/i.test(msg)) {
+    // GitHub answers "not found" for private repos it won't admit exist. If
+    // this machine holds no credentials at all, missing auth is the likelier
+    // (and actionable) diagnosis.
+    return hasGitCredentials() ? "repo-not-found" : "auth-missing";
+  }
   return "other";
 }
 
@@ -205,7 +213,9 @@ async function git(
     // would otherwise be misclassified as "other" and hide the Create-branch
     // affordance). LC_ALL=C is load-bearing here — gettext ignores LANGUAGE
     // once the locale resolves to C. `env` replaces (not merges), so spread.
-    env: { ...process.env, LC_ALL: "C", LANG: "C", LANGUAGE: "C" },
+    // GIT_NO_PROMPT_ENV: callers are daemons/servers with no terminal — a
+    // private-repo clone must fail fast, not hang on an invisible prompt.
+    env: { ...process.env, LC_ALL: "C", LANG: "C", LANGUAGE: "C", ...GIT_NO_PROMPT_ENV },
   });
 }
 

@@ -11,6 +11,7 @@ import { confirmRiskyRoot } from "./serve";
 import { resolveCodeBinary } from "../vscode-install";
 import { announceConnect } from "../open-url";
 import { DEFAULT_SIGNAL_URL } from "./serve";
+import { hasGhCli, hasGitCredentials } from "../../provision/git-auth";
 
 interface SetupArgs {
   dir?: string;
@@ -125,12 +126,31 @@ export const setupCommand: CommandModule<{}, SetupArgs> = {
     });
     if (!ok) process.exit(1);
 
-    // 5. Tell the user how to connect, and open the browser straight at the
-    //    token-carrying URL so VS Code loads without typing the token in.
+    // 5. Close with what the user actually got and what to try first, and open
+    //    the browser straight at the token-carrying URL so VS Code loads
+    //    without typing the token in.
     console.log("");
     console.log(`[codehost] ✓ server "${name}" is live, serving ${dir}`);
     announceConnect(token);
-    console.log(`[codehost] manage it with: codehost list · codehost stop ${name}`);
+    console.log("");
+    console.log("[codehost] try it:");
+    console.log("[codehost]   · on that page this machine appears as a host — Connect opens VS Code");
+    console.log("[codehost]   · paste any github.com repo URL there — it clones into your workspace and opens");
+    console.log("[codehost]   · another machine? run the same installer there, then “+ Add” its token on the page");
+    // Private-repo readiness: provisioning clones over plain https, so without
+    // a credential helper those clones fail (with a hint, but better to say it
+    // now than after the first broken open).
+    if (hasGitCredentials()) {
+      console.log("[codehost] ✓ GitHub auth: ready — private repos will clone");
+    } else {
+      console.log("[codehost] ⚠ GitHub auth: none found — private repos won't clone until you run:");
+      console.log(
+        hasGhCli()
+          ? "[codehost]     gh auth login && gh auth setup-git"
+          : "[codehost]     gh auth login && gh auth setup-git   (install gh first: https://cli.github.com)",
+      );
+    }
+    console.log(`[codehost] manage: codehost list · codehost stop ${name}`);
   },
 };
 

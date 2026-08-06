@@ -375,8 +375,12 @@ export function Discovery() {
   // this tab rides another tab's connection via the broker.
   const [connPath, setConnPath] = useState<"lan" | "p2p" | null>(null);
   const [iframeSrc, setIframeSrc] = useState<string | null>(null);
-  // Streamed setup.sh output shown while connState === "provisioning".
+  // Streamed setup.sh output shown while connState === "provisioning", and
+  // whether the script exited non-zero — a failed provision keeps this view
+  // (log + diagnosis) on screen instead of opening the editor on a workspace
+  // that was never materialized.
   const [provisionLog, setProvisionLog] = useState("");
+  const [provisionFailed, setProvisionFailed] = useState(false);
   // Per-host-card free-text filter over its workspace chip list, keyed by
   // peerId — only rendered once a card's list is long enough to need one.
   const [wsFilter, setWsFilter] = useState<Record<string, string>>({});
@@ -772,14 +776,22 @@ export function Discovery() {
       if (postConnect?.kind === "repo") {
         setConnState("provisioning");
         setProvisionLog("");
+        setProvisionFailed(false);
         let openedEarly = false;
-        const ws = await runProvision(server.peerId, postConnect.target, (path) => {
+        const { ws, failed } = await runProvision(server.peerId, postConnect.target, (path) => {
           if (openedEarly || activePeerRef.current !== server.peerId) return;
           openedEarly = true;
           openConnected(path);
         });
         if (activePeerRef.current !== server.peerId) return; // cancelled/switched mid-provision
         if (openedEarly) return; // already opened via the ready sentinel
+        if (failed) {
+          // Keep the log (with the daemon's diagnosis) on screen — opening the
+          // editor on a workspace that never materialized helps no one.
+          setProvisionFailed(true);
+          setResolving(null);
+          return;
+        }
         if (ws) openFolder = ws;
       }
 
@@ -800,14 +812,20 @@ export function Discovery() {
       if (!postConnect && folder !== undefined && server.meta?.folderProvisioning) {
         setConnState("provisioning");
         setProvisionLog("");
+        setProvisionFailed(false);
         let openedEarly = false;
-        const ws = await runFolderProvision(server.peerId, folder, (path) => {
+        const { ws, failed } = await runFolderProvision(server.peerId, folder, (path) => {
           if (openedEarly || activePeerRef.current !== server.peerId) return;
           openedEarly = true;
           openConnected(path);
         });
         if (activePeerRef.current !== server.peerId) return;
         if (openedEarly) return;
+        if (failed) {
+          setProvisionFailed(true);
+          setResolving(null);
+          return;
+        }
         if (ws) openFolder = ws;
       }
 
@@ -837,10 +855,15 @@ export function Discovery() {
   // before it exits. `onReady` fires at most once, as soon as it's seen —
   // the caller can switch to the connected view immediately while this
   // keeps draining the rest of the log in the background.
-  async function streamProvisionBody(res: Response, initialLog: string, onReady?: (path: string) => void) {
+  // Resolves to the script's exit code (null when the stream carried none).
+  async function streamProvisionBody(
+    res: Response,
+    initialLog: string,
+    onReady?: (path: string) => void,
+  ): Promise<number | null> {
     let buf = initialLog;
     setProvisionLog(buf);
-    if (!res.body) return;
+    if (!res.body) return null;
     let readyFired = false;
     const reader = res.body.getReader();
     const dec = new TextDecoder();
@@ -867,13 +890,15 @@ export function Discovery() {
     } catch {
       // stream interrupted (channel closed) — caller falls back to the header path
     }
+    const exit = buf.match(/::codehost:exit=(\d+)/);
+    return exit ? Number(exit[1]) : null;
   }
 
   async function runProvision(
     peerId: string,
     t: RepoTarget,
     onReady?: (path: string) => void,
-  ): Promise<string | null> {
+  ): Promise<{ ws: string | null; failed: boolean }> {
     const params = new URLSearchParams({
       owner: t.owner,
       repo: t.name,
@@ -884,36 +909,40 @@ export function Discovery() {
     try {
       res = await connBroker.tunnelFor(peerId).fetch("GET", `/__codehost/provision?${params}`, {});
     } catch {
-      return null;
+      return { ws: null, failed: false };
     }
     const ws = res.headers.get("x-codehost-workspace");
     if (!ws) {
       await res.body?.cancel().catch(() => {});
-      return null;
+      return { ws: null, failed: false };
     }
-    await streamProvisionBody(res, `[codehost] provisioning ${t.owner}/${t.name}@${t.branch ?? DEFAULT_BRANCH}…\n`, onReady);
-    return ws;
+    const exit = await streamProvisionBody(res, `[codehost] provisioning ${t.owner}/${t.name}@${t.branch ?? DEFAULT_BRANCH}…\n`, onReady);
+    return { ws, failed: exit != null && exit !== 0 };
   }
 
   // Folder-mount provisioning: opt-in (server.meta?.folderProvisioning),
   // gives a `/host/<hostname>/<path>` open the same pre-open hook a repo
   // open gets. Older daemons (or hosts that haven't opted in) 403 — treated
   // the same as "no route", falling straight back to opening the folder.
-  async function runFolderProvision(peerId: string, path: string, onReady?: (path: string) => void): Promise<string | null> {
+  async function runFolderProvision(
+    peerId: string,
+    path: string,
+    onReady?: (path: string) => void,
+  ): Promise<{ ws: string | null; failed: boolean }> {
     const params = new URLSearchParams({ kind: "folder", path });
     let res: Response;
     try {
       res = await connBroker.tunnelFor(peerId).fetch("GET", `/__codehost/provision?${params}`, {});
     } catch {
-      return null;
+      return { ws: null, failed: false };
     }
     const ws = res.headers.get("x-codehost-workspace");
     if (!ws) {
       await res.body?.cancel().catch(() => {});
-      return null;
+      return { ws: null, failed: false };
     }
-    await streamProvisionBody(res, `[codehost] provisioning ${path}…\n`, onReady);
-    return ws;
+    const exit = await streamProvisionBody(res, `[codehost] provisioning ${path}…\n`, onReady);
+    return { ws, failed: exit != null && exit !== 0 };
   }
 
   // Fetch a host's `.codehost/config.yaml` + setup script over the tunnel for
@@ -1320,10 +1349,14 @@ export function Discovery() {
           <header style={styles.header}>
             <span style={styles.brand}>codehost</span>
             <span style={styles.dim}>·</span>
-            <span style={styles.dim}>provisioning…</span>
+            {provisionFailed ? (
+              <span style={{ color: "var(--ch-accent-amber)" }}>provisioning failed — see the log below</span>
+            ) : (
+              <span style={styles.dim}>provisioning…</span>
+            )}
             <span style={{ flex: 1 }} />
             <button style={styles.connectBtn} onClick={disconnect}>
-              Cancel
+              {provisionFailed ? "Back" : "Cancel"}
             </button>
           </header>
           <pre style={styles.provLog}>{provisionLog || "starting…"}</pre>
@@ -1334,6 +1367,12 @@ export function Discovery() {
 
   // Host settings view: view/edit .codehost/config.yaml + the setup script
   // over the tunnel, instead of an iframe. `#provisioning` is the only tab.
+  // The host's advertised meta (if it's still online) carries provisioning
+  // readiness — e.g. whether private clones can authenticate.
+  const settingsMeta = settingsHost
+    ? allServers.find((x) => x.server.meta?.host === settingsHost || x.server.meta?.name === settingsHost)?.server
+        .meta
+    : undefined;
   if (settingsHost && connState === "connected") {
     return (
       <>
@@ -1349,6 +1388,17 @@ export function Discovery() {
             </button>
           </header>
           <div style={styles.main}>
+            {settingsMeta?.githubAuth &&
+              (settingsMeta.githubAuth.ok ? (
+                <p style={{ color: "var(--ch-accent-teal)", marginBottom: 12 }}>
+                  ✓ GitHub auth: ready — private repos will clone on this host
+                </p>
+              ) : (
+                <p style={{ color: "var(--ch-accent-amber)", marginBottom: 12 }}>
+                  ⚠ GitHub auth: not set up — private repos won't clone. On this host, run:{" "}
+                  <code style={styles.code}>gh auth login && gh auth setup-git</code>
+                </p>
+              ))}
             {hostSettings?.status === "loading" && <p style={styles.dim}>loading…</p>}
             {hostSettings?.status === "error" && <p style={styles.tokenError}>{hostSettings.message}</p>}
             {hostSettings?.status === "ready" && settingsTab === "provisioning" && (

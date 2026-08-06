@@ -5,6 +5,7 @@ import { CONFIG_YAML, SETUP_PS1, SETUP_SH } from "./init";
 import type { LocalRequest } from "./tunnel";
 import { repoAllowed, resolveWorkspacePath, validateProvisionTarget } from "../shared/provision";
 import { fromPosixPath, repoKey, toPosixPath } from "../shared/repo";
+import { GIT_AUTH_ERROR_RE, GIT_NO_PROMPT_ENV, gitAuthHint } from "../provision/git-auth";
 
 // Daemon side of provisioning. A repo open hits `GET /__codehost/provision?...`
 // over the tunnel; this validates the identity, computes the daemon-authoritative
@@ -334,10 +335,14 @@ function runScriptBody(
       const say = (s: string) => controller.enqueue(enc.encode(s));
       say(announce);
       let code = 1;
+      let sawAuthError = false;
       try {
         const proc = Bun.spawn(cmd, {
           cwd: deps.homeDir,
-          env: { ...process.env, ...env },
+          // GIT_NO_PROMPT_ENV: the daemon has no terminal, so a private-repo
+          // clone must fail fast with a matchable error — never sit waiting on
+          // an invisible credential prompt until the provision timeout.
+          env: { ...process.env, ...env, ...GIT_NO_PROMPT_ENV },
           stdout: "pipe",
           stderr: "pipe",
         });
@@ -363,6 +368,7 @@ function runScriptBody(
             if (lastNl === -1) continue;
             const complete = pending.slice(0, lastNl + 1);
             pending = pending.slice(lastNl + 1);
+            if (!sawAuthError && GIT_AUTH_ERROR_RE.test(complete)) sawAuthError = true;
             controller.enqueue(enc.encode(redact(complete, secrets)));
           }
           pending += dec.decode();
@@ -374,6 +380,12 @@ function runScriptBody(
       } catch (err) {
         say(`[codehost] provision error: ${String(err)}\n`);
       } finally {
+        // An auth-shaped git failure gets an actionable diagnosis appended to
+        // the log: git says "repository not found" for a private repo it can't
+        // see, which reads as a bad URL when the real fix is `gh auth login`.
+        if (code !== 0 && sawAuthError) {
+          for (const line of gitAuthHint()) say(`[codehost] ${line}\n`);
+        }
         inFlight.delete(lockKey);
         resolveDone(code);
         say(`\n::codehost:exit=${code}\n`);
