@@ -24,7 +24,7 @@ import {
   shareableDeepLink,
 } from "../shared/repo";
 import { getRooms, historyFor, recordConnection, setRooms } from "./history";
-import { deriveTags, matchQuery, roomDisplayLabel, shortRoomLabel, tagKey } from "../shared/tags";
+import { deriveTags, matchQuery, roomLabels, shortRoomLabel, tagKey } from "../shared/tags";
 
 const TOKEN_KEY = "codehost.token";
 
@@ -1183,10 +1183,19 @@ export function Discovery() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rootServerKey]);
   const onlineRooms = tokens.filter((t) => roomOpen[t]).length;
-  // Human room labels: named after what's inside (server names) rather than the
-  // meaningless token hash — the hash is only the empty-room fallback.
-  const roomLabel = (t: string) =>
-    roomDisplayLabel(t, (serversByRoom[t] ?? []).map((s) => s.meta?.name ?? s.meta?.host ?? ""));
+  // Human room labels — the room chips read as "Hosts": named by the machines
+  // inside, disambiguated (user@name, then ·hash) when two rooms collide, and
+  // only the empty room falls back to the token hash.
+  const roomLabelByToken = roomLabels(
+    tokens.map((t) => ({
+      token: t,
+      servers: (serversByRoom[t] ?? []).map((s) => ({
+        name: s.meta?.name ?? s.meta?.host,
+        user: s.meta?.user,
+      })),
+    })),
+  );
+  const roomLabel = (t: string) => roomLabelByToken.get(t) ?? shortRoomLabel(t);
   const activeServer = allServers.find((x) => x.server.peerId === activePeerId)?.server;
 
   // Other clients (browsers) across all joined rooms, deduped by peerId — the
@@ -1225,6 +1234,18 @@ export function Discovery() {
     // live-fetched previewMeta once its background connection lands.
     const agents = t.server.meta?.agents ?? previewMeta[t.server.peerId]?.agents ?? [];
     for (const a of agents) group.agentPids.add(a.pid);
+  }
+  // Same-name machines (two "Mac"s) already get distinct cards via hostId, but
+  // their titles would read identically — qualify duplicates like the Hosts
+  // chips: user@name first, then a stable hostId snippet if even that ties.
+  for (let pass = 0; pass < 2; pass++) {
+    const dup = new Map<string, number>();
+    for (const g of hostGroups) dup.set(g.label, (dup.get(g.label) ?? 0) + 1);
+    for (const g of hostGroups) {
+      if ((dup.get(g.label) ?? 0) <= 1) continue;
+      const user = g.items[0]?.server.meta?.user;
+      g.label = pass === 0 && user ? `${user}@${g.label}` : `${g.label}·${g.key.slice(0, 4)}`;
+    }
   }
   const toggleTag = (t: string) =>
     setActiveTags((a) => (a.includes(t) ? a.filter((x) => x !== t) : [...a, t]));
@@ -1482,8 +1503,12 @@ export function Discovery() {
           <span style={{ flex: 1 }} />
           <span style={{ ...styles.status, color: onlineRooms > 0 ? "var(--ch-accent-teal)" : "var(--ch-text-dim)" }}>
             {tokens.length === 0
-              ? "○ no rooms"
-              : `${onlineRooms > 0 ? "●" : "○"} ${onlineRooms}/${tokens.length} rooms`}
+              ? "○ no hosts"
+              : serverCount > 0
+                ? `● ${serverCount} ${serverCount === 1 ? "host" : "hosts"}`
+                : onlineRooms > 0
+                  ? "○ no hosts online"
+                  : "○ connecting…"}
           </span>
         </header>
 
@@ -1493,13 +1518,13 @@ export function Discovery() {
           <div style={styles.controls}>
           {resolving && (
             <p style={{ color: "var(--ch-accent-amber)", marginBottom: 12 }}>
-              Looking for <code style={styles.code}>{resolving}</code> in your rooms…{" "}
+              Looking for <code style={styles.code}>{resolving}</code> on your hosts…{" "}
               {tokens.length > 0 ? "waiting for a live server" : "join the room's token below"}.
             </p>
           )}
 
           <div style={styles.tokenForm}>
-            <label style={styles.label}>Rooms</label>
+            <label style={styles.label}>Hosts</label>
             {tokens.length > 0 ? (
               <>
                 <div style={styles.roomChips}>
@@ -1510,7 +1535,7 @@ export function Discovery() {
                       title={`${roomOpen[t] ? "connected" : "connecting…"} · room ${shortRoomLabel(t)}`}
                     >
                       {roomLabel(t)}
-                      <button type="button" style={styles.roomChipX} onClick={() => leaveRoom(t)} title="leave room">
+                      <button type="button" style={styles.roomChipX} onClick={() => leaveRoom(t)} title="forget this host (leaves its room)">
                         ✕
                       </button>
                     </span>
@@ -1605,7 +1630,7 @@ export function Discovery() {
             )}
           </div>
           {tokens.length > 0 && serverCount === 0 && (
-            <p style={styles.dim}>No servers online in your rooms yet.</p>
+            <p style={styles.dim}>No hosts online yet.</p>
           )}
           {serverCount === 0 && <SetupCard />}
           {serverCount > 0 && (
@@ -1756,7 +1781,7 @@ export function Discovery() {
           {tokens.length > 0 && (
             <section style={styles.rosterSection}>
               <div style={styles.rosterHead}>
-                In this room · you{otherClients.length > 0 ? ` + ${otherClients.length} other ${otherClients.length === 1 ? "client" : "clients"}` : ""}
+                Connected clients · you{otherClients.length > 0 ? ` + ${otherClients.length} other ${otherClients.length === 1 ? "client" : "clients"}` : ""}
               </div>
               <ul style={styles.list}>
                 <li style={styles.personRow}>

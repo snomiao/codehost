@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { deriveTags, matchQuery, matchToken, roomDisplayLabel, shortRoomLabel } from "./tags";
+import { deriveTags, matchQuery, matchToken, roomDisplayLabel, roomLabels, shortRoomLabel } from "./tags";
 
 test("deriveTags builds mnemonic tags from meta", () => {
   const tags = deriveTags(
@@ -58,6 +58,47 @@ test("roomDisplayLabel names a room after its servers", () => {
   expect(roomDisplayLabel(t, ["", ""])).toBe(shortRoomLabel(t));
   // Multi-server labels stay whitespace-free so `room:` filter tokens work.
   expect(roomDisplayLabel(t, ["a", "b"])).not.toMatch(/\s/);
+});
+
+test("roomLabels leaves unique names bare", () => {
+  const labels = roomLabels([
+    { token: "token-aaaa-1234567890", servers: [{ name: "mbp", user: "taku" }] },
+    { token: "token-bbbb-1234567890", servers: [{ name: "studio", user: "taku" }] },
+  ]);
+  expect(labels.get("token-aaaa-1234567890")).toBe("mbp");
+  expect(labels.get("token-bbbb-1234567890")).toBe("studio");
+});
+
+test("roomLabels disambiguates collisions by user, then room hash", () => {
+  // Same machine name, different users → user@name.
+  const byUser = roomLabels([
+    { token: "token-aaaa-1234567890", servers: [{ name: "mbp", user: "taku" }] },
+    { token: "token-bbbb-1234567890", servers: [{ name: "mbp", user: "sno" }] },
+  ]);
+  expect(byUser.get("token-aaaa-1234567890")).toBe("taku@mbp");
+  expect(byUser.get("token-bbbb-1234567890")).toBe("sno@mbp");
+
+  // Same name AND same user → the room hash breaks the tie.
+  const byHash = roomLabels([
+    { token: "token-aaaa-1234567890", servers: [{ name: "mbp", user: "taku" }] },
+    { token: "token-bbbb-1234567890", servers: [{ name: "mbp", user: "taku" }] },
+  ]);
+  const a = byHash.get("token-aaaa-1234567890")!;
+  const b = byHash.get("token-bbbb-1234567890")!;
+  expect(a).not.toBe(b);
+  expect(a).toBe(`taku@mbp·${shortRoomLabel("token-aaaa-1234567890")}`);
+
+  // No user advertised (older daemons) → straight to the hash.
+  const noUser = roomLabels([
+    { token: "token-aaaa-1234567890", servers: [{ name: "mbp" }] },
+    { token: "token-bbbb-1234567890", servers: [{ name: "mbp" }] },
+  ]);
+  expect(noUser.get("token-aaaa-1234567890")).toBe(`mbp·${shortRoomLabel("token-aaaa-1234567890")}`);
+});
+
+test("roomLabels keeps empty rooms on the hash fallback", () => {
+  const t = "token-aaaa-1234567890";
+  expect(roomLabels([{ token: t, servers: [] }]).get(t)).toBe(shortRoomLabel(t));
 });
 
 test("shortRoomLabel is stable and exactly 4 chars", () => {

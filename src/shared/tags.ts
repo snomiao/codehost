@@ -37,6 +37,37 @@ export function roomDisplayLabel(token: string, serverNames: string[]): string {
   return names.length === 1 ? names[0] : `${names[0]}+${names.length - 1}`;
 }
 
+/**
+ * Label every joined room host-style for the "Hosts" chips, disambiguating
+ * name collisions with the least qualification that works: the bare label
+ * ("mbp"), then the host's user prefixed ("taku@mbp"), then the room hash
+ * suffixed ("mbp·13y1" — always unique, and matches the chip tooltip).
+ * Deterministic: the same set of rooms always yields the same labels.
+ */
+export function roomLabels(
+  rooms: { token: string; servers: { name?: string; user?: string }[] }[],
+): Map<string, string> {
+  const counts = (get: (r: (typeof rooms)[number]) => string) => {
+    const c = new Map<string, number>();
+    for (const r of rooms) c.set(get(r), (c.get(get(r)) ?? 0) + 1);
+    return c;
+  };
+  const base = (r: (typeof rooms)[number]) =>
+    roomDisplayLabel(r.token, r.servers.map((s) => s.name ?? ""));
+  const dupBase = counts(base);
+  const withUser = (r: (typeof rooms)[number]) => {
+    const user = r.servers.find((s) => s.user)?.user;
+    return (dupBase.get(base(r)) ?? 0) > 1 && user ? `${user}@${base(r)}` : base(r);
+  };
+  const dupUser = counts(withUser);
+  const out = new Map<string, string>();
+  for (const r of rooms) {
+    const l = withUser(r);
+    out.set(r.token, (dupUser.get(l) ?? 0) > 1 ? `${l}·${shortRoomLabel(r.token)}` : l);
+  }
+  return out;
+}
+
 /** Build the mnemonic tag list for a server from its advertised metadata. */
 export function deriveTags(meta: PeerMeta | null, opts: { roomLabel?: string } = {}): string[] {
   const tags: string[] = [];
