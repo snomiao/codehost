@@ -1,3 +1,10 @@
+# [0.38.0](https://github.com/snomiao/codehost/compare/v0.37.0...v0.38.0) (2026-08-06)
+
+
+### Features
+
+* **onboarding:** diagnose missing GitHub auth instead of hanging or lying ([7a974ad](https://github.com/snomiao/codehost/commit/7a974ad2507b23a431fe3be9c35be79ae6609670))
+
 # [0.37.0](https://github.com/snomiao/codehost/compare/v0.36.0...v0.37.0) (2026-08-06)
 
 
