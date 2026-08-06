@@ -1,0 +1,567 @@
+/**
+ * Workspace provisioning — the codehost standard.
+ *
+ * Maps a GitHub-style path `<owner>/<repo>/tree/<branch>` to a local
+ * worktree under `~/ws/<owner>/<repo>/tree/<branch>` and ensures it
+ * exists & is reasonably fresh:
+ *
+ *   - missing  -> `git clone --branch <branch> --single-branch
+ *                  --recurse-submodules https://github.com/<owner>/<repo>`
+ *                  into that dir (independent clone per branch)
+ *   - present  -> `git fetch --prune`; then `git pull --ff-only` **only
+ *                  if** the worktree is clean and fast-forwardable —
+ *                  otherwise fetch-only (never clobber local work)
+ *
+ * After a clone, branch creation, or a pull that advanced the checkout, the
+ * cross-platform `setup-repo.sh` runs via Bun Shell (`bun setup-repo.sh`):
+ * it updates submodules and installs dependencies for whichever ecosystem(s)
+ * the repo uses (JS via its pinned lockfile, Rust, Go, Python, Ruby). For any
+ * non-`main` branch we also seed `.env.local` from the sibling `tree/main`
+ * worktree (seed-once: never overwrites one already in the branch).
+ *
+ * All git invocations use `execFile` (argv array, no shell) and every
+ * path segment is validated, so a hostile `owner`/`repo`/`branch` can't
+ * inject options or escape `~/ws`.
+ *
+ * This module is the provisioning CORE: it imports ONLY node builtins +
+ * subprocess `git`/`bun`, so consumers (e.g. an agent spawner) can depend on
+ * `codehost/provision` without pulling in any native transport
+ * (node-datachannel) / terminal (bun-pty) / UI (react, hono, vite) deps. The
+ * live filesystem watcher (which needs the native `@parcel/watcher`) lives in
+ * the sibling `codehost/provision/watch` module.
+ */
+
+import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
+import { copyFile, mkdir } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
+import { GIT_NO_PROMPT_ENV, hasGitCredentials } from "./git-auth";
+
+// Auth probes/hints are part of the provision surface: consumers (agent-yes's
+// `ay ws`, embedders) need the same "is this a private repo or a missing
+// login?" diagnosis the daemon streams.
+export { GIT_AUTH_ERROR_RE, GIT_NO_PROMPT_ENV, gitAuthHint, hasGhCli, hasGitCredentials } from "./git-auth";
+
+const execFileP = promisify(execFile);
+
+/** Default workspace root when nothing else is configured (`~/ws`). */
+export const WS_ROOT = path.join(os.homedir(), "ws");
+
+/**
+ * Resolve the workspace root at CALL TIME (never a captured module const), so a
+ * consumer can point provisioning at a non-default layout — e.g. this machine
+ * keeps repos under `/code/<owner>/<repo>/tree/<branch>`. Precedence:
+ *   1. an explicit `wsRoot` argument (per-call override)
+ *   2. `process.env.CODEHOST_WS_ROOT` (per-process override)
+ *   3. `~/ws` (the default standard layout)
+ */
+export function resolveWsRoot(wsRoot?: string): string {
+  return wsRoot ?? process.env.CODEHOST_WS_ROOT ?? path.join(os.homedir(), "ws");
+}
+
+const GIT_TIMEOUT_MS = 120_000;
+// Dependency installs / builds can be slow; give the setup script its own
+// generous budget.
+const SETUP_TIMEOUT_MS = 600_000;
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const SETUP_SCRIPT = path.join(HERE, "setup-repo.sh");
+
+export type RepoSpec = { owner: string; repo: string; branch: string };
+
+export type GitStatus = {
+  branch: string;
+  head: string;
+  ahead: number;
+  behind: number;
+  dirty: boolean;
+  hasUpstream: boolean;
+};
+
+/**
+ * Why a provision failed, when we can tell:
+ *   - "branch-not-found": repo exists on the remote but the branch does
+ *     not — the shell offers a "Create branch" action for this.
+ *   - "repo-not-found": the remote repo itself is missing/inaccessible.
+ *   - "other": anything else (network, auth, disk, …).
+ */
+export type FailReason = "branch-not-found" | "repo-not-found" | "auth-missing" | "other";
+
+export type ProvisionResult = {
+  ok: boolean;
+  spec: RepoSpec;
+  /** Absolute local worktree path (the VS Code `?folder=` target). */
+  folder: string;
+  existed: boolean;
+  action: "cloned" | "pulled" | "fetched" | "created" | "forked" | "none" | "error";
+  git?: GitStatus;
+  error?: string;
+  reason?: FailReason;
+};
+
+function classifyError(msg: string): FailReason {
+  if (/remote branch .* not found/i.test(msg)) return "branch-not-found";
+  // With prompts disabled, a missing-credentials clone fails on the username
+  // read — unambiguously an auth gap, not a bad URL.
+  if (/could not read Username|terminal prompts disabled/i.test(msg)) return "auth-missing";
+  if (/repository .* not found|could not read from remote/i.test(msg)) {
+    // GitHub answers "not found" for private repos it won't admit exist. If
+    // this machine holds no credentials at all, missing auth is the likelier
+    // (and actionable) diagnosis.
+    return hasGitCredentials() ? "repo-not-found" : "auth-missing";
+  }
+  return "other";
+}
+
+/** Parse `<owner>/<repo>/tree/<branch>` (branch may contain slashes). */
+export function parseSpec(p: string): RepoSpec | null {
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(p);
+  } catch {
+    return null; // malformed percent-encoding (URIError) → not a spec
+  }
+  const clean = decoded.replace(/^\/+/, "").replace(/\/+$/, "");
+  const m = clean.match(/^([^/]+)\/([^/]+)\/tree\/(.+)$/);
+  if (!m) return null;
+  const [, owner, repo, branch] = m;
+  // Narrow the regex groups to `string` (strict consumers compile this under
+  // noUncheckedIndexedAccess, where match groups are `string | undefined`).
+  if (!owner || !repo || !branch) return null;
+  if (![owner, repo, ...branch.split("/")].every(isSafeSegment)) return null;
+  return { owner, repo, branch };
+}
+
+/**
+ * Normalize any of the common ways a repo gets referenced into a `RepoSpec`,
+ * so every consumer of the standard parses identically. Accepts:
+ *   - `https://github.com/<o>/<r>/tree/<b>`  and  `github.com/<o>/<r>/tree/<b>`
+ *   - `<o>/<r>/tree/<b>`         (delegates to `parseSpec`)
+ *   - `<o>/<r>@<branch>`         → `<o>/<r>/tree/<branch>`
+ *   - `<o>/<r>`                  → default branch `main`
+ * A trailing `.git` and any `#`/`?` fragment are stripped first. The branch may
+ * contain `/`. Every segment is validated via `parseSpec`'s `isSafeSegment`, so
+ * a hostile input can't traverse or inject options. Returns null when the input
+ * doesn't name a repo.
+ */
+export function parseSource(input: string): RepoSpec | null {
+  let s = input.trim();
+  if (!s) return null;
+  // Drop URL scheme and a leading host, so github URLs and bare paths converge.
+  s = s.replace(/^[a-z][a-z0-9+.-]*:\/\//i, "");
+  s = s.replace(/^(?:www\.)?github\.com\//i, "");
+  // Strip `#fragment` / `?query` tails.
+  s = s.replace(/[#?].*$/, "");
+  // Strip a trailing `.git` (before or after a `/tree/...` suffix is unusual,
+  // but `<o>/<r>.git` and `<o>/<r>.git/tree/<b>` both normalize cleanly).
+  s = s.replace(/^\/+/, "").replace(/\/+$/, "");
+
+  // `<o>/<r>/tree/<b>` — hand straight to the canonical parser.
+  if (/^[^/]+\/[^/]+\/tree\/.+$/.test(s)) {
+    return parseSpec(s.replace(/\.git(?=\/tree\/)/, ""));
+  }
+
+  // `<o>/<r>@<branch>` — normalize the `@` form to `tree/<branch>`.
+  const at = s.match(/^([^/]+)\/([^/@]+?)(?:\.git)?@(.+)$/);
+  if (at) {
+    const [, owner, repo, branch] = at;
+    if (!owner || !repo || !branch) return null;
+    return parseSpec(`${owner}/${repo}/tree/${branch}`);
+  }
+
+  // `<o>/<r>` — default branch `main`.
+  const bare = s.match(/^([^/]+)\/([^/]+?)(?:\.git)?$/);
+  if (bare) {
+    const [, owner, repo] = bare;
+    if (!owner || !repo) return null;
+    return parseSpec(`${owner}/${repo}/tree/main`);
+  }
+
+  return null;
+}
+
+/** A path segment that can't traverse, hide options, or inject control. */
+function isSafeSegment(s: string): boolean {
+  return (
+    s.length > 0 &&
+    s !== "." &&
+    s !== ".." &&
+    !s.startsWith("-") && // no option injection (e.g. branch "--upload-pack=…")
+    !/[/\\\0]/.test(s) &&
+    !/[\x00-\x1f]/.test(s)
+  );
+}
+
+export function folderFor(spec: RepoSpec, wsRoot?: string): string {
+  return path.join(
+    resolveWsRoot(wsRoot),
+    spec.owner,
+    spec.repo,
+    "tree",
+    spec.branch,
+  );
+}
+
+async function git(
+  cwd: string,
+  args: string[],
+): Promise<{ stdout: string; stderr: string }> {
+  return execFileP("git", args, {
+    cwd,
+    timeout: GIT_TIMEOUT_MS,
+    maxBuffer: 64 * 1024 * 1024,
+    // Force git's error messages to stable English regardless of the daemon's
+    // locale, so `classifyError`'s regexes match (a zh_TW/ja_JP daemon emits
+    // e.g. "找不到遠端分支" instead of "Remote branch ... not found", which
+    // would otherwise be misclassified as "other" and hide the Create-branch
+    // affordance). LC_ALL=C is load-bearing here — gettext ignores LANGUAGE
+    // once the locale resolves to C. `env` replaces (not merges), so spread.
+    // GIT_NO_PROMPT_ENV: callers are daemons/servers with no terminal — a
+    // private-repo clone must fail fast, not hang on an invisible prompt.
+    env: { ...process.env, LC_ALL: "C", LANG: "C", LANGUAGE: "C", ...GIT_NO_PROMPT_ENV },
+  });
+}
+
+/**
+ * Read ahead/behind/dirty for a worktree (assumes it is a git dir). Exported
+ * for the sibling `watch` module, which recomputes status on every filesystem
+ * burst; consumers normally use `statusOf` (which guards for provisioned-ness).
+ */
+export async function readStatus(dir: string): Promise<GitStatus> {
+  // porcelain=v2 --branch gives `# branch.*` headers + entries.
+  const { stdout } = await git(dir, ["status", "--porcelain=v2", "--branch"]);
+  let branch = "";
+  let head = "";
+  let ahead = 0;
+  let behind = 0;
+  let hasUpstream = false;
+  let dirty = false;
+  for (const line of stdout.split("\n")) {
+    if (line.startsWith("# branch.head ")) branch = line.slice(14).trim();
+    else if (line.startsWith("# branch.oid ")) head = line.slice(13).trim();
+    else if (line.startsWith("# branch.ab ")) {
+      hasUpstream = true;
+      const m = line.match(/\+(\d+)\s+-(\d+)/);
+      if (m) {
+        ahead = Number(m[1]);
+        behind = Number(m[2]);
+      }
+    } else if (line && !line.startsWith("#")) {
+      dirty = true; // any tracked/untracked entry
+    }
+  }
+  return { branch, head: head.slice(0, 12), ahead, behind, dirty, hasUpstream };
+}
+
+/** Git status for an existing worktree, or null if it isn't provisioned. */
+export async function statusOf(
+  spec: RepoSpec,
+  wsRoot?: string,
+): Promise<GitStatus | null> {
+  const folder = folderFor(spec, wsRoot);
+  if (!existsSync(path.join(folder, ".git"))) return null;
+  try {
+    return await readStatus(folder);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Run the cross-platform repo setup script (`setup-repo.sh`) in a worktree
+ * via Bun Shell — `bun <script>` interprets the `.sh` with Bun's own shell,
+ * so it works identically on Windows. The script updates submodules and
+ * installs dependencies for whichever ecosystem(s) the repo uses (JS via the
+ * pinned package manager, Rust, Go, Python, Ruby). Best-effort: a failed or
+ * slow install must not fail provisioning — the editor still opens and the
+ * user can re-run setup from the integrated terminal.
+ */
+async function runRepoSetup(dir: string): Promise<void> {
+  try {
+    await execFileP("bun", [SETUP_SCRIPT], {
+      cwd: dir,
+      timeout: SETUP_TIMEOUT_MS,
+      maxBuffer: 64 * 1024 * 1024,
+    });
+  } catch {
+    // best-effort
+  }
+}
+
+/**
+ * Fire-and-forget remote refresh for an existing worktree: `git fetch`, then
+ * `git pull --ff-only` if it's safe (clean, behind, not ahead), then re-run
+ * setup if the checkout actually advanced. Runs detached from the request so a
+ * slow fetch never blocks the editor opening; the file watcher broadcasts any
+ * resulting status change to the live UI. Best-effort — errors are swallowed.
+ */
+async function refreshInBackground(folder: string): Promise<void> {
+  try {
+    await git(folder, ["fetch", "--prune", "origin"]);
+    const st = await readStatus(folder);
+    if (st.hasUpstream && !st.dirty && st.behind > 0 && st.ahead === 0) {
+      const before = st.head;
+      await git(folder, ["pull", "--ff-only"]);
+      const after = await readStatus(folder);
+      if (after.head !== before) await runRepoSetup(folder);
+    }
+  } catch {
+    // network/auth/lock hiccup — leave the worktree as-is
+  }
+}
+
+/**
+ * Seed a non-`main` branch worktree's `.env.local` from the sibling
+ * `tree/main` worktree, so feature checkouts inherit the local (gitignored)
+ * env without re-entry. Seed-once: skips if the branch already has one, so
+ * per-branch edits are never clobbered. Always reads `tree/main` directly
+ * (not `../main`) so branches containing `/` resolve correctly.
+ */
+async function seedEnvLocal(
+  spec: RepoSpec,
+  folder: string,
+  wsRoot: string,
+): Promise<void> {
+  if (spec.branch === "main") return;
+  const src = path.join(
+    wsRoot,
+    spec.owner,
+    spec.repo,
+    "tree",
+    "main",
+    ".env.local",
+  );
+  const dest = path.join(folder, ".env.local");
+  if (!existsSync(src) || existsSync(dest)) return;
+  try {
+    await copyFile(src, dest);
+  } catch {
+    // best-effort — a locked/disappearing source must not fail provisioning
+  }
+}
+
+/**
+ * Ensure the worktree for `spec` exists and is fresh. Never throws —
+ * failures are returned as `{ ok:false, action:"error", error }`.
+ */
+export async function provision(
+  spec: RepoSpec,
+  opts?: { wsRoot?: string },
+): Promise<ProvisionResult> {
+  const wsRoot = resolveWsRoot(opts?.wsRoot);
+  const folder = folderFor(spec, wsRoot);
+  const base: Omit<ProvisionResult, "action"> & {
+    action: ProvisionResult["action"];
+  } = {
+    ok: false,
+    spec,
+    folder,
+    existed: existsSync(path.join(folder, ".git")),
+    action: "none",
+  };
+
+  try {
+    if (!base.existed) {
+      // Clone this branch independently into the worktree path.
+      await mkdir(path.dirname(folder), { recursive: true });
+      const url = `https://github.com/${spec.owner}/${spec.repo}`;
+      await git(wsRoot, [
+        "clone",
+        "--branch",
+        spec.branch,
+        "--single-branch",
+        "--recurse-submodules",
+        "--",
+        url,
+        folder,
+      ]);
+      await seedEnvLocal(spec, folder, wsRoot);
+      await runRepoSetup(folder);
+      const git2 = await readStatus(folder);
+      return { ...base, ok: true, action: "cloned", git: git2 };
+    }
+
+    // Present: return the current local status immediately, then refresh from
+    // the remote in the BACKGROUND. A `git fetch` on a large, actively-pushed
+    // repo can be slow, and blocking the response on it stalls the editor
+    // opening (and trips the proxy's upstream timeout → 502). The watcher
+    // pushes any pull-induced changes live, so the UI still converges.
+    await seedEnvLocal(spec, folder, wsRoot);
+    const current = await readStatus(folder);
+    void refreshInBackground(folder);
+    return { ...base, ok: true, action: "fetched", git: current };
+  } catch (e: unknown) {
+    const err = e as { stderr?: string; message?: string };
+    const error = (err.stderr || err.message || String(e)).trim().slice(0, 600);
+    return {
+      ...base,
+      ok: false,
+      action: "error",
+      error,
+      reason: classifyError(error),
+    };
+  }
+}
+
+/**
+ * Create `spec.branch` locally (no push) for a repo whose remote branch
+ * doesn't exist yet. Clones the repo's default branch into the worktree
+ * path, then `git switch -c <branch>`. Refuses if the worktree already
+ * exists (use the normal provision path for that). Never throws.
+ */
+export async function createBranch(
+  spec: RepoSpec,
+  opts?: { wsRoot?: string },
+): Promise<ProvisionResult> {
+  const wsRoot = resolveWsRoot(opts?.wsRoot);
+  const folder = folderFor(spec, wsRoot);
+  const base = {
+    ok: false as boolean,
+    spec,
+    folder,
+    existed: existsSync(path.join(folder, ".git")),
+    action: "none" as ProvisionResult["action"],
+  };
+  if (base.existed) {
+    return {
+      ...base,
+      ok: false,
+      action: "error",
+      error: "worktree already exists",
+    };
+  }
+  try {
+    await mkdir(path.dirname(folder), { recursive: true });
+    const url = `https://github.com/${spec.owner}/${spec.repo}`;
+    // Clone the default branch (no --branch), then branch off it locally.
+    await git(wsRoot, ["clone", "--recurse-submodules", "--", url, folder]);
+    await git(folder, ["switch", "-c", spec.branch]);
+    await seedEnvLocal(spec, folder, wsRoot);
+    await runRepoSetup(folder);
+    const status = await readStatus(folder);
+    return { ...base, ok: true, action: "created", git: status };
+  } catch (e: unknown) {
+    const err = e as { stderr?: string; message?: string };
+    const error = (err.stderr || err.message || String(e)).trim().slice(0, 600);
+    return {
+      ...base,
+      ok: false,
+      action: "error",
+      error,
+      reason: classifyError(error),
+    };
+  }
+}
+
+/**
+ * Fork the worktree at `fromCwd` to a NEW branch in a sibling worktree off its
+ * current HEAD. Unlike `createBranch` (which branches off the remote default),
+ * this branches off `fromCwd`'s current HEAD via `git worktree add` — shared
+ * object store, **no clone** — so the fork starts from exactly the committed
+ * state the source is on. owner/repo come from `fromCwd`'s `origin` remote, so
+ * the fork lands at `<wsRoot>/<owner>/<repo>/tree/<branch>` beside its siblings.
+ *
+ * By default the fork is **clean**: only committed work crosses over, so the
+ * source's uncommitted changes stay put. Pass `wip: true` to also carry the
+ * source's uncommitted work — tracked changes are replayed via
+ * `git stash create` → `stash apply` (the source worktree is never touched) and
+ * untracked, non-ignored files are copied. Because the new worktree starts at
+ * the same HEAD, the WIP applies without conflict.
+ *
+ * Refuses if `fromCwd` isn't a git worktree with a github origin, the branch
+ * name is unsafe, or the target already exists. Never throws.
+ */
+export async function forkWorktree(opts: {
+  fromCwd: string;
+  branch: string;
+  wsRoot?: string;
+  /** Carry the source's uncommitted work into the fork. Default: false (clean fork). */
+  wip?: boolean;
+}): Promise<ProvisionResult> {
+  const { fromCwd, branch } = opts;
+  const wsRoot = resolveWsRoot(opts.wsRoot);
+  // Branch may contain `/`; validate each segment like `parseSpec` does.
+  const okBranch = branch.length > 0 && branch.split("/").every(isSafeSegment);
+
+  // Resolve owner/repo from the source's origin remote (never fetched — just
+  // parsed), so the fork is a sibling under the same `<owner>/<repo>/tree/*`.
+  let spec: RepoSpec | null = null;
+  try {
+    if (!existsSync(path.join(fromCwd, ".git"))) throw new Error("not a git worktree");
+    const { stdout } = await git(fromCwd, ["remote", "get-url", "origin"]);
+    const m = stdout.trim().match(/github\.com[:/]([^/]+)\/(.+?)(?:\.git)?\/?$/i);
+    if (m && okBranch && m[1] && m[2] && isSafeSegment(m[1]) && isSafeSegment(m[2]))
+      spec = { owner: m[1], repo: m[2], branch };
+  } catch {
+    spec = null;
+  }
+  if (!spec) {
+    return {
+      ok: false,
+      spec: { owner: "", repo: "", branch },
+      folder: "",
+      existed: false,
+      action: "error",
+      error: okBranch
+        ? `'${fromCwd}' is not a git worktree with a github origin remote`
+        : `invalid branch name: ${branch}`,
+    };
+  }
+
+  const folder = folderFor(spec, wsRoot);
+  const base = {
+    ok: false as boolean,
+    spec,
+    folder,
+    existed: existsSync(path.join(folder, ".git")),
+    action: "none" as ProvisionResult["action"],
+  };
+  if (base.existed) {
+    return { ...base, action: "error", error: "worktree already exists" };
+  }
+  try {
+    await mkdir(path.dirname(folder), { recursive: true });
+    // New worktree off the source's current HEAD — shared object store, no
+    // clone. `-b` creates the branch (errors if it already exists).
+    await git(fromCwd, ["worktree", "add", "-b", spec.branch, folder, "HEAD"]);
+
+    // Opt-in WIP: by default the fork is clean (committed state only). When
+    // `wip` is set, carry the source's uncommitted work across.
+    if (opts.wip) {
+      // Tracked WIP: `stash create` snapshots index+worktree into a commit without
+      // touching the source's working tree or stash list; the sibling worktree
+      // applies it (shared store, same HEAD → conflict-free).
+      const { stdout: stashSha } = await git(fromCwd, ["stash", "create"]);
+      const sha = stashSha.trim();
+      if (sha) await git(folder, ["stash", "apply", sha]);
+
+      // Untracked, non-ignored files (the stash above excludes them) — copied over.
+      const { stdout: untracked } = await git(fromCwd, [
+        "ls-files",
+        "--others",
+        "--exclude-standard",
+        "-z",
+      ]);
+      for (const rel of untracked.split("\0").filter(Boolean)) {
+        try {
+          const to = path.join(folder, rel);
+          await mkdir(path.dirname(to), { recursive: true });
+          await copyFile(path.join(fromCwd, rel), to);
+        } catch {
+          // best-effort per file (vanished mid-copy, permission, …)
+        }
+      }
+    }
+
+    await seedEnvLocal(spec, folder, wsRoot);
+    await runRepoSetup(folder);
+    const status = await readStatus(folder);
+    return { ...base, ok: true, action: "forked", git: status };
+  } catch (e: unknown) {
+    const err = e as { stderr?: string; message?: string };
+    const error = (err.stderr || err.message || String(e)).trim().slice(0, 600);
+    return { ...base, action: "error", error, reason: classifyError(error) };
+  }
+}

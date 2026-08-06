@@ -1,0 +1,25 @@
+{
+  "name": "@snomiao/ws-provision",
+  "version": "0.1.0",
+  "description": "Provision git workspaces in the <root>/<owner>/<repo>/tree/<branch> layout: clone/refresh/fork worktrees, plus non-interactive GitHub auth probes and hints. Zero runtime dependencies; TypeScript source consumed directly (Bun-first, same convention as codehost).",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/snomiao/codehost.git",
+    "directory": "packages/ws-provision"
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "test": "bun test src"
+  }
+}
