@@ -1,3 +1,10 @@
+# [0.36.0](https://github.com/snomiao/codehost/compare/v0.35.3...v0.36.0) (2026-08-06)
+
+
+### Features
+
+* **web:** name room chips after their servers, hide the room tag when single-room ([463a076](https://github.com/snomiao/codehost/commit/463a07680bcc83a382673850fd5283ee084d3466))
+
 ## [0.35.3](https://github.com/snomiao/codehost/compare/v0.35.2...v0.35.3) (2026-08-06)
 
 
