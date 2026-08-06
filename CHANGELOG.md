@@ -1,3 +1,10 @@
+# [0.39.0](https://github.com/snomiao/codehost/compare/v0.38.0...v0.39.0) (2026-08-06)
+
+
+### Features
+
+* **provision:** re-export the git-auth probes/hints for library consumers ([6368886](https://github.com/snomiao/codehost/commit/6368886bbf1a06e95c7c2c51c952150b41d4727e))
+
 # [0.38.0](https://github.com/snomiao/codehost/compare/v0.37.0...v0.38.0) (2026-08-06)
 
 
