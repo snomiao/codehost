@@ -87,6 +87,13 @@ export interface DaemonizeOptions {
 /** Start the foreground serve under oxmgr. Returns false if oxmgr is unusable. */
 export async function startDaemon(opts: DaemonizeOptions): Promise<boolean> {
   if (!(await ensureOxmgr())) return false;
+  // Install the login service BEFORE starting the process: (re)installing the
+  // service restarts the oxmgr daemon itself, which kills every process it
+  // manages — including the one we're about to start. With the old
+  // start-then-install order every `setup` run SIGTERM'd its own fresh daemon
+  // seconds after launch (observed dying mid-VS-Code-download with nothing in
+  // the logs and 0 restarts).
+  enableStartup();
   // Replace any previous instance with the same name.
   ox(["delete", opts.name], { stdio: "ignore" });
 
@@ -97,8 +104,25 @@ export async function startDaemon(opts: DaemonizeOptions): Promise<boolean> {
       [`start`, opts.command, `--name=${opts.name}`, `--cwd=${opts.cwd}`, `--restart=on-failure`],
       { stdio: "inherit" },
     ) === 0;
-  if (ok) enableStartup();
-  return ok;
+  if (!ok) return false;
+
+  // A daemon that dies right after `start` (bad flags, missing runtime, a
+  // crashed install step) still reports start success above — catch it here so
+  // the failure is loud instead of "setup said live, the page shows nothing".
+  await Bun.sleep(2000);
+  const status = oxCapture(["status", opts.name]);
+  if (status && !/^\s*Status:\s+running/m.test(status)) {
+    console.warn(`[codehost] warning: daemon "${opts.name}" is not running 2s after start — check: oxmgr logs ${opts.name}`);
+  }
+  return true;
+}
+
+/** Run the oxmgr CLI capturing stdout (null if unresolvable or it failed). */
+function oxCapture(args: string[]): string | null {
+  const entry = oxmgrEntry();
+  if (!entry) return null;
+  const r = spawnSync(process.execPath, [entry, ...args], { encoding: "utf8" });
+  return r.status === 0 ? (r.stdout ?? "") : null;
 }
 
 /**
@@ -108,6 +132,9 @@ export async function startDaemon(opts: DaemonizeOptions): Promise<boolean> {
  * and non-fatal: hosts without an init system just get a hint.
  */
 function enableStartup(): void {
+  // Already installed → do nothing. Reinstalling bounces the oxmgr daemon,
+  // killing every process it manages (not just ours), so only install once.
+  if (ox(["service", "--system", "auto", "status"], { stdio: "ignore" }) === 0) return;
   const ok = ox(["service", "--system", "auto", "install"], { stdio: "pipe" }) === 0;
   if (ok) {
     console.log("[codehost] login auto-start enabled (oxmgr service installed)");
