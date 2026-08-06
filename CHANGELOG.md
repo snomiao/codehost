@@ -1,3 +1,10 @@
+# [0.40.0](https://github.com/snomiao/codehost/compare/v0.39.0...v0.40.0) (2026-08-06)
+
+
+### Features
+
+* **provision:** extract the provision core into @snomiao/ws-provision ([4472f31](https://github.com/snomiao/codehost/commit/4472f319ee0a7f851e99bc1fa738e351463a1a8c))
+
 # [0.39.0](https://github.com/snomiao/codehost/compare/v0.38.0...v0.39.0) (2026-08-06)
 
 
