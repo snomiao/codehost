@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { deriveTags, matchQuery, matchToken, shortRoomLabel } from "./tags";
+import { deriveTags, matchQuery, matchToken, roomDisplayLabel, shortRoomLabel } from "./tags";
 
 test("deriveTags builds mnemonic tags from meta", () => {
   const tags = deriveTags(
@@ -46,6 +46,18 @@ test("matchQuery ANDs all tokens", () => {
   expect(matchQuery(e, "codehost host:mbp")).toBe(true);
   expect(matchQuery(e, "codehost host:other")).toBe(false);
   expect(matchQuery(e, "")).toBe(true);
+});
+
+test("roomDisplayLabel names a room after its servers", () => {
+  const t = "super-secret-token-value-1234567890";
+  expect(roomDisplayLabel(t, ["tak.local"])).toBe("tak.local");
+  // Duplicates collapse (a host advertising both name and hostname).
+  expect(roomDisplayLabel(t, ["tak.local", "tak.local", "mbp"])).toBe("tak.local+1");
+  // Empty room falls back to the token hash; blank names don't count.
+  expect(roomDisplayLabel(t, [])).toBe(shortRoomLabel(t));
+  expect(roomDisplayLabel(t, ["", ""])).toBe(shortRoomLabel(t));
+  // Multi-server labels stay whitespace-free so `room:` filter tokens work.
+  expect(roomDisplayLabel(t, ["a", "b"])).not.toMatch(/\s/);
 });
 
 test("shortRoomLabel is stable and exactly 4 chars", () => {

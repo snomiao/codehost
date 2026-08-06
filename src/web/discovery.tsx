@@ -24,7 +24,7 @@ import {
   shareableDeepLink,
 } from "../shared/repo";
 import { getRooms, historyFor, recordConnection, setRooms } from "./history";
-import { deriveTags, matchQuery, shortRoomLabel, tagKey } from "../shared/tags";
+import { deriveTags, matchQuery, roomDisplayLabel, shortRoomLabel, tagKey } from "../shared/tags";
 
 const TOKEN_KEY = "codehost.token";
 
@@ -1183,6 +1183,10 @@ export function Discovery() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rootServerKey]);
   const onlineRooms = tokens.filter((t) => roomOpen[t]).length;
+  // Human room labels: named after what's inside (server names) rather than the
+  // meaningless token hash — the hash is only the empty-room fallback.
+  const roomLabel = (t: string) =>
+    roomDisplayLabel(t, (serversByRoom[t] ?? []).map((s) => s.meta?.name ?? s.meta?.host ?? ""));
   const activeServer = allServers.find((x) => x.server.peerId === activePeerId)?.server;
 
   // Other clients (browsers) across all joined rooms, deduped by peerId — the
@@ -1191,13 +1195,15 @@ export function Discovery() {
     .flat()
     .filter((c, i, all) => all.findIndex((x) => x.peerId === c.peerId) === i);
 
-  // Annotate each server with its mnemonic fake-tags (incl. its room label), then
-  // filter. The room token is hashed to a short label — never rendered raw.
+  // Annotate each server with its mnemonic fake-tags, then filter. The room
+  // tag only appears with several rooms joined — in the common single-room
+  // case it distinguishes nothing and is pure noise. (The raw token is never
+  // rendered; the label is server names or, for an empty room, the hash.)
   const tagged = allServers.map(({ server: s, room }) => ({
     server: s,
     room,
     name: s.meta?.name ?? s.peerId.slice(0, 8),
-    tags: deriveTags(s.meta, { roomLabel: shortRoomLabel(room) }),
+    tags: deriveTags(s.meta, tokens.length > 1 ? { roomLabel: roomLabel(room) } : {}),
   }));
   const query = [...activeTags, filter].join(" ");
   const filtered = tagged.filter((t) => matchQuery({ name: t.name, tags: t.tags }, query));
@@ -1501,9 +1507,9 @@ export function Discovery() {
                     <span
                       key={t}
                       style={{ ...styles.chip, ...styles.roomChip, ...(roomOpen[t] ? styles.roomChipOn : {}) }}
-                      title={roomOpen[t] ? "connected" : "connecting…"}
+                      title={`${roomOpen[t] ? "connected" : "connecting…"} · room ${shortRoomLabel(t)}`}
                     >
-                      {shortRoomLabel(t)}
+                      {roomLabel(t)}
                       <button type="button" style={styles.roomChipX} onClick={() => leaveRoom(t)} title="leave room">
                         ✕
                       </button>
@@ -1607,7 +1613,7 @@ export function Discovery() {
               <input
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}
-                placeholder="filter…  e.g.  repo:codehost  host:mbp  room:ab12  (space = AND)"
+                placeholder="filter…  e.g.  repo:codehost  host:mbp  wt:main  (space = AND)"
                 style={styles.search}
               />
               {(activeTags.length > 0 || suggestedTags.length > 0) && (

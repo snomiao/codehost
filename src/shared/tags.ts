@@ -24,6 +24,19 @@ export function shortRoomLabel(token: string): string {
   return (h >>> 0).toString(36).slice(0, 4).padStart(4, "0");
 }
 
+/**
+ * Human room label derived from the room's live server names: one server → its
+ * name ("tak.local"), several → "tak.local+2", none online → the hash label.
+ * Space-free so it stays usable as a `room:` filter-tag value (the query
+ * matcher splits on whitespace). Purely a display mnemonic — identity stays in
+ * the token.
+ */
+export function roomDisplayLabel(token: string, serverNames: string[]): string {
+  const names = [...new Set(serverNames.filter(Boolean))];
+  if (names.length === 0) return shortRoomLabel(token);
+  return names.length === 1 ? names[0] : `${names[0]}+${names.length - 1}`;
+}
+
 /** Build the mnemonic tag list for a server from its advertised metadata. */
 export function deriveTags(meta: PeerMeta | null, opts: { roomLabel?: string } = {}): string[] {
   const tags: string[] = [];
