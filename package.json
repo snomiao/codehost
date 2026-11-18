@@ -30,7 +30,7 @@
     "deploy:pages": "vite build && wrangler pages deploy dist/public --project-name codehost",
     "start": "bun src/server.ts",
     "test": "bun test",
-    "typecheck": "tsgo --noEmit && tsgo --noEmit -p src/web/tsconfig.sw.json && tsgo --noEmit -p worker/tsconfig.json"
+    "typecheck": "tsrs --noEmit && tsrs --noEmit -p src/web/tsconfig.sw.json && tsrs --noEmit -p worker/tsconfig.json"
   },
   "dependencies": {
     "@parcel/watcher": "^2.5.6",
@@ -60,13 +60,13 @@
     "@types/react-dom": "^19.1.7",
     "@types/yargs": "^17.0.33",
     "@cloudflare/workers-types": "^4.20250101.0",
-    "@typescript/native-preview": "^7.0.0-dev.20260124.1",
     "wrangler": "^4.95.0",
     "@vitejs/plugin-react": "^6.0.1",
     "concurrently": "^9.2.1",
     "portless": "^0.12.0",
     "typescript": "^5",
-    "vite": "^8.0.10"
+    "vite": "^8.0.10",
+    "tsrs": "0.25.0-ts7.1.0-beta"
   },
   "trustedDependencies": [
     "node-datachannel"
