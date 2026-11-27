@@ -136,14 +136,21 @@ fn key_byte(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'.' | b'-')
 }
 
+/// What bun's `.env` parser skips between a key and its `=`: space, tab,
+/// vertical tab, form feed, and line ends too (bun 1.4.0 takes `KEY\r=1`
+/// and `KEY\n=1` for KEY; tried for every byte).
+fn dotenv_blank(byte: u8) -> bool {
+    matches!(byte, b' ' | b'\t' | b'\n' | b'\x0b' | b'\x0c' | b'\r')
+}
+
 /// Every name bun's `.env` parser could take for a key in `content`, and
 /// more. bun reads a key as the longest run of `[A-Za-z0-9_.-]` where a line
 /// starts (after blanks, and after `export `), or after a quoted value, and
-/// takes it when blanks and then `=`, or `:` and a blank, follow. Wherever
-/// it starts, nothing before it is a key character. So every such run in
-/// the file that is followed by blanks and `=` or `:` is taken here,
-/// wherever it is, inside values and comments too: a name too many only
-/// hands back.
+/// takes it when blanks (`dotenv_blank`, line ends included) and then `=`,
+/// or `:` and a blank, follow. Wherever it starts, nothing before it is a
+/// key character. So every such run in the file that is followed by blanks
+/// and `=` or `:` is taken here, wherever it is, inside values and comments
+/// too: a name too many only hands back.
 pub fn dotenv_keys(content: &[u8]) -> Vec<&[u8]> {
     let mut keys = Vec::new();
     let mut at = 0;
@@ -157,7 +164,7 @@ pub fn dotenv_keys(content: &[u8]) -> Vec<&[u8]> {
             at += 1;
         }
         let mut next = at;
-        while next < content.len() && matches!(content[next], b' ' | b'\t' | b'\x0b' | b'\x0c') {
+        while next < content.len() && dotenv_blank(content[next]) {
             next += 1;
         }
         if matches!(content.get(next), Some(b'=' | b':')) {
@@ -418,6 +425,9 @@ mod tests {
         assert_eq!(keys("URL=https://x.dev/?a=b\n"), ["URL", "https", "a"]);
         assert_eq!(keys("a.b-c_d=1\téx=2"), ["a.b-c_d", "x"]);
         assert!(keys("# only a comment\n\n   \nexport\n").is_empty());
+        // bun 1.4.0 takes A, B, C and D for keys here: line ends count as
+        // blanks between a key and its `=`.
+        assert_eq!(keys("A\r=1\nB\n=2\nC\r\n=3\nD\x0b\x0c =4\n"), ["A", "B", "C", "D"]);
     }
 
     #[test]
