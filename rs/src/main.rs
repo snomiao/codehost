@@ -6,11 +6,11 @@
 //! handed back to the JavaScript the package still ships, src/cli/index.ts,
 //! so nothing changes for users.
 //!
-//! Native, on Linux: `open --print`, `init`, the token check of `serve`,
-//! `dev` and `expose`, and `dev` registering with a live host daemon. Each
-//! of them works out its whole answer first (what it prints, what it
-//! writes), and declines (`HandBack`) before any of it shows. On macOS and
-//! Windows everything is handed back: nothing was compared there.
+//! Native, on Linux and macOS: `open --print`, `init`, the token check of
+//! `serve`, `dev` and `expose`, and `dev` registering with a live host
+//! daemon. Each of them works out its whole answer first (what it prints,
+//! what it writes), and declines (`HandBack`) before any of it shows. On
+//! Windows everything is handed back: none of it is compiled there.
 
 mod js_fallback;
 

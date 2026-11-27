@@ -57,8 +57,9 @@
 //! or standard error is a terminal, or FORCE_COLOR is set. A command that
 //! would write to standard error then hands back (`Machine::plain_stderr`).
 //!
-//! Only on Linux is anything answered natively: nothing was compared on
-//! macOS or Windows.
+//! Only on Linux and macOS is anything answered natively, the two systems
+//! the parity cases run on with the binary answering; on Windows the cases
+//! run too, and show that everything is handed back there.
 
 use std::ffi::OsStr;
 use std::fs;
@@ -335,8 +336,9 @@ fn loadable(path: &Path) -> bool {
 }
 
 pub fn machine() -> Result<Machine, HandBack> {
-    // Compared on Linux only: macOS and Windows go back.
-    if cfg!(not(target_os = "linux")) {
+    // Compared on Linux and macOS only: any other Unix goes back. (On
+    // Windows nothing of this is compiled.)
+    if cfg!(not(any(target_os = "linux", target_os = "macos"))) {
         return Err(HandBack);
     }
     if std::env::vars_os().any(|(name, value)| for_the_runtime(&name) || !text(&name) || !text(&value)) {
