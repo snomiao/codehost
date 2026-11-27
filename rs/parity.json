@@ -2160,7 +2160,7 @@
       "handback": "bun reads the files above the current directory too"
     },
     {
-      "name": "open beside a .env without anything that matters",
+      "name": "open beside a .env setting variables that are not set",
       "files": {
         ".env": "FOO=1\nGITHUB_TOKEN=not-a-real-one\n"
       },
@@ -2169,7 +2169,8 @@
         "--print",
         "--anon",
         "o/r"
-      ]
+      ],
+      "handback": "bun loads them, and git inherits them"
     },
     {
       "name": "open beside a .env setting HOME and PATH (set ones win)",
@@ -4318,6 +4319,1918 @@
         ]
       ],
       "handback": "not compared"
+    },
+    {
+      "name": "verify: open beside a tsconfig.json with a paths pattern of two stars",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ],
+      "files": {
+        "tsconfig.json": "{\"compilerOptions\": {\"paths\": {\"a*b*\": [\"./x\"]}}}"
+      },
+      "handback": "bun warns about this project file"
+    },
+    {
+      "name": "verify: open beside a tsconfig.json with a paths target of two stars",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ],
+      "files": {
+        "tsconfig.json": "{\"compilerOptions\": {\"paths\": {\"@/*\": [\"./src/*/*\"]}}}"
+      },
+      "handback": "bun warns about this project file"
+    },
+    {
+      "name": "verify: open beside a jsconfig.json with a paths target of two stars",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ],
+      "files": {
+        "jsconfig.json": "{\"compilerOptions\": {\"paths\": {\"x/*\": [\"*/*\"]}}}"
+      },
+      "handback": "bun warns about this project file"
+    },
+    {
+      "name": "verify: open beside a tsconfig.json with a jsxFactory bun cannot parse",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ],
+      "files": {
+        "tsconfig.json": "{\"compilerOptions\": {\"jsxFactory\": \"a-b\"}}"
+      },
+      "handback": "bun warns about this project file"
+    },
+    {
+      "name": "verify: open beside a tsconfig.json with a jsxFragmentFactory bun cannot parse",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ],
+      "files": {
+        "tsconfig.json": "{\"compilerOptions\": {\"jsxFragmentFactory\": \"a b\"}}"
+      },
+      "handback": "bun warns about this project file"
+    },
+    {
+      "name": "verify: open below a tsconfig.json with paths bun warns about",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ],
+      "files": {
+        "tsconfig.json": "{\"compilerOptions\": {\"paths\": {\"@/*\": [\"./src/*/*\"]}}}"
+      },
+      "setup": [
+        "mkdir -p sub"
+      ],
+      "env": {
+        "PARITY_CD": "sub"
+      },
+      "handback": "bun warns about this project file"
+    },
+    {
+      "name": "verify: init beside a tsconfig.json with paths bun warns about",
+      "args": [
+        "init",
+        "ws"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ],
+      "files": {
+        "tsconfig.json": "{\"compilerOptions\": {\"paths\": {\"a*b*\": [\"./x\"]}}}"
+      },
+      "handback": "bun warns about this project file"
+    },
+    {
+      "name": "verify: serve with a bad token beside a tsconfig.json bun warns about",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "short"
+      ],
+      "files": {
+        "tsconfig.json": "{\"compilerOptions\": {\"paths\": {\"a*b*\": [\"./x\"]}}}"
+      },
+      "handback": "bun's warnings are dropped by process.exit, but the file goes back all the same"
+    },
+    {
+      "name": "verify: dev registers beside a tsconfig.json bun warns about",
+      "args": [
+        "dev",
+        "ws",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Parity-Token-1"
+      ],
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '{\\n  \"pid\": %s,\\n  \"root\": %s,\\n  \"token\": %s,\\n  \"startedAt\": 1\\n}' \"$PPID\" '\"/srv/ws\"' '\"Daemon Token/1+é\"' > <HOME>/.codehost/daemon.json",
+        "mkdir ws"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ],
+      "normalize": [
+        [
+          "\"addedAt\": \\d{13}",
+          "\"addedAt\": <MS>"
+        ]
+      ],
+      "files": {
+        "tsconfig.json": "{\"compilerOptions\": {\"paths\": {\"a*b*\": [\"./x\"]}}}"
+      },
+      "handback": "bun warns about this project file"
+    },
+    {
+      "name": "verify: open beside a tsconfig.json with one-star paths and a member jsxFactory (bun is quiet)",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ],
+      "files": {
+        "tsconfig.json": "{\"compilerOptions\": {\"baseUrl\": \".\", \"paths\": {\"*\": [\"*\"], \"@/*\": [\"./src/*\"]}, \"jsxFactory\": \"React.createElement\"}}"
+      }
+    },
+    {
+      "name": "verify: open beside a package.json with imports not starting with # (bun is quiet)",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ],
+      "files": {
+        "package.json": "{\"name\": \"x\", \"imports\": {\"a\": \"./x.js\"}, \"exports\": {}}"
+      }
+    },
+    {
+      "name": "verify: open in a repository beside a .env setting LD_LIBRARY_PATH to a libc git cannot load",
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ],
+      "files": {
+        ".env": "LD_LIBRARY_PATH=<CWD>/libs\n",
+        "libs/libc.so.6": "not an ELF file\n"
+      },
+      "setup": [
+        "mkdir -p '.'",
+        "git -C '.' init -q -b main",
+        "git -C '.' remote add origin 'https://github.com/o/r'",
+        "git -C '.' -c user.name=p -c user.email=p@p commit -q --allow-empty -m init"
+      ],
+      "handback": "bun loads a variable from .env that is not set, and git inherits it"
+    },
+    {
+      "name": "verify: open in a repository of another user, with SUDO_UID in .env (needs root)",
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ],
+      "files": {
+        ".env": "SUDO_UID=65534\n"
+      },
+      "setup": [
+        "mkdir -p '.'",
+        "git -C '.' init -q -b main",
+        "git -C '.' remote add origin 'https://github.com/o/r'",
+        "chown -R 65534:65534 . 2>/dev/null || true"
+      ],
+      "handback": "bun loads a variable from .env that is not set, and git inherits it"
+    },
+    {
+      "name": "verify: open in a repository of another user, no .env (needs root)",
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ],
+      "setup": [
+        "mkdir -p '.'",
+        "git -C '.' init -q -b main",
+        "git -C '.' remote add origin 'https://github.com/o/r'",
+        "chown -R 65534:65534 . 2>/dev/null || true"
+      ]
+    },
+    {
+      "name": "verify: open in a repository beside a .env setting LD_PRELOAD to nothing (git still runs)",
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ],
+      "files": {
+        ".env": "LD_PRELOAD=/nonexistent/libnothing.so\n"
+      },
+      "setup": [
+        "mkdir -p '.'",
+        "git -C '.' init -q -b main",
+        "git -C '.' remote add origin 'https://github.com/o/r'",
+        "git -C '.' -c user.name=p -c user.email=p@p commit -q --allow-empty -m init"
+      ],
+      "handback": "bun loads a variable from .env that is not set, and git inherits it"
+    },
+    {
+      "name": "verify: open beside a .env with export, quotes and expansion",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ],
+      "files": {
+        ".env": "export FOO=\"a b\"\nBAR='x'\nBAZ=$FOO\nMULTI=\"1\n2\"\n"
+      },
+      "handback": "bun loads a variable from .env that is not set, and git inherits it"
+    },
+    {
+      "name": "verify: open in a repository beside a .env setting LANG and LC_ALL",
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ],
+      "files": {
+        ".env": "LANG=de_DE.UTF-8\nLC_ALL=de_DE.UTF-8\nLANGUAGE=de\n"
+      },
+      "setup": [
+        "mkdir -p '.'",
+        "git -C '.' init -q -b main",
+        "git -C '.' remote add origin 'https://github.com/o/r'",
+        "git -C '.' -c user.name=p -c user.email=p@p commit -q --allow-empty -m init"
+      ],
+      "handback": "bun loads a variable from .env that is not set, and git inherits it"
+    },
+    {
+      "name": "verify: open beside a .env.local that is a directory",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ],
+      "setup": [
+        "mkdir .env.local"
+      ],
+      "handback": "a .env that cannot be read goes back"
+    },
+    {
+      "name": "verify: open in a repository whose origin URL is 9 MB",
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "after": [
+        "sort -u \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ],
+      "setup": [
+        "mkdir -p '.'",
+        "git -C '.' init -q -b main",
+        "git -C '.' -c user.name=p -c user.email=p@p commit -q --allow-empty -m init",
+        "printf '[remote \"origin\"]\\n\\turl = https://github.com/o/r/%s\\n' \"$(head -c 9000000 /dev/zero | tr '\\0' x)\" >> .git/config"
+      ],
+      "handback": "git prints more than bun's spawnSync reads (1 MiB)"
+    },
+    {
+      "name": "verify: open in a repository whose origin URL is 600 KB",
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ],
+      "setup": [
+        "mkdir -p '.'",
+        "git -C '.' init -q -b main",
+        "git -C '.' -c user.name=p -c user.email=p@p commit -q --allow-empty -m init",
+        "printf '[remote \"origin\"]\\n\\turl = https://github.com/o/r/%s\\n' \"$(head -c 600000 /dev/zero | tr '\\0' x)\" >> .git/config"
+      ]
+    },
+    {
+      "name": "verify: dev registers a repository whose origin URL is 9 MB",
+      "args": [
+        "dev",
+        "r",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Parity-Token-1"
+      ],
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '{\\n  \"pid\": %s,\\n  \"root\": %s,\\n  \"token\": %s,\\n  \"startedAt\": 1\\n}' \"$PPID\" '\"/srv/ws\"' '\"Daemon Token/1+é\"' > <HOME>/.codehost/daemon.json",
+        "mkdir -p 'r'",
+        "git -C 'r' init -q -b main",
+        "cd r && printf '[remote \"origin\"]\\n\\turl = https://github.com/o/r/%s\\n' \"$(head -c 9000000 /dev/zero | tr '\\0' x)\" >> .git/config"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "sort -u \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ],
+      "normalize": [
+        [
+          "\"addedAt\": \\d{13}",
+          "\"addedAt\": <MS>"
+        ]
+      ],
+      "handback": "git prints more than bun's spawnSync reads (1 MiB)"
+    },
+    {
+      "name": "verify: open with a saved token of 200 KB",
+      "args": [
+        "open",
+        "--print",
+        "o/r"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ],
+      "setup": [
+        "mkdir -p <HOME>/.codehost && { printf '{\"token\": \"'; head -c 200000 /dev/zero | tr '\\0' A; printf 'b1-/+\"}'; } > <HOME>/.codehost/config.json"
+      ]
+    },
+    {
+      "name": "verify: serve -t of 100 KB",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-Aa1-"
+      ]
+    },
+    {
+      "name": "verify: serve -t of 11 UTF-16 units ending in astral characters",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Aa1-aaa😀😀"
+      ]
+    },
+    {
+      "name": "verify: serve -t of 257 units, the last character astral",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Aa1-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa😀"
+      ]
+    },
+    {
+      "name": "verify: serve -t with U+180E (not \\s since ES2016)",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "aaaa᠎aaaaaaa"
+      ]
+    },
+    {
+      "name": "verify: serve -t with U+200B (not \\s)",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "aaaaaaaaaaa​"
+      ]
+    },
+    {
+      "name": "verify: serve -t with U+0085 (not \\s)",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "aaaaaaaaaaa"
+      ]
+    },
+    {
+      "name": "verify: serve -t with U+2028 inside",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Aa1-aaaa aaaa"
+      ]
+    },
+    {
+      "name": "verify: serve -t weak, surrounded by NBSP",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        " Changeme1234 "
+      ]
+    },
+    {
+      "name": "verify: serve -t PassWord1234",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "PassWord1234"
+      ]
+    },
+    {
+      "name": "verify: serve -t of non-ASCII letters and digits",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "ÄÖÜäöüß12345"
+      ]
+    },
+    {
+      "name": "verify: serve -t of 300 spaces",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "                                                                                                                                                                                                                                                                                                            "
+      ]
+    },
+    {
+      "name": "verify: serve -t of a lone ideographic space and letters",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "　aaaaaaaaaaaaaa　"
+      ]
+    },
+    {
+      "name": "verify: expose 00000 with a bad token",
+      "args": [
+        "expose",
+        "00000",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "short"
+      ]
+    },
+    {
+      "name": "verify: dev --standalone with a bad token",
+      "args": [
+        "dev",
+        "--standalone",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "short"
+      ]
+    },
+    {
+      "name": "verify: serve --port 99999 with a bad token and a missing dir",
+      "args": [
+        "serve",
+        "nowhere",
+        "--port",
+        "99999",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "short"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "verify: serve with a bad token and CLICOLOR_FORCE",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "short"
+      ],
+      "env": {
+        "CLICOLOR_FORCE": "1"
+      }
+    },
+    {
+      "name": "verify: serve with a bad token and FORCE_COLOR=0",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "short"
+      ],
+      "env": {
+        "FORCE_COLOR": "0"
+      },
+      "handback": "FORCE_COLOR is set"
+    },
+    {
+      "name": "verify: serve with a bad token and TERM=dumb",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "short"
+      ],
+      "env": {
+        "TERM": "dumb"
+      }
+    },
+    {
+      "name": "verify: serve with a bad token and JSC_dumpOptions",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "short"
+      ],
+      "env": {
+        "JSC_dumpOptions": "1"
+      }
+    },
+    {
+      "name": "verify: serve with a bad token and an empty PATH entry",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "short"
+      ],
+      "env": {
+        "PARITY_PATH_PREFIX": "/usr/bin:"
+      },
+      "handback": "an empty PATH entry"
+    },
+    {
+      "name": "verify: open \"version --print\"",
+      "args": [
+        "open",
+        "version",
+        "--print"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "verify: open \"--print Help\"",
+      "args": [
+        "open",
+        "--print",
+        "Help"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "verify: open \"--print TRUE\"",
+      "args": [
+        "open",
+        "--print",
+        "TRUE"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "verify: open \"--print o/r --anon --anon\"",
+      "args": [
+        "open",
+        "--print",
+        "o/r",
+        "--anon",
+        "--anon"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ],
+      "handback": "a repeated option is yargs's"
+    },
+    {
+      "name": "verify: open \"--print --page= o/r\"",
+      "args": [
+        "open",
+        "--print",
+        "--page=",
+        "o/r"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "verify: open \"--print --page https://x.dev/?a=1/ o/r\"",
+      "args": [
+        "open",
+        "--print",
+        "--page",
+        "https://x.dev/?a=1/",
+        "o/r"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "verify: open \"--print -t 0x10 o/r\"",
+      "args": [
+        "open",
+        "--print",
+        "-t",
+        "0x10",
+        "o/r"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "verify: open \"--print -t =x o/r\"",
+      "args": [
+        "open",
+        "--print",
+        "-t",
+        "=x",
+        "o/r"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "verify: open \"--print -t ' ' ''\" outside a repository",
+      "args": [
+        "open",
+        "--print",
+        "-t",
+        " ",
+        ""
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "verify: open \"--print completion\"",
+      "args": [
+        "open",
+        "--print",
+        "completion"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "verify: open \"--print --t x o/r\"",
+      "args": [
+        "open",
+        "--print",
+        "--t",
+        "x",
+        "o/r"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ],
+      "handback": "an unknown option"
+    },
+    {
+      "name": "verify: open \"--print --page=help o/r\"",
+      "args": [
+        "open",
+        "--print",
+        "--page=help",
+        "o/r"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "verify: open \"--print --token=true o/r\"",
+      "args": [
+        "open",
+        "--print",
+        "--token=true",
+        "o/r"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "verify: open \"--print --page=false o/r\"",
+      "args": [
+        "open",
+        "--print",
+        "--page=false",
+        "o/r"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "verify: open \"--print -t help o/r\"",
+      "args": [
+        "open",
+        "--print",
+        "-t",
+        "help",
+        "o/r"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ],
+      "handback": "the word help"
+    },
+    {
+      "name": "verify: open \"--print o/r help\"",
+      "args": [
+        "open",
+        "--print",
+        "o/r",
+        "help"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ],
+      "handback": "the word help"
+    },
+    {
+      "name": "verify: open \"--print --anon\" with an @-only target",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "@"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "verify: open \"--print --anon\" with a target of newline-separated parts",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "a/b\nc/d"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "verify: open \"--print --anon\" with a branch holding U+2028",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r/tree/a b"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "verify: open \"--print --anon\" with a CRLF-terminated target",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r\r\n"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "verify: open \"--print --anon\" with an http URL with a port and .git",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "HTTP://Git.Example.com:8443/o/r.git?x#y"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "verify: serve \"--token=help\"",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "--token=help"
+      ]
+    },
+    {
+      "name": "verify: open \"--print -t\" with a token holding a newline",
+      "args": [
+        "open",
+        "--print",
+        "-t",
+        "a\nb",
+        "o/r"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "verify: open \"--print --page\" ending in a space and a slash",
+      "args": [
+        "open",
+        "--print",
+        "--page",
+        "https://x.dev/ /",
+        "o/r"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "verify: open with a directory named git first on PATH",
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ],
+      "setup": [
+        "mkdir -p '.'",
+        "git -C '.' init -q -b main",
+        "git -C '.' remote add origin 'https://github.com/o/r'",
+        "mkdir -p pp/git"
+      ],
+      "env": {
+        "PARITY_PATH_PREFIX": "<CWD>/pp"
+      }
+    },
+    {
+      "name": "verify: open with a git script without #! first on PATH",
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ],
+      "files": {
+        "pp/git": "case \"$*\" in *is-inside*) echo true;; *get-url*) echo https://github.com/o/r;; *) echo main;; esac\n"
+      },
+      "setup": [
+        "chmod +x pp/git"
+      ],
+      "env": {
+        "PARITY_PATH_PREFIX": "<CWD>/pp"
+      },
+      "handback": "a git that cannot be started"
+    },
+    {
+      "name": "verify: init \"ws help\"",
+      "args": [
+        "init",
+        "ws",
+        "help"
+      ],
+      "handback": "the word help"
+    },
+    {
+      "name": "verify: open with a saved token of two spaces",
+      "args": [
+        "open",
+        "--print",
+        "o/r"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ],
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '%s' '{\"token\": \"  \"}' > <HOME>/.codehost/config.json"
+      ]
+    },
+    {
+      "name": "verify: open with a saved token holding U+2028 and an escaped pair",
+      "args": [
+        "open",
+        "--print",
+        "o/r"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ],
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '%s' '{\"token\": \"a b\\ud83d\\ude00\"}' > <HOME>/.codehost/config.json"
+      ]
+    },
+    {
+      "name": "verify: open with the key token written with an escape",
+      "args": [
+        "open",
+        "--print",
+        "o/r"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ],
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '%s' '{\"\\u0074oken\": \"Esc-Key-1\"}' > <HOME>/.codehost/config.json"
+      ]
+    },
+    {
+      "name": "verify: open with config.json a link to a file",
+      "args": [
+        "open",
+        "--print",
+        "o/r"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ],
+      "setup": [
+        "printf '%s' '{\"token\": \"Linked-1\"}' > real.json",
+        "mkdir -p <HOME>/.codehost && ln -s <CWD>/real.json <HOME>/.codehost/config.json"
+      ]
+    },
+    {
+      "name": "verify: open with config.json in CRLF and nested values",
+      "args": [
+        "open",
+        "--print",
+        "o/r"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ],
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '%s' '{\r\n  \"hostId\": {\"a\": [1, 2.5e3, null]},\r\n  \"token\": \"Crlf-1\"\r\n}\r\n' > <HOME>/.codehost/config.json"
+      ]
+    },
+    {
+      "name": "verify: open with config.json holding a NUL after the object",
+      "args": [
+        "open",
+        "--print",
+        "o/r"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ],
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '{\"token\": \"x\"}\\0' > <HOME>/.codehost/config.json"
+      ],
+      "handback": "text that is not strict JSON"
+    },
+    {
+      "name": "verify: open with HOME ending in a slash",
+      "args": [
+        "open",
+        "--print",
+        "o/r"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ],
+      "env": {
+        "HOME": "<HOME>/"
+      },
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '%s' '{\"token\": \"Slash-1\"}' > <HOME>/.codehost/config.json"
+      ]
+    },
+    {
+      "name": "verify: open with config.json holding an empty-string key and a token",
+      "args": [
+        "open",
+        "--print",
+        "o/r"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ],
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '%s' '{\"\": 1, \"token\": \"E-1\"}' > <HOME>/.codehost/config.json"
+      ]
+    },
+    {
+      "name": "verify: init \"./\"",
+      "args": [
+        "init",
+        "./"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "verify: init \"ws/\"",
+      "args": [
+        "init",
+        "ws/"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "verify: init with an empty config.yaml there",
+      "args": [
+        "init"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ],
+      "files": {
+        ".codehost/config.yaml": ""
+      }
+    },
+    {
+      "name": "verify: init a linked directory",
+      "args": [
+        "init",
+        "link"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ],
+      "setup": [
+        "mkdir real && ln -s real link"
+      ]
+    },
+    {
+      "name": "verify: init below a linked directory",
+      "args": [
+        "init",
+        "link/sub"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ],
+      "setup": [
+        "mkdir real && ln -s real link"
+      ]
+    },
+    {
+      "name": "verify: init -f with only setup.ps1 there",
+      "args": [
+        "init",
+        "-f"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ],
+      "files": {
+        ".codehost/setup.ps1": "mine\n"
+      }
+    },
+    {
+      "name": "verify: init -f with setup.sh mode 700",
+      "args": [
+        "init",
+        "-f"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ],
+      "files": {
+        ".codehost/setup.sh": "mine\n"
+      },
+      "setup": [
+        "chmod 700 .codehost/setup.sh"
+      ]
+    },
+    {
+      "name": "verify: init \" ws \"",
+      "args": [
+        "init",
+        " ws "
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "verify: init \"ws\\nx\"",
+      "args": [
+        "init",
+        "ws\nx"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "verify: init into an empty .codehost",
+      "args": [
+        "init",
+        "ws"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ],
+      "setup": [
+        "mkdir -p ws/.codehost"
+      ]
+    },
+    {
+      "name": "verify: init a path through ..",
+      "args": [
+        "init",
+        "a/../b/./c"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "verify: init with setup.sh a FIFO",
+      "args": [
+        "init"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ],
+      "setup": [
+        "mkdir .codehost && mkfifo .codehost/setup.sh"
+      ]
+    },
+    {
+      "name": "verify: dev \"\"",
+      "args": [
+        "dev",
+        "",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Parity-Token-1"
+      ],
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '{\\n  \"pid\": %s,\\n  \"root\": %s,\\n  \"token\": %s,\\n  \"startedAt\": 1\\n}' \"$PPID\" '\"/srv/ws\"' '\"Daemon Token/1+é\"' > <HOME>/.codehost/daemon.json"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ],
+      "normalize": [
+        [
+          "\"addedAt\": \\d{13}",
+          "\"addedAt\": <MS>"
+        ]
+      ]
+    },
+    {
+      "name": "verify: dev with daemon.json in another key order with extra fields",
+      "args": [
+        "dev",
+        "ws",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Parity-Token-1"
+      ],
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '%s' '{\"token\": \"Odd-Order-1\", \"extra\": [1, {\"x\": null}], \"root\": \"/r\", \"startedAt\": 1.5, \"pid\": '\"$PPID\"'}' > <HOME>/.codehost/daemon.json",
+        "mkdir ws"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ],
+      "normalize": [
+        [
+          "\"addedAt\": \\d{13}",
+          "\"addedAt\": <MS>"
+        ]
+      ]
+    },
+    {
+      "name": "verify: dev with a daemon root holding a quote and a newline",
+      "args": [
+        "dev",
+        "ws",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Parity-Token-1"
+      ],
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '{\\n  \"pid\": %s,\\n  \"root\": %s,\\n  \"token\": %s,\\n  \"startedAt\": 1\\n}' \"$PPID\" '\"/srv/\\\"w\\ns\\\"\"' '\"Daemon-Token-1\"' > <HOME>/.codehost/daemon.json",
+        "mkdir ws"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ],
+      "normalize": [
+        [
+          "\"addedAt\": \\d{13}",
+          "\"addedAt\": <MS>"
+        ]
+      ]
+    },
+    {
+      "name": "verify: dev with a daemon token of #&? and spaces",
+      "args": [
+        "dev",
+        "ws",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Parity-Token-1"
+      ],
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '{\\n  \"pid\": %s,\\n  \"root\": %s,\\n  \"token\": %s,\\n  \"startedAt\": 1\\n}' \"$PPID\" '\"/srv/ws\"' '\"a #&?= b/%\"' > <HOME>/.codehost/daemon.json",
+        "mkdir ws"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ],
+      "normalize": [
+        [
+          "\"addedAt\": \\d{13}",
+          "\"addedAt\": <MS>"
+        ]
+      ]
+    },
+    {
+      "name": "verify: dev with workspaces.json holding U+2028 and an escaped pair",
+      "args": [
+        "dev",
+        "ws",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Parity-Token-1"
+      ],
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '{\\n  \"pid\": %s,\\n  \"root\": %s,\\n  \"token\": %s,\\n  \"startedAt\": 1\\n}' \"$PPID\" '\"/srv/ws\"' '\"Daemon Token/1+é\"' > <HOME>/.codehost/daemon.json",
+        "mkdir -p <HOME>/.codehost && printf '%s' '[{\"path\": \"/a b\\ud83d\\ude00\\u0001\", \"addedAt\": 1}]' > <HOME>/.codehost/workspaces.json",
+        "mkdir ws"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ],
+      "normalize": [
+        [
+          "\"addedAt\": \\d{13}",
+          "\"addedAt\": <MS>"
+        ]
+      ]
+    },
+    {
+      "name": "verify: dev with workspaces.json addedAt first",
+      "args": [
+        "dev",
+        "ws",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Parity-Token-1"
+      ],
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '{\\n  \"pid\": %s,\\n  \"root\": %s,\\n  \"token\": %s,\\n  \"startedAt\": 1\\n}' \"$PPID\" '\"/srv/ws\"' '\"Daemon Token/1+é\"' > <HOME>/.codehost/daemon.json",
+        "mkdir -p <HOME>/.codehost && printf '%s' '[{\"addedAt\": 9007199254740991, \"path\": \"/x\"}]' > <HOME>/.codehost/workspaces.json",
+        "mkdir ws"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ],
+      "normalize": [
+        [
+          "\"addedAt\": \\d{13}",
+          "\"addedAt\": <MS>"
+        ]
+      ]
+    },
+    {
+      "name": "verify: dev with the directory registered already, written with escapes",
+      "args": [
+        "dev",
+        "ws",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Parity-Token-1"
+      ],
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '{\\n  \"pid\": %s,\\n  \"root\": %s,\\n  \"token\": %s,\\n  \"startedAt\": 1\\n}' \"$PPID\" '\"/srv/ws\"' '\"Daemon Token/1+é\"' > <HOME>/.codehost/daemon.json",
+        "mkdir -p <HOME>/.codehost && printf '%s' '[{\"path\": \"<CWD>\\/ws\", \"addedAt\": 1}]' > <HOME>/.codehost/workspaces.json",
+        "mkdir ws"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ],
+      "normalize": [
+        [
+          "\"addedAt\": \\d{13}",
+          "\"addedAt\": <MS>"
+        ]
+      ]
+    },
+    {
+      "name": "verify: dev with workspaces.json a link to a file",
+      "args": [
+        "dev",
+        "ws",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Parity-Token-1"
+      ],
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '{\\n  \"pid\": %s,\\n  \"root\": %s,\\n  \"token\": %s,\\n  \"startedAt\": 1\\n}' \"$PPID\" '\"/srv/ws\"' '\"Daemon Token/1+é\"' > <HOME>/.codehost/daemon.json",
+        "printf '[]' > <CWD>/w.json && ln -s <CWD>/w.json <HOME>/.codehost/workspaces.json",
+        "mkdir ws"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat <CWD>/w.json; echo",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ],
+      "normalize": [
+        [
+          "\"addedAt\": \\d{13}",
+          "\"addedAt\": <MS>"
+        ]
+      ]
+    },
+    {
+      "name": "verify: dev in a repository without origin on a branch",
+      "args": [
+        "dev",
+        "r",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Parity-Token-1"
+      ],
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '{\\n  \"pid\": %s,\\n  \"root\": %s,\\n  \"token\": %s,\\n  \"startedAt\": 1\\n}' \"$PPID\" '\"/srv/ws\"' '\"Daemon Token/1+é\"' > <HOME>/.codehost/daemon.json",
+        "mkdir -p 'r'",
+        "git -C 'r' init -q -b main",
+        "git -C 'r' -c user.name=p -c user.email=p@p commit -q --allow-empty -m init"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ],
+      "normalize": [
+        [
+          "\"addedAt\": \\d{13}",
+          "\"addedAt\": <MS>"
+        ]
+      ]
+    },
+    {
+      "name": "verify: dev registers a directory named with a trailing dot segment",
+      "args": [
+        "dev",
+        "ws/.",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Parity-Token-1"
+      ],
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '{\\n  \"pid\": %s,\\n  \"root\": %s,\\n  \"token\": %s,\\n  \"startedAt\": 1\\n}' \"$PPID\" '\"/srv/ws\"' '\"Daemon Token/1+é\"' > <HOME>/.codehost/daemon.json",
+        "mkdir ws"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ],
+      "normalize": [
+        [
+          "\"addedAt\": \\d{13}",
+          "\"addedAt\": <MS>"
+        ]
+      ]
+    },
+    {
+      "name": "verify: dev registers a directory given with ..",
+      "args": [
+        "dev",
+        "ws/../ws2",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Parity-Token-1"
+      ],
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '{\\n  \"pid\": %s,\\n  \"root\": %s,\\n  \"token\": %s,\\n  \"startedAt\": 1\\n}' \"$PPID\" '\"/srv/ws\"' '\"Daemon Token/1+é\"' > <HOME>/.codehost/daemon.json",
+        "mkdir ws ws2"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ],
+      "normalize": [
+        [
+          "\"addedAt\": \\d{13}",
+          "\"addedAt\": <MS>"
+        ]
+      ]
+    },
+    {
+      "name": "verify: dev with daemon.json pid 0",
+      "args": [
+        "dev",
+        "ws",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Parity-Token-1"
+      ],
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '%s' '{\"pid\": 0, \"root\": \"/r\", \"token\": \"Zero-Pid-1\"}' > <HOME>/.codehost/daemon.json",
+        "mkdir ws"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ],
+      "normalize": [
+        [
+          "\"addedAt\": \\d{13}",
+          "\"addedAt\": <MS>"
+        ]
+      ],
+      "handback": "a pid that is not a positive integer"
+    },
+    {
+      "name": "verify: dev with workspaces.json [] and spaces",
+      "args": [
+        "dev",
+        "ws",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Parity-Token-1"
+      ],
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '{\\n  \"pid\": %s,\\n  \"root\": %s,\\n  \"token\": %s,\\n  \"startedAt\": 1\\n}' \"$PPID\" '\"/srv/ws\"' '\"Daemon Token/1+é\"' > <HOME>/.codehost/daemon.json",
+        "mkdir -p <HOME>/.codehost && printf '%s' ' [ ] \n' > <HOME>/.codehost/workspaces.json",
+        "mkdir ws"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ],
+      "normalize": [
+        [
+          "\"addedAt\": \\d{13}",
+          "\"addedAt\": <MS>"
+        ]
+      ]
+    },
+    {
+      "name": "verify: dev with an entry for the directory that has a third key",
+      "args": [
+        "dev",
+        "ws",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Parity-Token-1"
+      ],
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '{\\n  \"pid\": %s,\\n  \"root\": %s,\\n  \"token\": %s,\\n  \"startedAt\": 1\\n}' \"$PPID\" '\"/srv/ws\"' '\"Daemon Token/1+é\"' > <HOME>/.codehost/daemon.json",
+        "mkdir -p <HOME>/.codehost && printf '%s' '[{\"path\": \"<CWD>/ws\", \"addedAt\": 1, \"x\": 2}]' > <HOME>/.codehost/workspaces.json",
+        "mkdir ws"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ],
+      "normalize": [
+        [
+          "\"addedAt\": \\d{13}",
+          "\"addedAt\": <MS>"
+        ]
+      ],
+      "handback": "an entry the JavaScript keeps by its own rules"
+    },
+    {
+      "name": "verify: dev with daemon.json root and token not strings",
+      "args": [
+        "dev",
+        "ws",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Parity-Token-1"
+      ],
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '%s' '{\"pid\": '\"$PPID\"', \"root\": 5, \"token\": [\"a\"]}' > <HOME>/.codehost/daemon.json",
+        "mkdir ws"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ],
+      "normalize": [
+        [
+          "\"addedAt\": \\d{13}",
+          "\"addedAt\": <MS>"
+        ]
+      ],
+      "handback": "root and token are not strings"
+    },
+    {
+      "name": "verify: dev registers a repository with an upper-case scheme and port",
+      "args": [
+        "dev",
+        "r",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Parity-Token-1"
+      ],
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '{\\n  \"pid\": %s,\\n  \"root\": %s,\\n  \"token\": %s,\\n  \"startedAt\": 1\\n}' \"$PPID\" '\"/srv/ws\"' '\"Daemon Token/1+é\"' > <HOME>/.codehost/daemon.json",
+        "mkdir -p 'r'",
+        "git -C 'r' init -q -b main",
+        "git -C 'r' remote add origin 'SSH://git@Git.Example.com:2222/team/svc.GIT/'",
+        "git -C 'r' -c user.name=p -c user.email=p@p commit -q --allow-empty -m init"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ],
+      "normalize": [
+        [
+          "\"addedAt\": \\d{13}",
+          "\"addedAt\": <MS>"
+        ]
+      ]
+    },
+    {
+      "name": "repair: open beside a tsconfig.json with a paths target not relative and no baseUrl",
+      "files": {
+        "tsconfig.json": "{\"compilerOptions\": {\"paths\": {\"@/*\": [\"src/*\"]}}}"
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ],
+      "handback": "bun warns about this project file"
+    },
+    {
+      "name": "repair: open beside a tsconfig.json with a paths target not relative and a baseUrl",
+      "files": {
+        "tsconfig.json": "{\"compilerOptions\": {\"baseUrl\": \".\", \"paths\": {\"@/*\": [\"src/*\", \"./lib/*\"]}}}"
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ]
+    },
+    {
+      "name": "repair: open beside a jsconfig.json with a jsxFactory ending in a dot",
+      "files": {
+        "jsconfig.json": "{\"compilerOptions\": {\"jsxFactory\": \"a.\"}}"
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ],
+      "handback": "bun warns about this project file"
+    },
+    {
+      "name": "repair: open beside a tsconfig.json with member jsxFactory and jsxFragmentFactory",
+      "files": {
+        "tsconfig.json": "{\"compilerOptions\": {\"jsx\": \"react\", \"jsxFactory\": \"h\", \"jsxFragmentFactory\": \"Preact.Fragment\"}}"
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ]
+    },
+    {
+      "name": "repair: open in a repository beside a .env whose keys are all set already",
+      "files": {
+        ".env": "# set by the case\nCODEHOST_PARITY_SET=from the file\nexport HOME=/elsewhere\n\n"
+      },
+      "env": {
+        "CODEHOST_PARITY_SET": "from the environment"
+      },
+      "setup": [
+        "mkdir -p '.'",
+        "git -C '.' init -q -b main",
+        "git -C '.' remote add origin 'https://github.com/o/r'",
+        "git -C '.' -c user.name=p -c user.email=p@p commit -q --allow-empty -m init"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "repair: open beside a .env of comments and blank lines",
+      "files": {
+        ".env": "# nothing here\n\n   \n# see the README\n"
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ]
+    },
+    {
+      "name": "repair: open beside a .env with a key only in a comment",
+      "files": {
+        ".env": "# CODEHOST_PARITY_NEW=1\n"
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ],
+      "handback": "the binary takes every name bun could take, comments included"
+    },
+    {
+      "name": "repair: open beside a .env setting a variable that is set but empty",
+      "files": {
+        ".env": "CODEHOST_PARITY_EMPTY=x\n"
+      },
+      "env": {
+        "CODEHOST_PARITY_EMPTY": ""
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ],
+      "handback": "bun loads a variable from .env that is not set, and git inherits it"
+    },
+    {
+      "name": "repair: open in a repository beside a .env setting a variable git does not read",
+      "files": {
+        ".env": "CODEHOST_PARITY_NEW=1\n"
+      },
+      "setup": [
+        "mkdir -p '.'",
+        "git -C '.' init -q -b main",
+        "git -C '.' remote add origin 'https://github.com/o/r'",
+        "git -C '.' -c user.name=p -c user.email=p@p commit -q --allow-empty -m init"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ],
+      "handback": "bun loads a variable from .env that is not set, and git inherits it"
+    },
+    {
+      "name": "repair: open beside a .env with a key after a quoted value",
+      "files": {
+        ".env": "HOME=\"/x\" CODEHOST_PARITY_NEW=1\n"
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ],
+      "handback": "bun loads a variable from .env that is not set, and git inherits it"
+    },
+    {
+      "name": "repair: open beside a .env with a key written KEY: value",
+      "files": {
+        ".env": "CODEHOST_PARITY_NEW: 1\n"
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ],
+      "handback": "bun loads a variable from .env that is not set, and git inherits it"
+    },
+    {
+      "name": "repair: open with LD_BIND_NOW set",
+      "env": {
+        "LD_BIND_NOW": "1"
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ],
+      "handback": "the dynamic loader that starts bun reads LD_*"
+    },
+    {
+      "name": "repair: open in a repository whose origin URL makes git print exactly 1 MiB",
+      "setup": [
+        "mkdir -p '.'",
+        "git -C '.' init -q -b main",
+        "printf '[remote \"origin\"]\\n\\turl = https://github.com/o/r/%s\\n' \"$(head -c 1048552 /dev/zero | tr '\\0' x)\" >> .git/config"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "repair: open with a git that writes 9 MB to stderr",
+      "files": {
+        "pp/git": "#!/bin/sh\nPATH=${PATH#*:}; export PATH\nout=$(git \"$@\"); status=$?\nhead -c 9000000 /dev/zero | tr '\\0' x >&2\nprintf '%s\\n' \"$out\"\nexit $status\n"
+      },
+      "setup": [
+        "mkdir -p '.'",
+        "git -C '.' init -q -b main",
+        "git -C '.' remote add origin 'https://github.com/o/r'",
+        "chmod +x pp/git"
+      ],
+      "env": {
+        "PARITY_PATH_PREFIX": "<CWD>/pp"
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "after": [
+        "sort -u \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ],
+      "handback": "git prints more than bun's spawnSync reads (1 MiB)"
     }
   ]
 }

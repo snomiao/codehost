@@ -19,9 +19,11 @@
 #      binary hands back when node-datachannel's addon is not where
 #      `require` would find it, so a stub of that package is put in the
 #      directory the runner makes its stand-in in (its TMPDIR);
-#   4. `cargo test`: the unit tests, and the comparison of the helpers with
-#      the TypeScript's own functions run by bun (rs/src/compare.rs). This
-#      builds the crate again from the same sources and Cargo.lock.
+#   4. `cargo test`: the unit tests, the comparison of the helpers with the
+#      TypeScript's own functions run by bun, and of what the binary takes
+#      for a quiet project file or a harmless .env with what bun does beside
+#      some hundreds of generated ones (rs/src/compare.rs). This builds the
+#      crate again from the same sources and Cargo.lock.
 #
 # Each run gets a temp directory of its own, removed afterwards.
 set -u

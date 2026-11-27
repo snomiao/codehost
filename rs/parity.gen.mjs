@@ -29,10 +29,11 @@
 //     that could make `--print` false;
 //   - run serve, dev or expose with a token the policy accepts, except dev
 //     with a live host daemon registered (it then only writes to
-//     workspaces.json); and never with -d, --standalone or without
-//     `--signal ws://127.0.0.1:1`. If a case were wrong, the TypeScript
-//     would find no VS Code (CODEHOST_CODE_BIN points nowhere) and no
-//     signaling server;
+//     workspaces.json); and never with -d or without
+//     `--signal ws://127.0.0.1:1`, nor with --standalone unless every token
+//     is one the policy rejects (the handler checks it first and exits). If
+//     a case were wrong, the TypeScript would find no VS Code
+//     (CODEHOST_CODE_BIN points nowhere) and no signaling server;
 //   - run setup, list, stop, update or __supervise, which reach process
 //     managers, the network or VS Code.
 // The home directory is the runner's empty one; no real token is used.
@@ -91,10 +92,14 @@ function refuseDanger(c) {
   }
   if (["serve", "dev", "expose"].includes(command)) {
     if (!all.includes(SIGNAL.join(" "))) throw new Error(`${c.name}: every server case points --signal at a closed port`);
-    if (rest.some((a) => ["-d", "--daemon", "--standalone"].includes(a) || a.startsWith("--daemon") || a.startsWith("--standalone"))) {
-      throw new Error(`${c.name}: no -d or --standalone`);
+    if (rest.some((a) => ["-d", "--daemon"].includes(a) || a.startsWith("--daemon"))) {
+      throw new Error(`${c.name}: no -d`);
     }
-    const accepted = tokensIn(rest).some(policyAccepts);
+    const tokens = tokensIn(rest);
+    if (rest.some((a) => a.startsWith("--standalone")) && !(tokens.length > 0 && !tokens.some(policyAccepts))) {
+      throw new Error(`${c.name}: --standalone only with a token the policy rejects`);
+    }
+    const accepted = tokens.some(policyAccepts);
     if (accepted && !(command === "dev" && c.liveDaemon)) throw new Error(`${c.name}: a token the policy accepts would start a server`);
   }
 }
@@ -353,7 +358,10 @@ back("open below a package.json that does not parse", "bun reads the files above
   env: { PARITY_CD: "sub" },
   args: ["open", "--print", "--anon", "o/r"],
 });
-add("open beside a .env without anything that matters", { files: { ".env": "FOO=1\nGITHUB_TOKEN=not-a-real-one\n" }, args: ["open", "--print", "--anon", "o/r"] });
+back("open beside a .env setting variables that are not set", "bun loads them, and git inherits them", {
+  files: { ".env": "FOO=1\nGITHUB_TOKEN=not-a-real-one\n" },
+  args: ["open", "--print", "--anon", "o/r"],
+});
 add("open beside a .env setting HOME and PATH (set ones win)", {
   files: { ".env": "HOME=/elsewhere\nPATH=/nowhere\n" },
   setup: [codehostFile("config.json", '{"token": "Saved-Token-1"}')],
@@ -602,6 +610,303 @@ back("dev with a daemon.json pid written as a float", "not compared", {
   args: ["dev", ...SIGNAL, "-t", DEV_TOKEN],
   after: DEV_AFTER,
   normalize: MS,
+});
+
+// ── the independent verifier's cases ─────────────────────────────────────────
+//
+// Written by the verifier of the first port (107 cases, named "verify: …"),
+// to break it: files bun reads before the program, .env variables that reach
+// git, very large values, the token policy at its edges, spellings, saved
+// state. Taken over as they were, except: the two cases with a token the
+// policy accepts (they would start `serve`) are left out, its boundary in
+// UTF-16 units is compared in rs/src/compare.rs; `expose 00000` gets the
+// closed `--signal` every server case has; and the two cases for a
+// repository of another user change its owner only where they can (as
+// root), so that they run elsewhere too.
+
+/** Every git command, each once: for a case the binary hands back after
+ *  asking git, so that the JavaScript asks again. */
+const GIT_ASKED = 'sort -u "$TMPDIR/git.log" 2>/dev/null || echo "(git not run)"';
+const verify = (name, why, spec) => (why ? back(`verify: ${name}`, why, spec) : add(`verify: ${name}`, spec));
+const vRepo = (origin, dir = ".") => repo(dir, { origin: origin ?? undefined });
+const vCommit = (dir = ".") => `git -C ${sq(dir)} -c user.name=p -c user.email=p@p commit -q --allow-empty -m init`;
+const vDaemon = (root = "/srv/ws", token = DAEMON_TOKEN) =>
+  `mkdir -p <HOME>/.codehost && printf '{\\n  "pid": %s,\\n  "root": %s,\\n  "token": %s,\\n  "startedAt": 1\\n}' "$PPID" ${sq(JSON.stringify(root))} ${sq(JSON.stringify(token))} > <HOME>/.codehost/daemon.json`;
+const vRawDaemon = (text) => `mkdir -p <HOME>/.codehost && printf '%s' ${sq(text)} > <HOME>/.codehost/daemon.json`;
+const bigOrigin = (bytes) =>
+  `printf '[remote "origin"]\\n\\turl = https://github.com/o/r/%s\\n' "$(head -c ${bytes} /dev/zero | tr '\\0' x)" >> .git/config`;
+const vOpen = (name, why, args, extra = {}) => verify(name.startsWith("open") ? name : `open ${name}`, why, { args: ["open", ...args], after: OPEN_AFTER, ...extra });
+const vDev = (name, why, args, setup, extra = {}) =>
+  verify(name.startsWith("dev ") ? name : `dev ${name}`, why, {
+    liveDaemon: true,
+    args: ["dev", ...args, ...SIGNAL, "-t", DEV_TOKEN],
+    setup,
+    after: [HOME_STATE, GIT_LOG],
+    normalize: MS,
+    ...extra,
+  });
+const vInit = (name, why, args, extra = {}) => verify(`init ${name}`, why, { args: ["init", ...args], after: [CWD_STATE], ...extra });
+const vServe = (name, why, token, extra = {}) => verify(name, why, { args: ["serve", ...SIGNAL, "-t", token], ...extra });
+const WARNS = "bun warns about this project file";
+const ENV_LOADED = "bun loads a variable from .env that is not set, and git inherits it";
+
+// A. Project files bun reads before the program and warns about.
+const PATHS_TWO_STARS_KEY = '{"compilerOptions": {"paths": {"a*b*": ["./x"]}}}';
+const PATHS_TWO_STARS_TARGET = '{"compilerOptions": {"paths": {"@/*": ["./src/*/*"]}}}';
+vOpen("open beside a tsconfig.json with a paths pattern of two stars", WARNS, ["--print", "--anon", "o/r"], { files: { "tsconfig.json": PATHS_TWO_STARS_KEY } });
+vOpen("open beside a tsconfig.json with a paths target of two stars", WARNS, ["--print", "--anon", "o/r"], { files: { "tsconfig.json": PATHS_TWO_STARS_TARGET } });
+vOpen("open beside a jsconfig.json with a paths target of two stars", WARNS, ["--print", "--anon", "o/r"], {
+  files: { "jsconfig.json": '{"compilerOptions": {"paths": {"x/*": ["*/*"]}}}' },
+});
+vOpen("open beside a tsconfig.json with a jsxFactory bun cannot parse", WARNS, ["--print", "--anon", "o/r"], { files: { "tsconfig.json": '{"compilerOptions": {"jsxFactory": "a-b"}}' } });
+vOpen("open beside a tsconfig.json with a jsxFragmentFactory bun cannot parse", WARNS, ["--print", "--anon", "o/r"], {
+  files: { "tsconfig.json": '{"compilerOptions": {"jsxFragmentFactory": "a b"}}' },
+});
+vOpen("open below a tsconfig.json with paths bun warns about", WARNS, ["--print", "--anon", "o/r"], {
+  files: { "tsconfig.json": PATHS_TWO_STARS_TARGET },
+  setup: ["mkdir -p sub"],
+  env: { PARITY_CD: "sub" },
+});
+vInit("beside a tsconfig.json with paths bun warns about", WARNS, ["ws"], { files: { "tsconfig.json": PATHS_TWO_STARS_KEY } });
+vServe("serve with a bad token beside a tsconfig.json bun warns about", "bun's warnings are dropped by process.exit, but the file goes back all the same", "short", {
+  files: { "tsconfig.json": PATHS_TWO_STARS_KEY },
+});
+vDev("dev registers beside a tsconfig.json bun warns about", WARNS, ["ws"], [vDaemon(), "mkdir ws"], { files: { "tsconfig.json": PATHS_TWO_STARS_KEY } });
+vOpen("open beside a tsconfig.json with one-star paths and a member jsxFactory (bun is quiet)", null, ["--print", "--anon", "o/r"], {
+  files: { "tsconfig.json": '{"compilerOptions": {"baseUrl": ".", "paths": {"*": ["*"], "@/*": ["./src/*"]}, "jsxFactory": "React.createElement"}}' },
+});
+vOpen("open beside a package.json with imports not starting with # (bun is quiet)", null, ["--print", "--anon", "o/r"], {
+  files: { "package.json": '{"name": "x", "imports": {"a": "./x.js"}, "exports": {}}' },
+});
+
+// B. .env variables that reach git without GIT_ or XDG_ in their name.
+vOpen("open in a repository beside a .env setting LD_LIBRARY_PATH to a libc git cannot load", ENV_LOADED, ["--print", "--anon"], {
+  files: { ".env": "LD_LIBRARY_PATH=<CWD>/libs\n", "libs/libc.so.6": "not an ELF file\n" },
+  setup: [...vRepo("https://github.com/o/r"), vCommit()],
+});
+vOpen("open in a repository of another user, with SUDO_UID in .env (needs root)", ENV_LOADED, ["--print", "--anon"], {
+  files: { ".env": "SUDO_UID=65534\n" },
+  setup: [...vRepo("https://github.com/o/r"), "chown -R 65534:65534 . 2>/dev/null || true"],
+});
+vOpen("open in a repository of another user, no .env (needs root)", null, ["--print", "--anon"], {
+  setup: [...vRepo("https://github.com/o/r"), "chown -R 65534:65534 . 2>/dev/null || true"],
+});
+vOpen("open in a repository beside a .env setting LD_PRELOAD to nothing (git still runs)", ENV_LOADED, ["--print", "--anon"], {
+  files: { ".env": "LD_PRELOAD=/nonexistent/libnothing.so\n" },
+  setup: [...vRepo("https://github.com/o/r"), vCommit()],
+});
+vOpen("open beside a .env with export, quotes and expansion", ENV_LOADED, ["--print", "--anon", "o/r"], {
+  files: { ".env": 'export FOO="a b"\nBAR=\'x\'\nBAZ=$FOO\nMULTI="1\n2"\n' },
+});
+vOpen("open in a repository beside a .env setting LANG and LC_ALL", ENV_LOADED, ["--print", "--anon"], {
+  files: { ".env": "LANG=de_DE.UTF-8\nLC_ALL=de_DE.UTF-8\nLANGUAGE=de\n" },
+  setup: [...vRepo("https://github.com/o/r"), vCommit()],
+});
+vOpen("open beside a .env.local that is a directory", "a .env that cannot be read goes back", ["--print", "--anon", "o/r"], { setup: ["mkdir .env.local"] });
+
+// C. Very large values. bun's spawnSync stops at 1 MiB of a child's output.
+vOpen("open in a repository whose origin URL is 9 MB", "git prints more than bun's spawnSync reads (1 MiB)", ["--print", "--anon"], {
+  setup: [...vRepo(null), vCommit(), bigOrigin(9000000)],
+  after: [GIT_ASKED, BROWSER_LOG],
+});
+vOpen("open in a repository whose origin URL is 600 KB", null, ["--print", "--anon"], { setup: [...vRepo(null), vCommit(), bigOrigin(600000)] });
+vDev("dev registers a repository whose origin URL is 9 MB", "git prints more than bun's spawnSync reads (1 MiB)", ["r"], [vDaemon(), ...vRepo(null, "r"), `cd r && ${bigOrigin(9000000)}`], {
+  after: [HOME_STATE, GIT_ASKED],
+});
+vOpen("open with a saved token of 200 KB", null, ["--print", "o/r"], {
+  setup: [`mkdir -p <HOME>/.codehost && { printf '{"token": "'; head -c 200000 /dev/zero | tr '\\0' A; printf 'b1-/+"}'; } > <HOME>/.codehost/config.json`],
+});
+vServe("serve -t of 100 KB", null, "Aa1-".repeat(25000));
+
+// D. The token policy.
+vServe("serve -t of 11 UTF-16 units ending in astral characters", null, "Aa1-aaa😀😀");
+vServe("serve -t of 257 units, the last character astral", null, `Aa1-${"a".repeat(251)}😀`);
+vServe("serve -t with U+180E (not \\s since ES2016)", null, "aaaa\u180eaaaaaaa");
+vServe("serve -t with U+200B (not \\s)", null, "aaaaaaaaaaa\u200b");
+vServe("serve -t with U+0085 (not \\s)", null, "aaaaaaaaaaa\u0085");
+vServe("serve -t with U+2028 inside", null, "Aa1-aaaa\u2028aaaa");
+vServe("serve -t weak, surrounded by NBSP", null, "\u00a0Changeme1234\u00a0");
+vServe("serve -t PassWord1234", null, "PassWord1234");
+vServe("serve -t of non-ASCII letters and digits", null, "ÄÖÜäöüß12345");
+vServe("serve -t of 300 spaces", null, " ".repeat(300));
+vServe("serve -t of a lone ideographic space and letters", null, "\u3000aaaaaaaaaaaaaa\u3000");
+verify("expose 00000 with a bad token", null, { args: ["expose", "00000", ...SIGNAL, "-t", "short"] });
+verify("dev --standalone with a bad token", null, { args: ["dev", "--standalone", ...SIGNAL, "-t", "short"] });
+verify("serve --port 99999 with a bad token and a missing dir", null, {
+  args: ["serve", "nowhere", "--port", "99999", ...SIGNAL, "-t", "short"],
+  after: [CWD_STATE, HOME_STATE],
+});
+vServe("serve with a bad token and CLICOLOR_FORCE", null, "short", { env: { CLICOLOR_FORCE: "1" } });
+vServe("serve with a bad token and FORCE_COLOR=0", "FORCE_COLOR is set", "short", { env: { FORCE_COLOR: "0" } });
+vServe("serve with a bad token and TERM=dumb", null, "short", { env: { TERM: "dumb" } });
+vServe("serve with a bad token and JSC_dumpOptions", null, "short", { env: { JSC_dumpOptions: "1" } });
+vServe("serve with a bad token and an empty PATH entry", "an empty PATH entry", "short", { env: { PARITY_PATH_PREFIX: "/usr/bin:" } });
+
+// E. Spellings of the command line.
+const YARGS = "yargs's to answer";
+vOpen('open "version --print"', null, ["version", "--print"]);
+vOpen('"--print Help"', null, ["--print", "Help"]);
+vOpen('"--print TRUE"', null, ["--print", "TRUE"]);
+vOpen('"--print o/r --anon --anon"', "a repeated option is yargs's", ["--print", "o/r", "--anon", "--anon"]);
+vOpen('"--print --page= o/r"', null, ["--print", "--page=", "o/r"]);
+vOpen('"--print --page https://x.dev/?a=1/ o/r"', null, ["--print", "--page", "https://x.dev/?a=1/", "o/r"]);
+vOpen('"--print -t 0x10 o/r"', null, ["--print", "-t", "0x10", "o/r"]);
+vOpen('"--print -t =x o/r"', null, ["--print", "-t", "=x", "o/r"]);
+vOpen("\"--print -t ' ' ''\" outside a repository", null, ["--print", "-t", " ", ""]);
+vOpen('"--print completion"', null, ["--print", "completion"]);
+vOpen('"--print --t x o/r"', "an unknown option", ["--print", "--t", "x", "o/r"]);
+vOpen('"--print --page=help o/r"', null, ["--print", "--page=help", "o/r"]);
+vOpen('"--print --token=true o/r"', null, ["--print", "--token=true", "o/r"]);
+vOpen('"--print --page=false o/r"', null, ["--print", "--page=false", "o/r"]);
+vOpen('"--print -t help o/r"', "the word help", ["--print", "-t", "help", "o/r"]);
+vOpen('"--print o/r help"', "the word help", ["--print", "o/r", "help"]);
+vOpen('"--print --anon" with an @-only target', null, ["--print", "--anon", "@"]);
+vOpen('"--print --anon" with a target of newline-separated parts', null, ["--print", "--anon", "a/b\nc/d"]);
+vOpen('"--print --anon" with a branch holding U+2028', null, ["--print", "--anon", "o/r/tree/a\u2028b"]);
+vOpen('"--print --anon" with a CRLF-terminated target', null, ["--print", "--anon", "o/r\r\n"]);
+vOpen('"--print --anon" with an http URL with a port and .git', null, ["--print", "--anon", "HTTP://Git.Example.com:8443/o/r.git?x#y"]);
+verify('serve "--token=help"', null, { args: ["serve", ...SIGNAL, "--token=help"] });
+vOpen('"--print -t" with a token holding a newline', null, ["--print", "-t", "a\nb", "o/r"]);
+vOpen('"--print --page" ending in a space and a slash', null, ["--print", "--page", "https://x.dev/ /", "o/r"]);
+vOpen("with a directory named git first on PATH", null, ["--print", "--anon"], {
+  setup: [...vRepo("https://github.com/o/r"), "mkdir -p pp/git"],
+  env: { PARITY_PATH_PREFIX: "<CWD>/pp" },
+});
+vOpen("with a git script without #! first on PATH", "a git that cannot be started", ["--print", "--anon"], {
+  files: { "pp/git": 'case "$*" in *is-inside*) echo true;; *get-url*) echo https://github.com/o/r;; *) echo main;; esac\n' },
+  setup: ["chmod +x pp/git"],
+  env: { PARITY_PATH_PREFIX: "<CWD>/pp" },
+});
+verify('init "ws help"', "the word help", { args: ["init", "ws", "help"] });
+
+// F. ~/.codehost/config.json.
+const vConfig = (text) => codehostFile("config.json", text);
+vOpen("open with a saved token of two spaces", null, ["--print", "o/r"], { setup: [vConfig('{"token": "  "}')] });
+vOpen("open with a saved token holding U+2028 and an escaped pair", null, ["--print", "o/r"], { setup: [vConfig('{"token": "a\u2028b\\ud83d\\ude00"}')] });
+vOpen("open with the key token written with an escape", null, ["--print", "o/r"], { setup: [vConfig('{"\\u0074oken": "Esc-Key-1"}')] });
+vOpen("open with config.json a link to a file", null, ["--print", "o/r"], {
+  setup: ["printf '%s' '{\"token\": \"Linked-1\"}' > real.json", "mkdir -p <HOME>/.codehost && ln -s <CWD>/real.json <HOME>/.codehost/config.json"],
+});
+vOpen("open with config.json in CRLF and nested values", null, ["--print", "o/r"], {
+  setup: [vConfig('{\r\n  "hostId": {"a": [1, 2.5e3, null]},\r\n  "token": "Crlf-1"\r\n}\r\n')],
+});
+vOpen("open with config.json holding a NUL after the object", "text that is not strict JSON", ["--print", "o/r"], {
+  setup: ["mkdir -p <HOME>/.codehost && printf '{\"token\": \"x\"}\\0' > <HOME>/.codehost/config.json"],
+});
+vOpen("open with HOME ending in a slash", null, ["--print", "o/r"], { env: { HOME: "<HOME>/" }, setup: [vConfig('{"token": "Slash-1"}')] });
+vOpen("open with config.json holding an empty-string key and a token", null, ["--print", "o/r"], { setup: [vConfig('{"": 1, "token": "E-1"}')] });
+
+// G. init.
+vInit('"./"', null, ["./"]);
+vInit('"ws/"', null, ["ws/"]);
+vInit("with an empty config.yaml there", null, [], { files: { ".codehost/config.yaml": "" } });
+vInit("a linked directory", null, ["link"], { setup: ["mkdir real && ln -s real link"] });
+vInit("below a linked directory", null, ["link/sub"], { setup: ["mkdir real && ln -s real link"] });
+vInit("-f with only setup.ps1 there", null, ["-f"], { files: { ".codehost/setup.ps1": "mine\n" } });
+vInit("-f with setup.sh mode 700", null, ["-f"], { files: { ".codehost/setup.sh": "mine\n" }, setup: ["chmod 700 .codehost/setup.sh"] });
+vInit('" ws "', null, [" ws "]);
+vInit('"ws\\nx"', null, ["ws\nx"]);
+vInit("into an empty .codehost", null, ["ws"], { setup: ["mkdir -p ws/.codehost"] });
+vInit("a path through ..", null, ["a/../b/./c"]);
+vInit("with setup.sh a FIFO", null, [], { setup: ["mkdir .codehost && mkfifo .codehost/setup.sh"] });
+
+// H. dev registering with a live host daemon.
+const vWorkspaces = (text) => codehostFile("workspaces.json", text);
+vDev('dev ""', null, [""], [vDaemon()]);
+vDev("with daemon.json in another key order with extra fields", null, ["ws"], [
+  vRawDaemon('{"token": "Odd-Order-1", "extra": [1, {"x": null}], "root": "/r", "startedAt": 1.5, "pid": PID}').replace("PID", `'"$PPID"'`),
+  "mkdir ws",
+]);
+vDev("with a daemon root holding a quote and a newline", null, ["ws"], [vDaemon('/srv/"w\ns"', "Daemon-Token-1"), "mkdir ws"]);
+vDev("with a daemon token of #&? and spaces", null, ["ws"], [vDaemon("/srv/ws", "a #&?= b/%"), "mkdir ws"]);
+vDev("with workspaces.json holding U+2028 and an escaped pair", null, ["ws"], [vDaemon(), vWorkspaces('[{"path": "/a\u2028b\\ud83d\\ude00\\u0001", "addedAt": 1}]'), "mkdir ws"]);
+vDev("with workspaces.json addedAt first", null, ["ws"], [vDaemon(), vWorkspaces('[{"addedAt": 9007199254740991, "path": "/x"}]'), "mkdir ws"]);
+vDev("with the directory registered already, written with escapes", null, ["ws"], [vDaemon(), vWorkspaces('[{"path": "<CWD>\\/ws", "addedAt": 1}]'), "mkdir ws"]);
+vDev("with workspaces.json a link to a file", null, ["ws"], [vDaemon(), "printf '[]' > <CWD>/w.json && ln -s <CWD>/w.json <HOME>/.codehost/workspaces.json", "mkdir ws"], {
+  after: [HOME_STATE, "cat <CWD>/w.json; echo", GIT_LOG],
+});
+vDev("in a repository without origin on a branch", null, ["r"], [vDaemon(), ...vRepo(null, "r"), vCommit("r")]);
+vDev("registers a directory named with a trailing dot segment", null, ["ws/."], [vDaemon(), "mkdir ws"]);
+vDev("registers a directory given with ..", null, ["ws/../ws2"], [vDaemon(), "mkdir ws ws2"]);
+vDev("with daemon.json pid 0", "a pid that is not a positive integer", ["ws"], [vRawDaemon('{"pid": 0, "root": "/r", "token": "Zero-Pid-1"}'), "mkdir ws"]);
+vDev("with workspaces.json [] and spaces", null, ["ws"], [vDaemon(), vWorkspaces(" [ ] \n"), "mkdir ws"]);
+vDev("with an entry for the directory that has a third key", "an entry the JavaScript keeps by its own rules", ["ws"], [
+  vDaemon(),
+  vWorkspaces('[{"path": "<CWD>/ws", "addedAt": 1, "x": 2}]'),
+  "mkdir ws",
+]);
+vDev("with daemon.json root and token not strings", "root and token are not strings", ["ws"], [
+  vRawDaemon('{"pid": PID, "root": 5, "token": ["a"]}').replace("PID", `'"$PPID"'`),
+  "mkdir ws",
+]);
+vDev("registers a repository with an upper-case scheme and port", null, ["r"], [vDaemon(), ...vRepo("SSH://git@Git.Example.com:2222/team/svc.GIT/", "r"), vCommit("r")]);
+
+// ── the repairs after the verification ───────────────────────────────────────
+//
+// Each pins one rule added for the verifier's findings, on both sides of it.
+
+// Project files: bun's other `paths` warning, and the edges of jsxFactory.
+back("repair: open beside a tsconfig.json with a paths target not relative and no baseUrl", WARNS, {
+  files: { "tsconfig.json": '{"compilerOptions": {"paths": {"@/*": ["src/*"]}}}' },
+  args: ["open", "--print", "--anon", "o/r"],
+});
+add("repair: open beside a tsconfig.json with a paths target not relative and a baseUrl", {
+  files: { "tsconfig.json": '{"compilerOptions": {"baseUrl": ".", "paths": {"@/*": ["src/*", "./lib/*"]}}}' },
+  args: ["open", "--print", "--anon", "o/r"],
+});
+back("repair: open beside a jsconfig.json with a jsxFactory ending in a dot", WARNS, {
+  files: { "jsconfig.json": '{"compilerOptions": {"jsxFactory": "a."}}' },
+  args: ["open", "--print", "--anon", "o/r"],
+});
+add("repair: open beside a tsconfig.json with member jsxFactory and jsxFragmentFactory", {
+  files: { "tsconfig.json": '{"compilerOptions": {"jsx": "react", "jsxFactory": "h", "jsxFragmentFactory": "Preact.Fragment"}}' },
+  args: ["open", "--print", "--anon", "o/r"],
+});
+
+// .env: native only when every key it could define is set already.
+add("repair: open in a repository beside a .env whose keys are all set already", {
+  files: { ".env": "# set by the case\nCODEHOST_PARITY_SET=from the file\nexport HOME=/elsewhere\n\n" },
+  env: { CODEHOST_PARITY_SET: "from the environment" },
+  setup: [...vRepo("https://github.com/o/r"), vCommit()],
+  args: ["open", "--print", "--anon"],
+  after: OPEN_AFTER,
+});
+add("repair: open beside a .env of comments and blank lines", { files: { ".env": "# nothing here\n\n   \n# see the README\n" }, args: ["open", "--print", "--anon", "o/r"] });
+// A key inside a comment is taken as well: a name too many only hands back.
+back("repair: open beside a .env with a key only in a comment", "the binary takes every name bun could take, comments included", {
+  files: { ".env": "# CODEHOST_PARITY_NEW=1\n" },
+  args: ["open", "--print", "--anon", "o/r"],
+});
+back("repair: open beside a .env setting a variable that is set but empty", ENV_LOADED, {
+  files: { ".env": "CODEHOST_PARITY_EMPTY=x\n" },
+  env: { CODEHOST_PARITY_EMPTY: "" },
+  args: ["open", "--print", "--anon", "o/r"],
+});
+back("repair: open in a repository beside a .env setting a variable git does not read", ENV_LOADED, {
+  files: { ".env": "CODEHOST_PARITY_NEW=1\n" },
+  setup: [...vRepo("https://github.com/o/r"), vCommit()],
+  args: ["open", "--print", "--anon"],
+  after: OPEN_AFTER,
+});
+back("repair: open beside a .env with a key after a quoted value", ENV_LOADED, { files: { ".env": 'HOME="/x" CODEHOST_PARITY_NEW=1\n' }, args: ["open", "--print", "--anon", "o/r"] });
+back("repair: open beside a .env with a key written KEY: value", ENV_LOADED, { files: { ".env": "CODEHOST_PARITY_NEW: 1\n" }, args: ["open", "--print", "--anon", "o/r"] });
+back("repair: open with LD_BIND_NOW set", "the dynamic loader that starts bun reads LD_*", { env: { LD_BIND_NOW: "1" }, args: ["open", "--print", "--anon", "o/r"] });
+
+// git's output at bun's spawnSync limit: 1,048,576 bytes is read, more is not.
+add("repair: open in a repository whose origin URL makes git print exactly 1 MiB", {
+  // "https://github.com/o/r/" (23 bytes), the x's, and git's newline.
+  setup: [...vRepo(null), bigOrigin(1024 * 1024 - 24)],
+  args: ["open", "--print", "--anon"],
+  after: OPEN_AFTER,
+});
+back("repair: open with a git that writes 9 MB to stderr", "git prints more than bun's spawnSync reads (1 MiB)", {
+  files: {
+    "pp/git": '#!/bin/sh\nPATH=${PATH#*:}; export PATH\nout=$(git "$@"); status=$?\nhead -c 9000000 /dev/zero | tr \'\\0\' x >&2\nprintf \'%s\\n\' "$out"\nexit $status\n',
+  },
+  setup: [...vRepo("https://github.com/o/r"), "chmod +x pp/git"],
+  env: { PARITY_PATH_PREFIX: "<CWD>/pp" },
+  args: ["open", "--print", "--anon"],
+  after: [GIT_ASKED, BROWSER_LOG],
 });
 
 // ── write ────────────────────────────────────────────────────────────────────
