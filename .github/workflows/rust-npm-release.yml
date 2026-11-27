@@ -52,11 +52,16 @@ jobs:
         && sh rs/parity/proof.sh "$RUSTIFY_PARITY" "$RUSTIFY_BIN_DIR/codehost"
       # Run once on every platform after installing; the parity job is Linux
       # only. None needs a token or the network. `open --print`, `init` and
-      # the token check are native on Linux and macOS and handed back on
-      # Windows, where the JavaScript prints the same. `init -f` writes
-      # ./smoke-ws/.codehost in the job's directory, the same each time.
+      # the token check are native on Linux, the only system they were
+      # compared on, and handed back on macOS and Windows, where the
+      # JavaScript prints the same; the markers make each platform show who
+      # answered (rs/src/js_fallback.rs is helper v5). Under `bun i -g` the
+      # `smoke` line above runs first and is the JavaScript's: it fetches
+      # node-datachannel's addon, which bun's install did not, and without
+      # which the binary hands back. `init -f` writes ./smoke-ws/.codehost in
+      # the job's directory, the same each time.
       smoke-extra: |
-        codehost open --print --anon owner/repo => [codehost] https://codehost.dev/github.com/owner/repo
-        ch open --print -t Tok/en+1 https://github.com/o/r.git => [codehost] https://codehost.dev/github.com/o/r#t=Tok%2Fen%2B1
-        codehost init smoke-ws -f => [codehost] scaffolded:
-        [1] codehost serve -t short --signal ws://127.0.0.1:1 => token must be at least 12 characters
+        [native:linux] [handback:darwin,win32] codehost open --print --anon owner/repo => [codehost] https://codehost.dev/github.com/owner/repo
+        [native:linux] [handback:darwin,win32] ch open --print -t Tok/en+1 https://github.com/o/r.git => [codehost] https://codehost.dev/github.com/o/r#t=Tok%2Fen%2B1
+        [native:linux] [handback:darwin,win32] codehost init smoke-ws -f => [codehost] scaffolded:
+        [1] [native:linux] [handback:darwin,win32] codehost serve -t short --signal ws://127.0.0.1:1 => token must be at least 12 characters
