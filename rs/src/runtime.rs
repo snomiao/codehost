@@ -4,25 +4,38 @@
 //! "The JavaScript" is `bun src/cli/index.ts`, and before its first line:
 //!
 //! - bun takes options and switches from variables named for it, Node and the
-//!   libraries inside it (BUN_*, NODE_*, MIMALLOC_*, ICU_*): any of them,
-//!   except BUN_INSTALL, which bun's installer puts in every profile, hands
-//!   back;
-//! - bun reads `bunfig.toml` (in the current directory, ~/.bunfig.toml,
-//!   $XDG_CONFIG_HOME/.bunfig.toml), which can preload code: hands back;
+//!   libraries inside it (BUN_*, NODE_*, MIMALLOC_*, ICU_*), and the dynamic
+//!   loader that starts bun (a glibc or musl program, where this binary is
+//!   static) reads LD_* (LD_PRELOAD, LD_LIBRARY_PATH, LD_DEBUG, …): any of
+//!   them, except BUN_INSTALL, which bun's installer puts in every profile,
+//!   hands back;
+//! - bun reads `bunfig.toml` in the current directory (not in the
+//!   directories above it): hands back. bun 1.4.0 ignores ~/.bunfig.toml and
+//!   $XDG_CONFIG_HOME/.bunfig.toml when it runs a file, but those hand back
+//!   too, which costs nothing;
 //! - bun loads `.env` files of the current directory (only there) into the
-//!   environment, without overriding a variable that is set. The commands
-//!   depend on HOME and PATH, which are set (or the invocation goes back),
-//!   and on what `git` reads, so a file that mentions GIT_ or XDG_ anywhere,
-//!   in any case, hands back; so does one mentioning BUN, NODE, ICU or COLOR;
+//!   environment, without overriding a variable that is set, and every
+//!   program the JavaScript starts inherits them: `git` reads not only GIT_*
+//!   but LD_*, SUDO_UID, HOME, XDG_*, LANG and more. So a `.env` file that
+//!   may define a variable that is not already set (and not empty) hands back
+//!   (`dotenv_keys` finds every name bun could take for a key, and more);
+//!   one whose every key is set already changes nothing. A file that
+//!   mentions GIT_, XDG_, BUN, NODE, ICU or COLOR anywhere, in any case,
+//!   hands back as well;
 //! - bun reads package.json, tsconfig.json and jsconfig.json in the current
 //!   directory and every directory above it, and writes to standard error
 //!   what it does not like in them: a syntax error, a key given twice, a
 //!   `type` other than "module" or "commonjs", an `exports` or `imports` map
 //!   of the wrong shape, a `browser` mapping that is not a string or a
-//!   boolean, a `paths` entry that is not an array, an unknown
+//!   boolean; in `compilerOptions`, a `paths` entry that is not an array, a
+//!   `paths` pattern or target with more than one `*`, a target that is not
+//!   relative when there is no `baseUrl`, a `jsxFactory` or
+//!   `jsxFragmentFactory` that is not a member expression, an unknown
 //!   `importsNotUsedAsValues`. A file is accepted only when it is in a shape
-//!   that was compared and none of these (see `plain_project_file`); an
-//!   `extends` (which makes bun read another file) hands back;
+//!   that was compared and none of these (see `plain_project_file`, and the
+//!   comparison with bun in rs/src/compare.rs); an `extends` (which makes bun
+//!   read another file) hands back. (A token rejection would not need this:
+//!   `process.exit` drops bun's warnings. It goes back all the same.);
 //! - every command imports src/cli/rtc-daemon.ts, which loads the native
 //!   node-datachannel addon and, when that fails, prints a line and
 //!   downloads it before the command runs. The addon has to be where
@@ -34,7 +47,8 @@
 //! or standard error is a terminal, or FORCE_COLOR is set. A command that
 //! would write to standard error then hands back (`Machine::plain_stderr`).
 //!
-//! On Windows nothing is answered natively: nothing was compared there.
+//! Only on Linux is anything answered natively: nothing was compared on
+//! macOS or Windows.
 
 use std::ffi::OsStr;
 use std::fs;
@@ -70,11 +84,11 @@ impl Machine {
     }
 }
 
-/// Variables bun, Node's compatibility layer, the allocator or ICU read for
-/// themselves.
+/// Variables bun, Node's compatibility layer, the allocator, ICU or the
+/// dynamic loader that starts bun read for themselves.
 fn for_the_runtime(name: &OsStr) -> bool {
     let name = name.to_string_lossy().to_ascii_uppercase();
-    name != "BUN_INSTALL" && ["BUN_", "NODE_", "MIMALLOC_", "ICU_"].iter().any(|start| name.starts_with(start))
+    name != "BUN_INSTALL" && ["BUN_", "NODE_", "MIMALLOC_", "ICU_", "LD_"].iter().any(|start| name.starts_with(start))
 }
 
 /// Every file bun may load from the current directory, under any NODE_ENV.
@@ -117,9 +131,58 @@ fn read_if_there(path: &Path) -> Result<Option<Vec<u8>>, HandBack> {
     }
 }
 
+/// A character bun takes into the key of a `.env` line.
+fn key_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'.' | b'-')
+}
+
+/// Every name bun's `.env` parser could take for a key in `content`, and
+/// more. bun reads a key as the longest run of `[A-Za-z0-9_.-]` where a line
+/// starts (after blanks, and after `export `), or after a quoted value, and
+/// takes it when blanks and then `=`, or `:` and a blank, follow. Wherever
+/// it starts, nothing before it is a key character. So every such run in
+/// the file that is followed by blanks and `=` or `:` is taken here,
+/// wherever it is, inside values and comments too: a name too many only
+/// hands back.
+pub fn dotenv_keys(content: &[u8]) -> Vec<&[u8]> {
+    let mut keys = Vec::new();
+    let mut at = 0;
+    while at < content.len() {
+        if !key_byte(content[at]) {
+            at += 1;
+            continue;
+        }
+        let start = at;
+        while at < content.len() && key_byte(content[at]) {
+            at += 1;
+        }
+        let mut next = at;
+        while next < content.len() && matches!(content[next], b' ' | b'\t' | b'\x0b' | b'\x0c') {
+            next += 1;
+        }
+        if matches!(content.get(next), Some(b'=' | b':')) {
+            keys.push(&content[start..at]);
+        }
+    }
+    keys
+}
+
+/// Whether the variable is set to something, so that bun keeps it as it is.
+fn set(name: &[u8]) -> bool {
+    use std::os::unix::ffi::OsStrExt as _;
+    std::env::var_os(OsStr::from_bytes(name)).is_some_and(|value| !value.is_empty())
+}
+
+/// Whether bun, loading `content` from a `.env` file, leaves the environment
+/// as it is: every key it could define is `set` already, and the file
+/// mentions none of `DOTENV_NAMES`.
+pub fn dotenv_changes_nothing(content: &[u8], set: impl Fn(&[u8]) -> bool) -> bool {
+    !DOTENV_NAMES.iter().any(|name| mentions(content, name)) && dotenv_keys(content).into_iter().all(set)
+}
+
 fn harmless_dotenv(path: &Path) -> Result<(), HandBack> {
     match read_if_there(path)? {
-        Some(content) if DOTENV_NAMES.iter().any(|name| mentions(&content, name)) => Err(HandBack),
+        Some(content) if !dotenv_changes_nothing(&content, set) => Err(HandBack),
         _ => Ok(()),
     }
 }
@@ -134,10 +197,21 @@ fn plain_target(value: &Json) -> bool {
     }
 }
 
+/// A `jsxFactory` bun reads without a word: ASCII identifiers joined by
+/// single dots (`h`, `React.createElement`). bun takes a few more (`.a`,
+/// `a..b`, an empty string, non-ASCII letters); those go back.
+fn member_expression(text: &str) -> bool {
+    text.split('.').all(|part| {
+        let mut chars = part.chars();
+        matches!(chars.next(), Some(c) if c.is_ascii_alphabetic() || c == '_' || c == '$')
+            && chars.all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '$')
+    })
+}
+
 /// A package.json, tsconfig.json or jsconfig.json about which bun says
 /// nothing (see the module's comment). Shapes outside these were not
 /// compared and go back.
-fn plain_project_file(name: &str, content: &[u8]) -> bool {
+pub fn plain_project_file(name: &str, content: &[u8]) -> bool {
     let Ok(text) = std::str::from_utf8(content) else { return false };
     let Some(Json::Obj(members)) = json::parse(text, true) else { return false };
     let root = Json::Obj(members);
@@ -173,14 +247,28 @@ fn plain_project_file(name: &str, content: &[u8]) -> bool {
         match root.get("compilerOptions") {
             None => true,
             Some(options @ Json::Obj(_)) => {
+                // bun warns about a pattern or a target with more than one
+                // `*`, and, without a baseUrl, about a target that does not
+                // start with `./` or `../` (it lets some others pass, such
+                // as `*`; those go back all the same).
+                let base_url = matches!(options.get("baseUrl"), Some(Json::Str(base)) if !base.is_empty());
+                let pattern = |text: &str| text.matches('*').count() <= 1;
+                let target = |item: &Json| {
+                    matches!(item, Json::Str(text) if pattern(text) && (base_url || text.starts_with("./") || text.starts_with("../")))
+                };
                 let paths_ok = match options.get("paths") {
                     None => true,
                     Some(Json::Obj(members)) => {
-                        members.iter().all(|(_, value)| matches!(value, Json::Arr(items) if items.iter().all(|item| matches!(item, Json::Str(_)))))
+                        members.iter().all(|(key, value)| pattern(key) && matches!(value, Json::Arr(items) if items.iter().all(target)))
                     }
                     Some(_) => false,
                 };
-                paths_ok && options.get("importsNotUsedAsValues").is_none()
+                let jsx_ok = ["jsxFactory", "jsxFragmentFactory"].iter().all(|name| match options.get(name) {
+                    None => true,
+                    Some(Json::Str(text)) => member_expression(text),
+                    Some(_) => false,
+                });
+                paths_ok && jsx_ok && options.get("importsNotUsedAsValues").is_none()
             }
             Some(_) => false,
         }
@@ -210,7 +298,8 @@ fn loadable(path: &Path) -> bool {
 }
 
 pub fn machine() -> Result<Machine, HandBack> {
-    if cfg!(not(unix)) {
+    // Compared on Linux only: macOS and Windows go back.
+    if cfg!(not(target_os = "linux")) {
         return Err(HandBack);
     }
     if std::env::vars_os().any(|(name, _)| for_the_runtime(&name)) {
@@ -278,6 +367,9 @@ mod tests {
         for text in [
             "// comment\n{\"compilerOptions\": {\"strict\": true, \"lib\": [\"es2020\",],},/* x */}",
             r#"{"compilerOptions": {"paths": {"@/*": ["./src/*"]}, "baseUrl": ".", "jsx": "weird"}}"#,
+            r#"{"compilerOptions": {"paths": {"@/*": ["src/*", "../x/*"], "*": ["*"]}, "baseUrl": "."}}"#,
+            r#"{"compilerOptions": {"paths": {}, "jsxFactory": "React.createElement", "jsxFragmentFactory": "h"}}"#,
+            r#"{"compilerOptions": {"jsxFactory": "$._a1.b"}}"#,
         ] {
             assert!(plain("tsconfig.json", text), "{text}");
         }
@@ -295,14 +387,45 @@ mod tests {
         for text in [r#"{"compilerOptions": {"paths": {"a": 5}}}"#, r#"{"compilerOptions": {"importsNotUsedAsValues": "weird"}}"#, r#"{"extends": "./x.json"}"#, r#"{"a":1,"a":2}"#] {
             assert!(!plain("tsconfig.json", text), "{text}");
         }
+        // bun 1.4.0 warns about these: `Invalid pattern "a*b*", must have at
+        // most one "*" character`, `Non-relative path "src/*" is not allowed
+        // when "baseUrl" is not set`, `Invalid JSX member expression: "a-b"`.
+        for text in [
+            r#"{"compilerOptions": {"paths": {"a*b*": ["./x"]}}}"#,
+            r#"{"compilerOptions": {"paths": {"@/*": ["./src/*/*"]}}}"#,
+            r#"{"compilerOptions": {"paths": {"x/*": ["*/*"]}, "baseUrl": "."}}"#,
+            r#"{"compilerOptions": {"paths": {"@/*": ["src/*"]}}}"#,
+            r#"{"compilerOptions": {"paths": {"@/*": ["src/*"]}, "baseUrl": ""}}"#,
+            r#"{"compilerOptions": {"paths": {"@/*": ["src/*"]}, "baseUrl": 5}}"#,
+            r#"{"compilerOptions": {"jsxFactory": "a-b"}}"#,
+            r#"{"compilerOptions": {"jsxFragmentFactory": "a b"}}"#,
+            r#"{"compilerOptions": {"jsxFactory": "a."}}"#,
+            r#"{"compilerOptions": {"jsxFactory": "1x"}}"#,
+        ] {
+            assert!(!plain("tsconfig.json", text), "{text}");
+            assert!(!plain("jsconfig.json", text), "{text}");
+        }
+        // bun says nothing about these, but they were not needed: back.
+        for text in [r#"{"compilerOptions": {"paths": {"@/*": ["*"]}}}"#, r#"{"compilerOptions": {"jsxFactory": ""}}"#, r#"{"compilerOptions": {"jsxFactory": 5}}"#] {
+            assert!(!plain("tsconfig.json", text), "{text}");
+        }
+    }
+
+    #[test]
+    fn every_name_bun_could_take_for_a_key() {
+        let keys = |text: &str| dotenv_keys(text.as_bytes()).into_iter().map(|key| String::from_utf8_lossy(key).into_owned()).collect::<Vec<_>>();
+        assert_eq!(keys("A=1\n  export B = 2\r\nC: 3\n# D=4\nE=\"x\" F=5\n"), ["A", "B", "C", "D", "E", "F"]);
+        assert_eq!(keys("URL=https://x.dev/?a=b\n"), ["URL", "https", "a"]);
+        assert_eq!(keys("a.b-c_d=1\téx=2"), ["a.b-c_d", "x"]);
+        assert!(keys("# only a comment\n\n   \nexport\n").is_empty());
     }
 
     #[test]
     fn variables_for_the_runtime() {
-        for name in ["BUN_OPTIONS", "NODE_ENV", "node_options", "MIMALLOC_VERBOSE", "ICU_DATA", "BUN_INSTALL_CACHE_DIR"] {
+        for name in ["BUN_OPTIONS", "NODE_ENV", "node_options", "MIMALLOC_VERBOSE", "ICU_DATA", "BUN_INSTALL_CACHE_DIR", "LD_PRELOAD", "LD_LIBRARY_PATH", "LD_DEBUG"] {
             assert!(for_the_runtime(OsStr::new(name)), "{name}");
         }
-        for name in ["BUN_INSTALL", "HOME", "NODENV_ROOT", "BUNDLE_PATH", "CODEHOST_NO_NATIVE"] {
+        for name in ["BUN_INSTALL", "HOME", "NODENV_ROOT", "BUNDLE_PATH", "CODEHOST_NO_NATIVE", "OLDPWD"] {
             assert!(!for_the_runtime(OsStr::new(name)), "{name}");
         }
     }

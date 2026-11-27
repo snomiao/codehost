@@ -6,11 +6,20 @@ use std::process::{Command, Stdio};
 
 use crate::{js, repo, HandBack};
 
+/// bun's `spawnSync` reads at most this much of a child's standard output,
+/// and as much of its standard error (Node's default `maxBuffer`, counted in
+/// bytes). One byte more and it kills the child and reports a failure, which
+/// the JavaScript takes for "", sooner or later depending on how fast the
+/// child writes (measured with bun 1.4.0: never up to 1,048,576 bytes,
+/// sometimes at 1,048,577, always from 2 MB).
+const MAX_BUFFER: usize = 1024 * 1024;
+
 /// `git(dir, args)`: `spawnSync("git", ["-C", dir, ...args])`, its standard
 /// output trimmed when it exits 0, otherwise "". A `git` that cannot be
-/// found gives "" there too; any other failure to start it, and output that
-/// is not UTF-8 (which the JavaScript would decode with replacement
-/// characters), is the JavaScript's.
+/// found gives "" there too; any other failure to start it, output that is
+/// not UTF-8 (which the JavaScript would decode with replacement
+/// characters), and either stream longer than `MAX_BUFFER`, is the
+/// JavaScript's.
 fn git(dir: &str, args: &[&str]) -> Result<String, HandBack> {
     let output = Command::new("git")
         .arg("-C")
@@ -23,6 +32,7 @@ fn git(dir: &str, args: &[&str]) -> Result<String, HandBack> {
     match output {
         Err(err) if err.kind() == ErrorKind::NotFound => Ok(String::new()),
         Err(_) => Err(HandBack),
+        Ok(output) if output.stdout.len() > MAX_BUFFER || output.stderr.len() > MAX_BUFFER => Err(HandBack),
         Ok(output) if output.status.code() == Some(0) => {
             let text = String::from_utf8(output.stdout).map_err(|_| HandBack)?;
             Ok(js::trim(&text).to_string())
