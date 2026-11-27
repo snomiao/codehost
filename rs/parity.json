@@ -4769,6 +4769,34 @@
       ]
     },
     {
+      "name": "verify: serve -t of 12 UTF-16 units, the last two one astral character (accepted)",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Aa1-aaaaaa😀"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ],
+      "handback": "a token the policy accepts: serve is the JavaScript's"
+    },
+    {
+      "name": "verify: serve -t with the Kelvin sign (accepted)",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Kodehost1234"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ],
+      "handback": "a token the policy accepts: serve is the JavaScript's"
+    },
+    {
       "name": "verify: serve -t with U+180E (not \\s since ES2016)",
       "args": [
         "serve",

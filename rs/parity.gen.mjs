@@ -29,7 +29,8 @@
 //     that could make `--print` false;
 //   - run serve, dev or expose with a token the policy accepts, except dev
 //     with a live host daemon registered (it then only writes to
-//     workspaces.json); and never with -d or without
+//     workspaces.json), and serve with no dir in the empty home (it then
+//     stops at `no workspace root configured`); and never with -d or without
 //     `--signal ws://127.0.0.1:1`, nor with --standalone unless every token
 //     is one the policy rejects (the handler checks it first and exits). If
 //     a case were wrong, the TypeScript would find no VS Code
@@ -100,8 +101,24 @@ function refuseDanger(c) {
       throw new Error(`${c.name}: --standalone only with a token the policy rejects`);
     }
     const accepted = tokens.some(policyAccepts);
-    if (accepted && !(command === "dev" && c.liveDaemon)) throw new Error(`${c.name}: a token the policy accepts would start a server`);
+    if (accepted && !(command === "dev" && c.liveDaemon) && !servesNoRoot(c)) throw new Error(`${c.name}: a token the policy accepts would start a server`);
   }
+}
+
+/** `serve` with nothing but the closed `--signal` and a token: no dir, no
+ *  setup, no files, no variables of its own. In the runner's empty home
+ *  nothing is remembered, so the TypeScript stops with `no workspace root
+ *  configured` (exit 1) right after the token check, before it writes,
+ *  starts or connects anything (serve.ts:135). Such a case says so with
+ *  `noRoot: true`. */
+function servesNoRoot(c) {
+  const [command, ...rest] = c.args;
+  if (command !== "serve" || !c.noRoot || c.setup || c.files || c.env || rest.length % 2 !== 0) return false;
+  for (let i = 0; i < rest.length; i += 2) {
+    const [option, value] = [rest[i], rest[i + 1]];
+    if (option === "--signal" ? value !== SIGNAL[1] : !["-t", "--token"].includes(option) || value.startsWith("-")) return false;
+  }
+  return true;
 }
 
 // ── cases ────────────────────────────────────────────────────────────────────
@@ -110,7 +127,7 @@ const cases = [];
 function add(name, spec) {
   const c = { name, ...spec };
   refuseDanger(c);
-  const { liveDaemon, ...kept } = c;
+  const { liveDaemon, noRoot, ...kept } = c;
   cases.push(kept);
 }
 function back(name, why, spec) {
@@ -617,10 +634,10 @@ back("dev with a daemon.json pid written as a float", "not compared", {
 // Written by the verifier of the first port (107 cases, named "verify: …"),
 // to break it: files bun reads before the program, .env variables that reach
 // git, very large values, the token policy at its edges, spellings, saved
-// state. Taken over as they were, except: the two cases with a token the
-// policy accepts (they would start `serve`) are left out, its boundary in
-// UTF-16 units is compared in rs/src/compare.rs; `expose 00000` gets the
-// closed `--signal` every server case has; and the two cases for a
+// state. Taken over as they were, all 107, except: the two cases with a
+// token the policy accepts also show that HOME stays empty (serve stops at
+// `no workspace root configured` there); `expose 00000` gets the closed
+// `--signal` every server case has; and the two cases for a
 // repository of another user change its owner only where they can (as
 // root), so that they run elsewhere too.
 
@@ -721,6 +738,12 @@ vServe("serve -t of 100 KB", null, "Aa1-".repeat(25000));
 // D. The token policy.
 vServe("serve -t of 11 UTF-16 units ending in astral characters", null, "Aa1-aaa😀😀");
 vServe("serve -t of 257 units, the last character astral", null, `Aa1-${"a".repeat(251)}😀`);
+// Two tokens the policy accepts. serve is the JavaScript's then, and with no
+// dir in the runner's empty home it stops at `no workspace root configured`
+// (see servesNoRoot); HOME is shown to stay empty.
+const ACCEPTED = "a token the policy accepts: serve is the JavaScript's";
+vServe("serve -t of 12 UTF-16 units, the last two one astral character (accepted)", ACCEPTED, "Aa1-aaaaaa😀", { noRoot: true, after: [HOME_STATE] });
+vServe("serve -t with the Kelvin sign (accepted)", ACCEPTED, "Kodehost1234", { noRoot: true, after: [HOME_STATE] });
 vServe("serve -t with U+180E (not \\s since ES2016)", null, "aaaa\u180eaaaaaaa");
 vServe("serve -t with U+200B (not \\s)", null, "aaaaaaaaaaa\u200b");
 vServe("serve -t with U+0085 (not \\s)", null, "aaaaaaaaaaa\u0085");
