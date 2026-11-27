@@ -1,0 +1,6 @@
+# The Rust port's files stay LF in every checkout, also on Windows with
+# core.autocrlf (as GitHub's Windows runners have it): the parity job runs
+# rs/parity/*.sh in Git Bash, which does not take a carriage return for the
+# end of a line, and `node rs/parity.gen.mjs --check` compares rs/parity.json
+# byte for byte.
+rs/** text=auto eol=lf
