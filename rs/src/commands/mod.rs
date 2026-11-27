@@ -28,6 +28,17 @@ pub fn recognise(args: &[String]) -> Option<Command> {
 }
 
 impl Command {
+    /// What the command was given, in the form rs/parity/helpers.ts writes
+    /// for yargs's parse of the same line (rs/src/compare.rs).
+    #[cfg(test)]
+    pub fn describe(&self) -> String {
+        match self {
+            Command::Open(open) => open.describe(),
+            Command::Init(init) => init.describe(),
+            Command::Server(server) => server.describe(),
+        }
+    }
+
     pub fn run(&self, machine: &Machine) -> Result<Answer, HandBack> {
         match self {
             Command::Open(open) => open.run(machine),

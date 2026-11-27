@@ -117,12 +117,39 @@ fn helpers_answer_as_the_typescript_does() {
             format!("[{},{token},{}]", json::stringify_str(t), json::stringify_str(page))
         })
         .collect();
+    // Command lines for the argument gate, from words its rules care about.
+    const COMMANDS: &[&str] = &["open", "open", "open", "init", "init", "serve", "dev", "dev", "expose"];
+    const WORDS: &[&str] = &[
+        "--print", "--print", "--anon", "-t", "--token", "--token=x y", "--token=", "--page", "--page=http://p.dev/", "-f", "--force",
+        "--name", "--signal", "ws://127.0.0.1:1", "--port", "8080", "08080", "abc", "--approve", "auto", "confirm", "maybe",
+        "--standalone", "-d", "--allow", "o/r", "a b", "", " ", "-", "--", "help", "true", "false", "--help", "-h", "--version",
+        "-x", "--unknown", "1e3", "0x10", "-5", "--no-print", "--print=true", "-tabc", "-t=abc", "--Token", "é", "dir", "short",
+        "Changeme1234", "--anon=false", "-f=x", "--token=-x", "70000", "null", "undefined", "__proto__", "constructor",
+    ];
+    const PLAIN: &[&str] = &[
+        "--print", "--print", "--anon", "-t", "--token", "x y", "--token=x y", "--page", "--page=http://p.dev/", "https://p.dev//", "-f",
+        "--force", "--name", "n", "--signal", "ws://127.0.0.1:1", "--port", "8080", "--approve", "auto", "confirm", "--standalone",
+        "o/r", "dir", "short", "Changeme1234", "a b", "é", "1e3",
+    ];
+    let lines: Vec<Vec<String>> = (0..20000)
+        .map(|_| {
+            let mut line = vec![COMMANDS[random.below(COMMANDS.len())].to_string()];
+            for _ in 0..random.below(7) {
+                let pool = if random.below(4) == 0 { WORDS } else { PLAIN };
+                line.push(pool[random.below(pool.len())].to_string());
+            }
+            line
+        })
+        .collect();
+    let line_lists: Vec<String> = lines.iter().map(|line| quoted(line)).collect();
+
     let request = format!(
-        "{{\"urls\":{},\"texts\":{},\"folders\":[{}],\"targets\":[{}]}}",
+        "{{\"urls\":{},\"texts\":{},\"folders\":[{}],\"targets\":[{}],\"lines\":[{}]}}",
         quoted(&urls),
         quoted(&tokens),
         folder_pairs.join(","),
-        target_triples.join(",")
+        target_triples.join(","),
+        line_lists.join(",")
     );
 
     let home = std::env::temp_dir().join(format!("codehost-compare-home-{}", std::process::id()));
@@ -193,6 +220,17 @@ fn helpers_answer_as_the_typescript_does() {
         let ours = open::url_for_target(js::trim(target), page, || Ok(token.as_deref().map(|t| js::trim(t).to_string())));
         check("buildUrl", target, ours.map(Some), &theirs);
     }
+    // Every line the binary takes, yargs takes too (no error, no help, no
+    // version), and gives the command the same values.
+    let mut taken = 0;
+    for (line, theirs) in lines.iter().zip(texts(answer("parsed"))) {
+        if let Some(command) = crate::commands::recognise(line) {
+            assert_eq!(Some(command.describe()), theirs, "the command line {line:?}");
+            taken += 1;
+        }
+    }
+    println!("{taken} of {} generated command lines taken by the binary, each parsed alike by yargs", lines.len());
+    assert!(taken >= 1000, "only {taken} command lines taken");
     println!("{compared} answers compared, {declined} declined (handed back)");
     assert!(declined * 50 < compared, "too many declined: {declined} of {}", compared + declined);
 }

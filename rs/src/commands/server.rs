@@ -73,6 +73,16 @@ pub fn recognise(kind: Kind, args: &[String]) -> Option<Server> {
 }
 
 impl Server {
+    #[cfg(test)]
+    pub fn describe(&self) -> String {
+        let dir = |default: &str| self.dir.clone().unwrap_or_else(|| default.to_string());
+        match self.kind {
+            Kind::Serve => ["serve".to_string(), self.token.clone(), dir("<none>")].join("\u{1}"),
+            Kind::Dev => ["dev".to_string(), self.token.clone(), dir("."), self.standalone.to_string()].join("\u{1}"),
+            Kind::Expose => ["expose".to_string(), self.token.clone()].join("\u{1}"),
+        }
+    }
+
     pub fn run(&self, machine: &Machine) -> Result<Answer, HandBack> {
         let token = js::trim(&self.token);
         if let Some(reason) = token::rejection(token) {

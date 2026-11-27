@@ -31,6 +31,66 @@ writeFileSync(join(dir, "open.ts"), `${source}\nexport { buildUrl };\n`);
 const { buildUrl } = await import(join(dir, "open.ts"));
 rmSync(dir, { recursive: true, force: true });
 
+// The yargs chain of src/cli/index.ts, with every handler replaced by one
+// that only records what it was given: nothing runs. `.parse` with a callback
+// prints nothing and exits nowhere; help, the version and errors come back
+// as output or a failure.
+const commands = await Promise.all(
+  [
+    ["setup", "setupCommand"],
+    ["init", "initCommand"],
+    ["serve", "serveCommand"],
+    ["dev", "devCommand"],
+    ["expose", "exposeCommand"],
+    ["open", "openCommand"],
+    ["list", "listCommand"],
+    ["stop", "stopCommand"],
+    ["update", "updateCommand"],
+    ["supervise", "superviseCommand"],
+  ].map(async ([file, name]) => (await import(join(root, `src/cli/commands/${file}.ts`)))[name]),
+);
+const { default: yargs } = await import(join(root, "node_modules/yargs/index.mjs"));
+const show = (value: unknown) => (value === undefined ? "<none>" : String(value));
+function describe(command: string, argv: Record<string, unknown>): string {
+  switch (command) {
+    case "open":
+      return ["open", show(argv.target), show(argv.token), show(argv.anon), show(argv.page)].join("\u0001");
+    case "init":
+      return ["init", show(argv.dir), show(argv.force)].join("\u0001");
+    case "serve":
+      return ["serve", show(argv.token), show(argv.dir)].join("\u0001");
+    case "dev":
+      return ["dev", show(argv.token), show(argv.dir), show(argv.standalone)].join("\u0001");
+    case "expose":
+      return ["expose", show(argv.token)].join("\u0001");
+    default:
+      return `other ${command}`;
+  }
+}
+function parseLine(line: string[]): string | null {
+  let seen: string | null = null;
+  let failed = false;
+  let printed = "";
+  const chain = yargs(line)
+    .scriptName("codehost")
+    .usage("$0 <command> [options]")
+    .exitProcess(false)
+    .fail(() => {
+      failed = true;
+    });
+  for (const command of commands) {
+    const name = String(command.command).split(" ")[0];
+    chain.command({ ...command, handler: (argv: Record<string, unknown>) => void (seen = describe(name, argv)) });
+  }
+  try {
+    chain.demandCommand(1, "Specify a command, e.g. `codehost serve`").strict().help().alias("h", "help").version();
+    chain.parse(line, {}, (_err: unknown, _argv: unknown, output: string) => void (printed = output ?? ""));
+  } catch {
+    failed = true;
+  }
+  return failed || printed !== "" ? null : seen;
+}
+
 const input = JSON.parse(readFileSync(0, "utf8"));
 const answers = {
   gitUrlToPath: input.urls.map((url: string) => gitUrlToPath(url)),
@@ -44,5 +104,6 @@ const answers = {
   buildUrl: input.targets.map(([target, token, page]: [string, string | null, string]) =>
     buildUrl({ target, token: token ?? undefined, anon: token === null, page, print: true }),
   ),
+  parsed: (input.lines ?? []).map((line: string[]) => parseLine(line)),
 };
 process.stdout.write(JSON.stringify(answers));

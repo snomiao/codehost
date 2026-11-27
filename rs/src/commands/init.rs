@@ -68,6 +68,11 @@ fn overwritable(path: &str) -> bool {
 }
 
 impl Init {
+    #[cfg(test)]
+    pub fn describe(&self) -> String {
+        ["init".to_string(), self.dir.clone(), self.force.to_string()].join("\u{1}")
+    }
+
     pub fn run(&self, machine: &Machine) -> Result<Answer, HandBack> {
         let dir = node::resolve(&machine.cwd, &self.dir);
         let codehost = node::join(&dir, ".codehost");

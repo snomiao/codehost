@@ -124,6 +124,12 @@ pub(crate) fn url_for_target(target: &str, page: &str, token: impl FnOnce() -> R
 }
 
 impl Open {
+    #[cfg(test)]
+    pub fn describe(&self) -> String {
+        let show = |value: &Option<String>| value.clone().unwrap_or_else(|| "<none>".to_string());
+        ["open".to_string(), show(&self.target), show(&self.token), self.anon.to_string(), self.page.clone()].join("\u{1}")
+    }
+
     /// `argv.anon ? undefined : (argv.token?.trim() || readConfig().token)`
     fn token(&self, machine: &Machine) -> Result<Option<String>, HandBack> {
         if self.anon {
