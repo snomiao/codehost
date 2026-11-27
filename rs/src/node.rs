@@ -1,6 +1,7 @@
 //! What the TypeScript asks of Node's API, on Unix: `path.resolve`,
-//! `os.hostname()`, `process.kill(pid, 0)`, and whether a directory can be
-//! written into (which the JavaScript finds out by trying).
+//! `os.hostname()`, `process.kill(pid, 0)`, whether a directory can be
+//! written into (which the JavaScript finds out by trying), and whether a
+//! file can be executed (which bun asks when it looks a program up).
 
 use std::ffi::{c_char, c_int, CString};
 
@@ -56,6 +57,14 @@ pub fn hostname() -> Option<String> {
 pub fn alive(pid: i32) -> bool {
     // SAFETY: signal 0 sends nothing; it only checks.
     unsafe { kill(pid, 0) == 0 }
+}
+
+/// Whether this user may execute the file at `path`.
+pub fn executable(path: &std::path::Path) -> bool {
+    use std::os::unix::ffi::OsStrExt as _;
+    let Ok(path) = CString::new(path.as_os_str().as_bytes()) else { return false };
+    // SAFETY: a valid C string; `access` only reads it.
+    unsafe { access(path.as_ptr(), X_OK) == 0 }
 }
 
 /// Whether new entries can be made in the directory `dir`.
