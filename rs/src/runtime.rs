@@ -43,6 +43,10 @@
 //!   but cannot be loaded, such as a glibc build on a musl system, is not
 //!   detected: there the TypeScript fails at every command.)
 //!
+//! bun keeps the environment as text: a variable whose name or value is not
+//! UTF-8 reaches the git it starts changed or not at all, so any such
+//! variable hands back.
+//!
 //! The program's own files are `path.join(os.homedir(), ".codehost", …)`:
 //! HOME as it is, with `..` resolved by the text. A HOME that is unset or
 //! empty (`os.homedir()` then asks the user database) or has a `..`
@@ -95,6 +99,15 @@ impl Machine {
 fn for_the_runtime(name: &OsStr) -> bool {
     let name = name.to_string_lossy().to_ascii_uppercase();
     name != "BUN_INSTALL" && ["BUN_", "NODE_", "MIMALLOC_", "ICU_", "LD_"].iter().any(|start| name.starts_with(start))
+}
+
+/// bun's `process.env` holds text, and the programs the JavaScript starts get
+/// that text back: a value that is not UTF-8 reaches git with U+FFFD in
+/// place of its bytes, a variable whose name is not UTF-8 not at all (bun
+/// 1.4.0). git reads many variables (XDG_CONFIG_HOME, GIT_*, HOME, …), and
+/// the binary passes them on as they are, so any such variable hands back.
+fn text(name_or_value: &OsStr) -> bool {
+    name_or_value.to_str().is_some()
 }
 
 /// Every file bun may load from the current directory, under any NODE_ENV.
@@ -326,7 +339,7 @@ pub fn machine() -> Result<Machine, HandBack> {
     if cfg!(not(target_os = "linux")) {
         return Err(HandBack);
     }
-    if std::env::vars_os().any(|(name, _)| for_the_runtime(&name)) {
+    if std::env::vars_os().any(|(name, value)| for_the_runtime(&name) || !text(&name) || !text(&value)) {
         return Err(HandBack);
     }
     let package_root = crate::js_fallback::package_root().ok_or(HandBack)?;
