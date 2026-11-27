@@ -6319,6 +6319,123 @@
         "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
       ],
       "handback": "git prints more than bun's spawnSync reads (1 MiB)"
+    },
+    {
+      "name": "repair: open with HOME through a missing directory and ..",
+      "env": {
+        "HOME": "<CWD>/nope/../h"
+      },
+      "setup": [
+        "mkdir -p h/.codehost && printf '{\"token\": \"Saved-1\"}' > h/.codehost/config.json"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "o/r"
+      ],
+      "handback": "a HOME with a `..` component, which path.join resolves by the text"
+    },
+    {
+      "name": "repair: open with HOME through a link and ..",
+      "env": {
+        "HOME": "<CWD>/ln/../h"
+      },
+      "setup": [
+        "mkdir -p p/q && ln -s <CWD>/p/q ln",
+        "mkdir -p h/.codehost && printf '{\"token\": \"Saved-1\"}' > h/.codehost/config.json",
+        "mkdir -p p/h/.codehost && printf '{\"token\": \"Other-2\"}' > p/h/.codehost/config.json"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "o/r"
+      ],
+      "handback": "a HOME with a `..` component, which path.join resolves by the text"
+    },
+    {
+      "name": "repair: open with a relative HOME",
+      "env": {
+        "HOME": "h"
+      },
+      "setup": [
+        "mkdir -p h/.codehost && printf '{\"token\": \"Saved-1\"}' > h/.codehost/config.json"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "o/r"
+      ]
+    },
+    {
+      "name": "repair: open with HOME holding a . segment and a double slash",
+      "env": {
+        "HOME": "<CWD>/./h//"
+      },
+      "setup": [
+        "mkdir -p h/.codehost && printf '{\"token\": \"Saved-1\"}' > h/.codehost/config.json"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "o/r"
+      ]
+    },
+    {
+      "name": "repair: dev registers with HOME through a missing directory and ..",
+      "env": {
+        "HOME": "<CWD>/nope/../h"
+      },
+      "setup": [
+        "mkdir -p h/.codehost && printf '{\\n  \"pid\": %s,\\n  \"root\": \"/srv/ws\",\\n  \"token\": \"Daemon-Token-1\"\\n}' \"$PPID\" > h/.codehost/daemon.json",
+        "mkdir ws"
+      ],
+      "args": [
+        "dev",
+        "ws",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Parity-Token-1"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "sort -u \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ],
+      "normalize": [
+        [
+          "\"addedAt\": \\d{13}",
+          "\"addedAt\": <MS>"
+        ]
+      ],
+      "handback": "a HOME with a `..` component, which path.join resolves by the text"
+    },
+    {
+      "name": "repair: dev registers with a relative HOME",
+      "env": {
+        "HOME": "h"
+      },
+      "setup": [
+        "mkdir -p h/.codehost && printf '{\\n  \"pid\": %s,\\n  \"root\": \"/srv/ws\",\\n  \"token\": \"Daemon-Token-1\"\\n}' \"$PPID\" > h/.codehost/daemon.json",
+        "mkdir ws"
+      ],
+      "args": [
+        "dev",
+        "ws",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Parity-Token-1"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ],
+      "normalize": [
+        [
+          "\"addedAt\": \\d{13}",
+          "\"addedAt\": <MS>"
+        ]
+      ]
     }
   ]
 }

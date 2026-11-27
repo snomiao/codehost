@@ -951,6 +951,47 @@ back("repair: open with a git that writes 9 MB to stderr", "git prints more than
   after: [GIT_ASKED, BROWSER_LOG],
 });
 
+// HOME as the TypeScript reads it: path.join(homedir(), ".codehost", …)
+// resolves a `..` by the text, the system through the directories. Found
+// after the verification (the first repair answered both `..` cases with
+// the file the system names: no token, or another one).
+const HOME_DOTDOT = "a HOME with a `..` component, which path.join resolves by the text";
+const homeConfig = (dir, token) => `mkdir -p ${dir}/.codehost && printf '{"token": "${token}"}' > ${dir}/.codehost/config.json`;
+back("repair: open with HOME through a missing directory and ..", HOME_DOTDOT, {
+  env: { HOME: "<CWD>/nope/../h" },
+  setup: [homeConfig("h", "Saved-1")],
+  args: ["open", "--print", "o/r"],
+});
+back("repair: open with HOME through a link and ..", HOME_DOTDOT, {
+  env: { HOME: "<CWD>/ln/../h" },
+  setup: ["mkdir -p p/q && ln -s <CWD>/p/q ln", homeConfig("h", "Saved-1"), homeConfig("p/h", "Other-2")],
+  args: ["open", "--print", "o/r"],
+});
+add("repair: open with a relative HOME", { env: { HOME: "h" }, setup: [homeConfig("h", "Saved-1")], args: ["open", "--print", "o/r"] });
+add("repair: open with HOME holding a . segment and a double slash", {
+  env: { HOME: "<CWD>/./h//" },
+  setup: [homeConfig("h", "Saved-1")],
+  args: ["open", "--print", "o/r"],
+});
+const homeDaemon = (dir) =>
+  `mkdir -p ${dir}/.codehost && printf '{\\n  "pid": %s,\\n  "root": "/srv/ws",\\n  "token": "Daemon-Token-1"\\n}' "$PPID" > ${dir}/.codehost/daemon.json`;
+back("repair: dev registers with HOME through a missing directory and ..", HOME_DOTDOT, {
+  liveDaemon: true,
+  env: { HOME: "<CWD>/nope/../h" },
+  setup: [homeDaemon("h"), "mkdir ws"],
+  args: ["dev", "ws", ...SIGNAL, "-t", DEV_TOKEN],
+  after: [CWD_STATE, GIT_ASKED],
+  normalize: MS,
+});
+add("repair: dev registers with a relative HOME", {
+  liveDaemon: true,
+  env: { HOME: "h" },
+  setup: [homeDaemon("h"), "mkdir ws"],
+  args: ["dev", "ws", ...SIGNAL, "-t", DEV_TOKEN],
+  after: [CWD_STATE, GIT_LOG],
+  normalize: MS,
+});
+
 // ── write ────────────────────────────────────────────────────────────────────
 
 const names = new Set();
