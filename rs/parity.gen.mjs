@@ -890,6 +890,25 @@ back("repair: open in a repository beside a .env setting a variable git does not
 });
 back("repair: open beside a .env with a key after a quoted value", ENV_LOADED, { files: { ".env": 'HOME="/x" CODEHOST_PARITY_NEW=1\n' }, args: ["open", "--print", "--anon", "o/r"] });
 back("repair: open beside a .env with a key written KEY: value", ENV_LOADED, { files: { ".env": "CODEHOST_PARITY_NEW: 1\n" }, args: ["open", "--print", "--anon", "o/r"] });
+// bun skips line ends between a key and its `=` as it skips blanks: the
+// first repair missed these, and the TypeScript's git then could not start.
+back("repair: open in a repository beside a .env setting LD_LIBRARY_PATH with a CR before =", ENV_LOADED, {
+  files: { ".env": "LD_LIBRARY_PATH\r=<CWD>/libs\n", "libs/libc.so.6": "not an ELF file\n" },
+  setup: [...vRepo("https://github.com/o/r"), vCommit()],
+  args: ["open", "--print", "--anon"],
+  after: OPEN_AFTER,
+});
+back("repair: open beside a .env with a key on one line and its = on the next", ENV_LOADED, {
+  files: { ".env": "CODEHOST_PARITY_NEW\n=1\n" },
+  args: ["open", "--print", "--anon", "o/r"],
+});
+add("repair: open in a repository beside a .env whose keys, all set already, end in line ends before =", {
+  files: { ".env": "HOME\r=/elsewhere\nCODEHOST_PARITY_SET\n=from the file\n" },
+  env: { CODEHOST_PARITY_SET: "from the environment" },
+  setup: [...vRepo("https://github.com/o/r"), vCommit()],
+  args: ["open", "--print", "--anon"],
+  after: OPEN_AFTER,
+});
 back("repair: open with LD_BIND_NOW set", "the dynamic loader that starts bun reads LD_*", { env: { LD_BIND_NOW: "1" }, args: ["open", "--print", "--anon", "o/r"] });
 
 // git's output at bun's spawnSync limit: 1,048,576 bytes is read, more is not.

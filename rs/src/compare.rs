@@ -392,31 +392,48 @@ fn project_files_the_binary_accepts_are_quiet_in_bun() {
 /// What bun loads from a `.env` file, against what the binary looks for.
 /// Generates some hundreds of files from the pieces bun's parser cares about
 /// (blanks, `export`, `=` and `:`, quotes of three kinds, escapes, comments,
-/// line ends of three kinds, `$` expansion), has bun 1.4.0 print its
-/// environment beside each, and requires that every variable it added is a
-/// name `dotenv_keys` found, and that the environment is untouched wherever
-/// the binary would answer (`dotenv_changes_nothing`).
+/// line ends of three kinds, also between a key and its `=`, `$` expansion),
+/// and one file for every byte that is not a key character, put before a
+/// key, inside it, between it and its `=`, and after its `:`. Has bun 1.4.0
+/// print its environment beside each, and requires that every variable it
+/// added is a name `dotenv_keys` found, and that the environment is
+/// untouched wherever the binary would answer (`dotenv_changes_nothing`).
 #[test]
 fn dotenv_keys_cover_what_bun_loads() {
     let mut random = Random(0x9e37_79b9_7f4a_7c15 ^ 0xdead_beef);
     const KEYS: &[&str] = &["A", "B_1", "a.b", "x-y", "HOME", "PATH", "SET_X", "EMPTY_X", "export", "1", "_", "Q", "git_dir", "LD_X"];
-    const BETWEEN: &[&str] = &["=", "=", " = ", ": ", ":", " :", "\t=\t", " ", "==", ":\t"];
+    const BETWEEN: &[&str] = &[
+        "=", "=", " = ", ": ", ":", " :", "\t=\t", " ", "==", ":\t", "\r=", "\n=", "\r\n=", "\x0b=", "\x0c =", " \n\t=", ":\n", "\n:\r",
+    ];
     const VALUES: &[&str] = &[
         "1", "a b", "\"q\"", "'s'", "`b`", "\"multi\nline\"", "'multi\nC=3'", "$HOME", "${SET_X}", "x#y", "https://a.b/?c=d", "", "\"unterminated",
         "\\\"", "\"a\" B=2", "'x' Z: 1", "\"a\\\"b\" Y=1", "x # C=1", "\"#\"", "é", "\"\\n\"", "`x\ny`D=1",
     ];
-    const BEFORE: &[&str] = &["", "", "  ", "export ", "\t", "# ", "export  ", "\u{feff}"];
+    const BEFORE: &[&str] = &["", "", "  ", "export ", "\t", "# ", "export  ", "\u{feff}", "\x0b", "\x0c", "\r", "export\n"];
     const ENDS: &[&str] = &["\n", "\n", "\r\n", "\r", ""];
-    let contents: Vec<String> = (0..400)
+    let mut contents: Vec<Vec<u8>> = (0..400)
         .map(|_| {
             (0..1 + random.below(4))
                 .map(|_| {
                     let parts = [pick(&mut random, BEFORE), pick(&mut random, KEYS), pick(&mut random, BETWEEN), pick(&mut random, VALUES), pick(&mut random, ENDS)];
                     parts.concat()
                 })
-                .collect()
+                .collect::<String>()
+                .into_bytes()
         })
         .collect();
+    let key_byte = |byte: u8| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'.' | b'-');
+    for byte in (0..=255u8).filter(|&byte| !key_byte(byte) && byte != b'=') {
+        let mut content = Vec::new();
+        for shape in [&b"\x00BYTE_BEFORE=v\n"[..], b"BYTE_\x00INSIDE=v\n", b"BYTE_BETWEEN\x00=v\n", b"BYTE_BETWEEN2\x00\x00=v\n", b"BYTE_COLON:\x00v\n"] {
+            content.extend(shape.iter().map(|&b| if b == 0 { byte } else { b }));
+        }
+        contents.push(content);
+    }
+    // Files the binary answers beside, with keys that are all set already.
+    for text in ["HOME\r=/x\n", "PATH\n=/y\n", "SET_X\r\n=2\n", "export HOME\n=1\nPATH :\t2\n", "# A=1\n", "\n\r\n\t\n", "SET_X=$HOME\r\nHOME='a'\n"] {
+        contents.push(text.as_bytes().to_vec());
+    }
 
     let base = scratch("dotenv");
     let entry = base.join("entry").join("env.ts");
@@ -441,14 +458,15 @@ fn dotenv_keys_cover_what_bun_loads() {
     let (mut native, mut loaded) = (0, 0);
     for (content, (stdout, _)) in contents.iter().zip(&answers[1..]) {
         let after = environment(stdout);
-        let keys = runtime::dotenv_keys(content.as_bytes());
+        let keys = runtime::dotenv_keys(content);
+        let shown = String::from_utf8_lossy(content);
         for (name, _) in after.iter().filter(|member| !baseline.contains(member)) {
             loaded += 1;
-            assert!(keys.contains(&name.as_bytes()), "bun loaded {name:?} from this .env, which dotenv_keys does not find:\n{content:?}");
+            assert!(keys.contains(&name.as_bytes()), "bun loaded {name:?} from this .env, which dotenv_keys does not find:\n{shown:?}");
         }
-        if runtime::dotenv_changes_nothing(content.as_bytes(), set) {
+        if runtime::dotenv_changes_nothing(content, set) {
             native += 1;
-            assert_eq!(after, baseline, "the binary answers beside this .env, but bun changed the environment:\n{content:?}");
+            assert_eq!(after, baseline, "the binary answers beside this .env, but bun changed the environment:\n{shown:?}");
         }
     }
     println!("{} .env files: bun loaded {loaded} variables, the binary answers beside {native}", contents.len());

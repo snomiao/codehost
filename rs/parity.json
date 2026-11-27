@@ -6178,6 +6178,66 @@
       "handback": "bun loads a variable from .env that is not set, and git inherits it"
     },
     {
+      "name": "repair: open in a repository beside a .env setting LD_LIBRARY_PATH with a CR before =",
+      "files": {
+        ".env": "LD_LIBRARY_PATH\r=<CWD>/libs\n",
+        "libs/libc.so.6": "not an ELF file\n"
+      },
+      "setup": [
+        "mkdir -p '.'",
+        "git -C '.' init -q -b main",
+        "git -C '.' remote add origin 'https://github.com/o/r'",
+        "git -C '.' -c user.name=p -c user.email=p@p commit -q --allow-empty -m init"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ],
+      "handback": "bun loads a variable from .env that is not set, and git inherits it"
+    },
+    {
+      "name": "repair: open beside a .env with a key on one line and its = on the next",
+      "files": {
+        ".env": "CODEHOST_PARITY_NEW\n=1\n"
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ],
+      "handback": "bun loads a variable from .env that is not set, and git inherits it"
+    },
+    {
+      "name": "repair: open in a repository beside a .env whose keys, all set already, end in line ends before =",
+      "files": {
+        ".env": "HOME\r=/elsewhere\nCODEHOST_PARITY_SET\n=from the file\n"
+      },
+      "env": {
+        "CODEHOST_PARITY_SET": "from the environment"
+      },
+      "setup": [
+        "mkdir -p '.'",
+        "git -C '.' init -q -b main",
+        "git -C '.' remote add origin 'https://github.com/o/r'",
+        "git -C '.' -c user.name=p -c user.email=p@p commit -q --allow-empty -m init"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
       "name": "repair: open with LD_BIND_NOW set",
       "env": {
         "LD_BIND_NOW": "1"
