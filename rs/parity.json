@@ -6436,6 +6436,64 @@
           "\"addedAt\": <MS>"
         ]
       ]
+    },
+    {
+      "name": "repair: open in a repository with XDG_CONFIG_HOME not UTF-8, whose git config rewrites the origin",
+      "env": {
+        "PARITY_PRINTF_ENV": "XDG_CONFIG_HOME=<CWD>/cfg\\377"
+      },
+      "setup": [
+        "mkdir -p \"$(printf 'cfg\\377/git')\" && printf '[url \"https://github.com/\"]\\n\\tinsteadOf = gh:\\n' > \"$(printf 'cfg\\377/git/config')\"",
+        "mkdir -p '.'",
+        "git -C '.' init -q -b main",
+        "git -C '.' remote add origin 'gh:o/r'",
+        "git -C '.' -c user.name=p -c user.email=p@p commit -q --allow-empty -m init"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ],
+      "handback": "a variable that is not UTF-8, which bun hands to git changed"
+    },
+    {
+      "name": "repair: open in a repository with XDG_CONFIG_HOME whose git config rewrites the origin",
+      "env": {
+        "XDG_CONFIG_HOME": "<CWD>/cfg"
+      },
+      "setup": [
+        "mkdir -p cfg/git && printf '[url \"https://github.com/\"]\\n\\tinsteadOf = gh:\\n' > cfg/git/config",
+        "mkdir -p '.'",
+        "git -C '.' init -q -b main",
+        "git -C '.' remote add origin 'gh:o/r'",
+        "git -C '.' -c user.name=p -c user.email=p@p commit -q --allow-empty -m init"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "repair: open with a variable git does not read, not UTF-8",
+      "env": {
+        "PARITY_PRINTF_ENV": "CODEHOST_PARITY_RAW=a\\377b"
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ],
+      "handback": "a variable that is not UTF-8, which bun hands to git changed"
     }
   ]
 }

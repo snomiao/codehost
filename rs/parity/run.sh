@@ -14,12 +14,15 @@
 #                    means to open a browser, and the cases of `open` print
 #                    that log to show none was asked to
 #
-# Two variables of the case steer it, and are not passed on:
+# These variables of the case steer it, and are not passed on:
 #
 #   PARITY_CD=<dir>    start the command in that directory below the case's
 #                      directory (which the runner cannot choose)
 #   PARITY_NO_GIT=1    no git at all: PATH holds only a link to bun
 #   PARITY_PATH_PREFIX=<dir>  put <dir> (relative, say) first on PATH
+#   PARITY_PRINTF_ENV=<name>=<format>  set <name> to what printf makes of
+#                      <format>: a value that is not UTF-8 (`\377`), which
+#                      the cases file, being JSON, cannot hold
 set -eu
 
 shims="$TMPDIR/shims"
@@ -47,6 +50,13 @@ if [ -n "${PARITY_PATH_PREFIX:-}" ]; then
 fi
 export PATH
 unset PARITY_NO_GIT PARITY_PATH_PREFIX
+
+if [ -n "${PARITY_PRINTF_ENV:-}" ]; then
+  name=${PARITY_PRINTF_ENV%%=*}
+  value=$(printf "${PARITY_PRINTF_ENV#*=}")
+  export "$name=$value"
+fi
+unset PARITY_PRINTF_ENV
 
 if [ -n "${PARITY_CD:-}" ]; then
   cd "$PARITY_CD"

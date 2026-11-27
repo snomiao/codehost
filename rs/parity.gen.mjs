@@ -992,6 +992,32 @@ add("repair: dev registers with a relative HOME", {
   normalize: MS,
 });
 
+// A variable that is not UTF-8: bun's process.env holds text, and the git it
+// starts gets U+FFFD in place of the bytes. Found after the verification
+// (the first repair answered with the git config that the TypeScript's git
+// could not find). rs/parity/run.sh sets the variable (PARITY_PRINTF_ENV).
+const NOT_TEXT = "a variable that is not UTF-8, which bun hands to git changed";
+back("repair: open in a repository with XDG_CONFIG_HOME not UTF-8, whose git config rewrites the origin", NOT_TEXT, {
+  env: { PARITY_PRINTF_ENV: "XDG_CONFIG_HOME=<CWD>/cfg\\377" },
+  setup: [
+    `mkdir -p "$(printf 'cfg\\377/git')" && printf '[url "https://github.com/"]\\n\\tinsteadOf = gh:\\n' > "$(printf 'cfg\\377/git/config')"`,
+    ...vRepo("gh:o/r"),
+    vCommit(),
+  ],
+  args: ["open", "--print", "--anon"],
+  after: OPEN_AFTER,
+});
+add("repair: open in a repository with XDG_CONFIG_HOME whose git config rewrites the origin", {
+  env: { XDG_CONFIG_HOME: "<CWD>/cfg" },
+  setup: [`mkdir -p cfg/git && printf '[url "https://github.com/"]\\n\\tinsteadOf = gh:\\n' > cfg/git/config`, ...vRepo("gh:o/r"), vCommit()],
+  args: ["open", "--print", "--anon"],
+  after: OPEN_AFTER,
+});
+back("repair: open with a variable git does not read, not UTF-8", NOT_TEXT, {
+  env: { PARITY_PRINTF_ENV: "CODEHOST_PARITY_RAW=a\\377b" },
+  args: ["open", "--print", "--anon", "o/r"],
+});
+
 // ── write ────────────────────────────────────────────────────────────────────
 
 const names = new Set();
