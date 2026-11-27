@@ -6,11 +6,11 @@
 //! handed back to the JavaScript the package still ships, src/cli/index.ts,
 //! so nothing changes for users.
 //!
-//! Native, on Linux and macOS: `open --print`, `init`, the token check of
-//! `serve`, `dev` and `expose`, and `dev` registering with a live host
-//! daemon. Each of them works out its whole answer first (what it prints,
-//! what it writes), and declines (`HandBack`) before any of it shows. On
-//! Windows everything is handed back.
+//! Native, on Linux: `open --print`, `init`, the token check of `serve`,
+//! `dev` and `expose`, and `dev` registering with a live host daemon. Each
+//! of them works out its whole answer first (what it prints, what it
+//! writes), and declines (`HandBack`) before any of it shows. On macOS and
+//! Windows everything is handed back: nothing was compared there.
 
 mod js_fallback;
 
@@ -51,8 +51,7 @@ fn native() -> bool {
 /// "Not mine": the invocation has to go to the JavaScript. Only ever
 /// returned before the first output and the first change.
 #[cfg(unix)]
-#[derive(Debug, PartialEq)]
-pub struct HandBack;
+pub use js_fallback::HandBack;
 
 /// A change a command makes before it prints.
 #[cfg(unix)]
@@ -91,19 +90,16 @@ fn main() {
 
 /// Answers a ported command and ends the process, or returns for the
 /// invocation to be handed back. A panic before anything has been done is a
-/// hand-back too: a bug in a ported command must not cost the user their
-/// command.
+/// hand-back too (`js_fallback::attempt`): a bug in a ported command must
+/// not cost the user their command.
 #[cfg(unix)]
 fn answer(args: &[String]) {
-    let report = std::panic::take_hook();
-    std::panic::set_hook(Box::new(|_| {}));
-    let outcome = std::panic::catch_unwind(|| {
+    let outcome = js_fallback::attempt(|| {
         let command = commands::recognise(args).ok_or(HandBack)?;
         let machine = runtime::machine()?;
         command.run(&machine)
     });
-    std::panic::set_hook(report);
-    if let Ok(Ok(answer)) = outcome {
+    if let Some(answer) = outcome {
         finish(answer);
     }
 }
