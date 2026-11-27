@@ -16,7 +16,7 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 
 use crate::json::{self, Json};
-use crate::{commands::open, js, repo, token};
+use crate::{commands::open, js, repo, runtime, token};
 
 const PIECES: &[&str] = &[
     "https://", "http://", "HTTPS://", "ssh://", "git://", "git+ssh://", "file://", "x-y.z+1://", "://", "git@", "user:pw@", "@", "@@", "a@b",
@@ -233,4 +233,224 @@ fn helpers_answer_as_the_typescript_does() {
     assert!(taken >= 1000, "only {taken} command lines taken");
     println!("{compared} answers compared, {declined} declined (handed back)");
     assert!(declined * 50 < compared, "too many declined: {declined} of {}", compared + declined);
+}
+
+// ── what bun reads before the program: project files and .env ──────────────
+
+/// Runs `bun <entry>` in each of `dirs` (each holding the files of one
+/// input), three at a time, with nothing in the environment but PATH, HOME,
+/// TMPDIR and `env`, and returns what each printed (stdout, stderr).
+fn bun_in_each(dirs: &[std::path::PathBuf], entry: &Path, home: &Path, env: &[(&str, &str)]) -> Vec<(String, String)> {
+    let run = |dir: &Path| {
+        let mut command = Command::new("bun");
+        command
+            .arg(entry)
+            .env_clear()
+            .env("PATH", std::env::var_os("PATH").unwrap_or_default())
+            .env("HOME", home)
+            .env("TMPDIR", home)
+            .current_dir(dir)
+            .stdin(Stdio::null());
+        for (name, value) in env {
+            command.env(name, value);
+        }
+        let output = command.output().expect("this test needs bun on PATH");
+        assert!(output.status.success(), "bun failed in {}: {}", dir.display(), String::from_utf8_lossy(&output.stderr));
+        (String::from_utf8_lossy(&output.stdout).into_owned(), String::from_utf8_lossy(&output.stderr).into_owned())
+    };
+    let chunk = dirs.len().div_ceil(3).max(1);
+    std::thread::scope(|scope| {
+        let workers: Vec<_> = dirs.chunks(chunk).map(|part| scope.spawn(move || part.iter().map(|dir| run(dir)).collect::<Vec<_>>())).collect();
+        workers.into_iter().flat_map(|worker| worker.join().unwrap()).collect()
+    })
+}
+
+/// A directory of its own under the temp directory, removed by the caller.
+fn scratch(name: &str) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!("codehost-compare-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("home")).unwrap();
+    std::fs::create_dir_all(dir.join("entry")).unwrap();
+    dir
+}
+
+fn pick<'a>(random: &mut Random, items: &[&'a str]) -> &'a str {
+    items[random.below(items.len())]
+}
+
+/// `"key": value` members, each with the given chance, in a JSON object.
+fn object(random: &mut Random, members: &[(&str, &[&str])], chance: usize) -> String {
+    let mut chosen: Vec<String> = Vec::new();
+    for (key, values) in members {
+        if random.below(100) < chance {
+            chosen.push(format!("{}: {}", json::stringify_str(key), pick(random, values)));
+        }
+    }
+    format!("{{{}}}", chosen.join(", "))
+}
+
+/// Every package.json, tsconfig.json or jsconfig.json the binary takes for
+/// one bun says nothing about. Generates some hundreds from the shapes bun
+/// checks (rs/src/runtime.rs), has bun 1.4.0 start beside each, and
+/// requires an empty standard error wherever `plain_project_file` says yes.
+#[test]
+fn project_files_the_binary_accepts_are_quiet_in_bun() {
+    let mut random = Random(0x2545_f491_4f6c_dd1d);
+    const TARGETS: &[&str] = &["\"./src/*\"", "\"../x/*\"", "\"src/*\"", "\"*\"", "\"*/*\"", "\"./a/*/b/*\"", "\".\"", "\"..\"", "\".\\\\x\"", "\"C:/x\"", "\"\"", "\"/abs/*\"", "\"./x\"", "5"];
+    const KEYS: &[&str] = &["@/*", "*", "a*b*", "x", "", "~/*", "**", "@app/*", "./*"];
+    const FACTORIES: &[&str] = &[
+        "\"React.createElement\"", "\"h\"", "\"a-b\"", "\"a b\"", "\"a.\"", "\".a\"", "\"a..b\"", "\"\"", "\"1x\"", "\"$\"", "\"_a.$b\"", "\"class\"", "\"é\"",
+        "\"a.b.c\"", "\"a.1\"", "5", "null",
+    ];
+    let mut files: Vec<(&str, String)> = Vec::new();
+    for _ in 0..360 {
+        let name = pick(&mut random, &["tsconfig.json", "tsconfig.json", "jsconfig.json"]);
+        let paths: Vec<String> = (0..random.below(4))
+            .map(|_| {
+                let value = match random.below(8) {
+                    0 => pick(&mut random, &["\"./x\"", "5", "null", "{}"]).to_string(),
+                    _ => format!("[{}]", (0..random.below(4)).map(|_| pick(&mut random, TARGETS)).collect::<Vec<_>>().join(", ")),
+                };
+                format!("{}: {value}", json::stringify_str(pick(&mut random, KEYS)))
+            })
+            .collect();
+        let mut options = object(
+            &mut random,
+            &[
+                ("baseUrl", &["\".\"", "\"\"", "\"./src\"", "5", "null", "\"src\""]),
+                ("jsxFactory", FACTORIES),
+                ("jsxFragmentFactory", FACTORIES),
+                ("jsx", &["\"react-jsx\"", "\"weird\"", "5"]),
+                ("strict", &["true"]),
+                ("importsNotUsedAsValues", &["\"remove\"", "\"x\""]),
+            ],
+            35,
+        );
+        if random.below(4) != 0 {
+            options.insert_str(1, &format!("\"paths\": {{{}}}{}", paths.join(", "), if options.len() > 2 { ", " } else { "" }));
+        }
+        let content = match random.below(20) {
+            0 => format!("{{\"extends\": \"./base.json\", \"compilerOptions\": {options}}}"),
+            1 => "{\"compilerOptions\": 5}".to_string(),
+            _ => format!("// generated\n{{\"compilerOptions\": {options},}}\n"),
+        };
+        files.push((name, content));
+    }
+    const EXPORTS: &[&str] = &[
+        "\"./x.js\"", "{\".\": \"./a.js\"}", "{\"./a\": {\"import\": \"./a.js\", \"default\": \"./b.js\"}}", "{\"import\": \"./a.js\"}",
+        "{\".\": \"./a.js\", \"x\": \"./b\"}", "{\"./a\": 5}", "{\"./a\": [\"./x\"]}", "{\"./a\": null}", "{}", "5", "null", "[\"./x\"]",
+    ];
+    for _ in 0..240 {
+        let content = object(
+            &mut random,
+            &[
+                ("name", &["\"x\"", "\"@a/b\"", "5", "{}"]),
+                ("version", &["\"1.0.0\"", "\"x\"", "1"]),
+                ("type", &["\"module\"", "\"commonjs\"", "\"Module\"", "5", "null"]),
+                ("main", &["\"./x.js\"", "5"]),
+                ("exports", EXPORTS),
+                ("imports", &["{\"#a\": \"./x.js\"}", "{\"a\": \"./x\"}", "{\"#a\": {\"node\": \"./x\"}}", "{\"#a\": 5}", "{}", "5", "{\"#a\": null}"]),
+                ("browser", &["\"./b.js\"", "{\"./a\": false}", "{\"a\": \"./c\"}", "{\"a\": 5}", "{\"a\": true}", "5", "false"]),
+                ("sideEffects", &["false", "[\"*.css\"]", "[5]", "\"x\""]),
+                ("workspaces", &["[\"packages/*\"]", "5"]),
+                ("dependencies", &["{\"a\": \"^1\"}", "{\"a\": 5}", "[]"]),
+                ("scripts", &["{\"t\": \"x\"}", "5"]),
+            ],
+            30,
+        );
+        files.push(("package.json", content));
+    }
+
+    let base = scratch("project-files");
+    let entry = base.join("entry").join("x.ts");
+    std::fs::write(&entry, "").unwrap();
+    let mut dirs = vec![base.join("empty")];
+    std::fs::create_dir_all(&dirs[0]).unwrap();
+    for (i, (name, content)) in files.iter().enumerate() {
+        let dir = base.join(i.to_string());
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(name), content).unwrap();
+        dirs.push(dir);
+    }
+    let answers = bun_in_each(&dirs, &entry, &base.join("home"), &[]);
+    std::fs::remove_dir_all(&base).unwrap();
+    assert_eq!(answers[0], (String::new(), String::new()), "bun is not quiet in an empty directory here; the comparison needs one");
+    let (mut accepted, mut warned) = (0, 0);
+    for ((name, content), (_, stderr)) in files.iter().zip(&answers[1..]) {
+        if !stderr.is_empty() {
+            warned += 1;
+        }
+        if runtime::plain_project_file(name, content.as_bytes()) {
+            accepted += 1;
+            assert!(stderr.is_empty(), "the binary answers beside this {name}, but bun warns:\n{content}\n{stderr}");
+        }
+    }
+    println!("{} project files: the binary accepts {accepted}, bun warns about {warned}", files.len());
+    assert!(accepted >= 100 && warned >= 100, "too few of either to compare: {accepted} accepted, {warned} warned about");
+}
+
+/// What bun loads from a `.env` file, against what the binary looks for.
+/// Generates some hundreds of files from the pieces bun's parser cares about
+/// (blanks, `export`, `=` and `:`, quotes of three kinds, escapes, comments,
+/// line ends of three kinds, `$` expansion), has bun 1.4.0 print its
+/// environment beside each, and requires that every variable it added is a
+/// name `dotenv_keys` found, and that the environment is untouched wherever
+/// the binary would answer (`dotenv_changes_nothing`).
+#[test]
+fn dotenv_keys_cover_what_bun_loads() {
+    let mut random = Random(0x9e37_79b9_7f4a_7c15 ^ 0xdead_beef);
+    const KEYS: &[&str] = &["A", "B_1", "a.b", "x-y", "HOME", "PATH", "SET_X", "EMPTY_X", "export", "1", "_", "Q", "git_dir", "LD_X"];
+    const BETWEEN: &[&str] = &["=", "=", " = ", ": ", ":", " :", "\t=\t", " ", "==", ":\t"];
+    const VALUES: &[&str] = &[
+        "1", "a b", "\"q\"", "'s'", "`b`", "\"multi\nline\"", "'multi\nC=3'", "$HOME", "${SET_X}", "x#y", "https://a.b/?c=d", "", "\"unterminated",
+        "\\\"", "\"a\" B=2", "'x' Z: 1", "\"a\\\"b\" Y=1", "x # C=1", "\"#\"", "é", "\"\\n\"", "`x\ny`D=1",
+    ];
+    const BEFORE: &[&str] = &["", "", "  ", "export ", "\t", "# ", "export  ", "\u{feff}"];
+    const ENDS: &[&str] = &["\n", "\n", "\r\n", "\r", ""];
+    let contents: Vec<String> = (0..400)
+        .map(|_| {
+            (0..1 + random.below(4))
+                .map(|_| {
+                    let parts = [pick(&mut random, BEFORE), pick(&mut random, KEYS), pick(&mut random, BETWEEN), pick(&mut random, VALUES), pick(&mut random, ENDS)];
+                    parts.concat()
+                })
+                .collect()
+        })
+        .collect();
+
+    let base = scratch("dotenv");
+    let entry = base.join("entry").join("env.ts");
+    std::fs::write(&entry, "process.stdout.write(JSON.stringify(process.env));\n").unwrap();
+    let mut dirs = vec![base.join("empty")];
+    std::fs::create_dir_all(&dirs[0]).unwrap();
+    for (i, content) in contents.iter().enumerate() {
+        let dir = base.join(i.to_string());
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(".env"), content).unwrap();
+        dirs.push(dir);
+    }
+    let given = [("SET_X", "1"), ("EMPTY_X", "")];
+    let answers = bun_in_each(&dirs, &entry, &base.join("home"), &given);
+    std::fs::remove_dir_all(&base).unwrap();
+    let environment = |stdout: &str| match json::parse(stdout, false) {
+        Some(Json::Obj(members)) => members.into_iter().filter(|(name, _)| name != "PWD" && name != "OLDPWD").collect::<Vec<_>>(),
+        _ => panic!("bun printed no environment: {stdout}"),
+    };
+    let baseline = environment(&answers[0].0);
+    let set = |name: &[u8]| baseline.iter().any(|(key, value)| key.as_bytes() == name && !matches!(value, Json::Str(text) if text.is_empty()));
+    let (mut native, mut loaded) = (0, 0);
+    for (content, (stdout, _)) in contents.iter().zip(&answers[1..]) {
+        let after = environment(stdout);
+        let keys = runtime::dotenv_keys(content.as_bytes());
+        for (name, _) in after.iter().filter(|member| !baseline.contains(member)) {
+            loaded += 1;
+            assert!(keys.contains(&name.as_bytes()), "bun loaded {name:?} from this .env, which dotenv_keys does not find:\n{content:?}");
+        }
+        if runtime::dotenv_changes_nothing(content.as_bytes(), set) {
+            native += 1;
+            assert_eq!(after, baseline, "the binary answers beside this .env, but bun changed the environment:\n{content:?}");
+        }
+    }
+    println!("{} .env files: bun loaded {loaded} variables, the binary answers beside {native}", contents.len());
+    assert!(loaded >= 300 && native >= 20, "too little to compare: {loaded} variables loaded, {native} files answered natively");
 }
