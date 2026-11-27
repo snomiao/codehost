@@ -23,10 +23,20 @@
 #   PARITY_PRINTF_ENV=<name>=<format>  set <name> to what printf makes of
 #                      <format>: a value that is not UTF-8 (`\377`), which
 #                      the cases file, being JSON, cannot hold
+#
+# On Windows (Git Bash) the runner writes TMPDIR as C:/…, while PATH there is
+# a list of POSIX paths, so the stand-ins' directory goes on it as /c/….
+# There the runtime looks programs up with PATHEXT and never runs the git
+# stand-in, a shell script, so the cases show no git commands on Windows
+# (where the binary answers nothing natively).
 set -eu
 
 shims="$TMPDIR/shims"
 mkdir -p "$shims"
+shims_on_path=$shims
+if command -v cygpath > /dev/null 2>&1; then
+  shims_on_path=$(cygpath -u "$shims")
+fi
 for opener in xdg-open open; do
   printf '#!/bin/sh\necho "%s $*" >> "%s/browser.log"\n' "$opener" "$TMPDIR" > "$shims/$opener"
   chmod +x "$shims/$opener"
@@ -34,7 +44,7 @@ done
 
 if [ "${PARITY_NO_GIT:-}" = 1 ]; then
   ln -s "$(command -v bun)" "$shims/bun"
-  PATH="$shims"
+  PATH="$shims_on_path"
 else
   real_git=$(command -v git)
   cat > "$shims/git" << EOF
@@ -43,7 +53,7 @@ printf 'git %s\n' "\$*" >> "$TMPDIR/git.log"
 exec "$real_git" "\$@"
 EOF
   chmod +x "$shims/git"
-  PATH="$shims:$PATH"
+  PATH="$shims_on_path:$PATH"
 fi
 if [ -n "${PARITY_PATH_PREFIX:-}" ]; then
   PATH="$PARITY_PATH_PREFIX:$PATH"

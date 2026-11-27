@@ -5,7 +5,9 @@
 #
 # from anywhere, after `bun install` in the repository (node-datachannel's
 # install script fetches its prebuilt addon, which every command loads). The
-# CI workflow runs this against the Linux binary it has just built.
+# CI workflow runs this against the binary it has just built, on Linux,
+# macOS and Windows (its parity-platforms), in bash; on Windows that is Git
+# for Windows' bash, where the binary hands every case back.
 #
 #   1. rs/parity.json is what rs/parity.gen.mjs writes;
 #   2. every case, TypeScript (`bun src/cli/index.ts`) against the binary,
@@ -13,53 +15,79 @@
 #   2b. the same with a pseudo-terminal as standard input, output and error
 #      (rs/parity/terminal.py): there bun prints console.error in red, and
 #      the binary hands back what writes to standard error. The hand-back
-#      check below is not repeated on a terminal, where those cases go back;
+#      check below is not repeated on a terminal, where those cases go back.
+#      Not on Windows, which has no pseudo-terminal for python's pty (and
+#      where the binary answers nothing natively, on a terminal or not);
 #   3. the binary alone against the runner's stand-in package, which fails
-#      unless exactly the cases marked "handback" reach the JavaScript. The
-#      binary hands back when node-datachannel's addon is not where
-#      `require` would find it, so a stub of that package is put in the
-#      directory the runner makes its stand-in in (its TMPDIR);
+#      unless exactly the cases marked "handback" for this system reach the
+#      JavaScript. The binary hands back when node-datachannel's addon is
+#      not where `require` would find it, so a stub of that package is put
+#      in the directory the runner makes its stand-in in (its temp
+#      directory);
 #   4. `cargo test`: the unit tests, the comparison of the helpers with the
 #      TypeScript's own functions run by bun, and of what the binary takes
 #      for a quiet project file or a harmless .env with what bun does beside
-#      some hundreds of generated ones (rs/src/compare.rs). This builds the
-#      crate again from the same sources and Cargo.lock.
+#      some hundreds of generated ones (rs/src/compare.rs; on Windows, where
+#      none of it is compiled, only the hand-back helper's tests). This
+#      builds the crate again from the same sources and Cargo.lock.
 #
 # Each run gets a temp directory of its own, removed afterwards.
 set -u
 usage="usage: proof.sh <parity.mjs> <binary>"
+
+# Git Bash on Windows: paths go to Windows programs (node, the binary) as
+# C:/…, the one spelling that both they and the shell read.
+windows=false
+case "${RUSTIFY_PLATFORM:-$(uname -s)}" in
+  win32*|MINGW*|MSYS*|CYGWIN*) windows=true ;;
+esac
+spelt() {
+  if $windows; then cygpath -m "$1"; else printf '%s\n' "$1"; fi
+}
 absolute() {
   case "$1" in
-    /*) printf '%s\n' "$1" ;;
-    *) printf '%s/%s\n' "$PWD" "$1" ;;
+    /*|[A-Za-z]:[\\/]*) spelt "$1" ;;
+    *) spelt "$PWD/$1" ;;
   esac
 }
 runner=$(absolute "${1:?$usage}")
 binary=$(absolute "${2:?$usage}")
 cd "$(dirname "$0")/../.." || exit 1
-repo=$PWD
+repo=$(spelt "$PWD")
 
 node rs/parity.gen.mjs --check || exit 1
 
+# One run of the runner, in a temp directory of its own: TMPDIR, and TEMP
+# and TMP, which node reads on Windows.
+run_in() {
+  dir=$1
+  shift
+  TMPDIR=$dir TEMP=$dir TMP=$dir node "$runner" "$@"
+}
+
 failed=0
-plain=$(mktemp -d)
-TMPDIR=$plain node "$runner" --cases rs/parity.json \
+plain=$(spelt "$(mktemp -d)")
+run_in "$plain" --cases rs/parity.json \
   --ts "sh rs/parity/run.sh bun src/cli/index.ts" \
   --rs "env CODEHOST_PACKAGE_ROOT=$repo sh rs/parity/run.sh $binary" || failed=1
 rm -rf "$plain"
 
-terminal=$(mktemp -d)
-TMPDIR=$terminal node "$runner" --cases rs/parity.json \
-  --ts "python3 rs/parity/terminal.py sh rs/parity/run.sh bun src/cli/index.ts" \
-  --rs "env CODEHOST_PACKAGE_ROOT=$repo python3 rs/parity/terminal.py sh rs/parity/run.sh $binary" || failed=1
-rm -rf "$terminal"
+if $windows; then
+  echo "proof.sh: not run on a terminal: Windows has no pseudo-terminal for rs/parity/terminal.py"
+else
+  terminal=$(mktemp -d)
+  run_in "$terminal" --cases rs/parity.json \
+    --ts "python3 rs/parity/terminal.py sh rs/parity/run.sh bun src/cli/index.ts" \
+    --rs "env CODEHOST_PACKAGE_ROOT=$repo python3 rs/parity/terminal.py sh rs/parity/run.sh $binary" || failed=1
+  rm -rf "$terminal"
+fi
 
-handback=$(mktemp -d)
+handback=$(spelt "$(mktemp -d)")
 stub="$handback/node_modules/node-datachannel"
 mkdir -p "$stub/build/Release"
 printf '{"name": "node-datachannel"}\n' > "$stub/package.json"
 : > "$stub/build/Release/node_datachannel.node"
-TMPDIR=$handback node "$runner" --cases rs/parity.json \
+run_in "$handback" --cases rs/parity.json \
   --rs "sh rs/parity/run.sh $binary" \
   --handback CODEHOST_PACKAGE_ROOT=src/cli/index.ts || failed=1
 rm -rf "$handback"

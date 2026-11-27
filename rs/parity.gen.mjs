@@ -4,7 +4,7 @@
 //
 //   node rs/parity.gen.mjs           # rewrite rs/parity.json
 //   node rs/parity.gen.mjs --check   # fail if rs/parity.json is not what this writes
-//   node rs/parity.gen.mjs --list    # print the case names
+//   node rs/parity.gen.mjs --list    # print the case names, and who answers each on linux, darwin, win32
 //
 // Then, from the repository root, after `bun install` and a release build:
 //
@@ -19,10 +19,18 @@
 // home directory, names, modes and contents.
 //
 // A case says who is expected to answer it:
-//   add(...)   the binary answers;
-//   back(...)  the binary hands it back to the JavaScript: a spelling or a
-//              command that is yargs's to answer, a state of the machine the
-//              binary does not reproduce.
+//   add(...)   the binary answers, on Linux and macOS; on Windows, where
+//              nothing is ported yet, it hands the case back (the case's
+//              "handback" names win32 alone);
+//   back(...)  the binary hands it back to the JavaScript everywhere: a
+//              spelling or a command that is yargs's to answer, a state of
+//              the machine the binary does not reproduce.
+// Either may say, as `skip: { <system>: "<why>" }`, where a case cannot mean
+// the same thing (a link Git Bash cannot make, a name APFS refuses); it is
+// then not run there. The same cases run on Linux, macOS and Windows (the
+// workflow's parity-platforms), so every line they run is POSIX shell with
+// no GNU-only option, and the tree of a directory is printed by node
+// (rs/parity/tree.mjs).
 //
 // What no case does, and the generator refuses to write:
 //   - run `open` without `--print` (it opens the browser), or with a word
@@ -50,9 +58,9 @@ const sq = (text) => `'${String(text).replace(/'/g, `'\\''`)}'`;
 
 // ── what a case looks at afterwards ──────────────────────────────────────────
 
-/** Everything below a directory: kind, mode and path, then the contents. */
-const tree = (dir) =>
-  `cd ${dir} && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo "== $f"; cat "$f"; echo; done`;
+/** Everything below a directory: kind, mode and path, then the contents
+ *  (rs/parity/tree.mjs, started outside the directories the program sees). */
+const tree = (dir) => `cd "<ROOT>" && node "<REPO>/rs/parity/tree.mjs" "${dir}"`;
 const HOME_STATE = tree("<HOME>");
 const CWD_STATE = tree("<CWD>");
 /** Every git command the implementation ran, in order. */
@@ -123,11 +131,25 @@ function servesNoRoot(c) {
 
 // ── cases ────────────────────────────────────────────────────────────────────
 
+/** Why a case the binary answers on Linux and macOS goes back on Windows. */
+const WINDOWS = "nothing is native on Windows yet: the ported commands are not compiled there";
+/** Why a case whose setup makes a link is not run on Windows. */
+const NO_LINKS = "Git Bash's ln -s copies the target, and fails for one that is missing: there is no link to compare";
+
+const SYSTEMS = ["linux", "darwin", "win32"];
 const cases = [];
 function add(name, spec) {
   const c = { name, ...spec };
   refuseDanger(c);
   const { liveDaemon, noRoot, ...kept } = c;
+  kept.handback ??= { win32: WINDOWS };
+  if ((kept.setup || []).some((line) => /\bln -s\b/.test(line))) kept.skip = { win32: NO_LINKS, ...kept.skip };
+  for (const marks of [kept.handback, kept.skip]) {
+    if (marks && typeof marks === "object" && Object.keys(marks).some((system) => !SYSTEMS.includes(system))) {
+      throw new Error(`${name}: a system that is not one of ${SYSTEMS.join(", ")}`);
+    }
+  }
+  if (kept.skip && Object.keys(kept.skip).length === 0) delete kept.skip;
   cases.push(kept);
 }
 function back(name, why, spec) {
@@ -560,10 +582,21 @@ back("serve with a bad token beside a bunfig.toml", "bun reads it before the pro
 
 const DEV_TOKEN = "Parity-Token-1";
 const DAEMON_TOKEN = "Daemon Token/1+é";
+/** A line that needs the pid of a process alive for the whole case, as
+ *  `$pid`: the runner's own, which the IN-USE file of its run directory
+ *  (the directory above <ROOT>) names. On Linux and macOS that is $PPID,
+ *  the parent of the shell that runs the line; in Git Bash on Windows a
+ *  shell started by a Windows program has the parent 1, and the runtime's
+ *  process.kill knows Windows pids only. When the pid cannot be read the
+ *  line fails, and the case is BROKEN: nothing is run with a dead pid
+ *  (with which dev would serve). */
+const withRunnerPid = (line) => `pid=$(sed -n 's/.* process \\([0-9][0-9]*\\) on .*/\\1/p' "<ROOT>/../IN-USE") && [ -n "$pid" ] && ${line}`;
 /** daemon.json naming a process that is alive for the whole case: the
- *  runner itself, the parent of the shell that runs this line. */
+ *  runner itself. */
 const liveDaemon = (token = DAEMON_TOKEN, root = "/srv/ws") =>
-  `mkdir -p <HOME>/.codehost && printf '{\\n  "pid": %s,\\n  "root": %s,\\n  "token": %s,\\n  "startedAt": 1\\n}' "$PPID" ${sq(JSON.stringify(root))} ${sq(JSON.stringify(token))} > <HOME>/.codehost/daemon.json`;
+  withRunnerPid(
+    `mkdir -p <HOME>/.codehost && printf '{\\n  "pid": %s,\\n  "root": %s,\\n  "token": %s,\\n  "startedAt": 1\\n}' "$pid" ${sq(JSON.stringify(root))} ${sq(JSON.stringify(token))} > <HOME>/.codehost/daemon.json`,
+  );
 const DEV_AFTER = [HOME_STATE, GIT_LOG];
 // Only the entry being added carries the time (13 digits until 2286); the
 // entries already there keep shorter numbers, so they are compared.
@@ -575,7 +608,11 @@ dev("dev registers the current directory");
 dev("dev registers a directory", { setup: ["mkdir ws"], args: ["ws"] });
 dev("dev registers a directory that does not exist", { args: ["missing/dir"] });
 dev("dev registers a directory with spaces and ü", { setup: ["mkdir 'my ws ü'"], args: ["my ws ü"] });
-dev("dev registers a directory with a backslash", { setup: ["mkdir 'a\\b'"], args: ["a\\b"] });
+dev("dev registers a directory with a backslash", {
+  setup: ["mkdir 'a\\b'"],
+  args: ["a\\b"],
+  skip: { win32: "a Windows file name cannot hold a backslash, which is a separator there" },
+});
 dev("dev registers a repository", { setup: repo("r", { origin: "git@github.com:O/R.git", commit: true, branch: "feat/x" }), args: ["r"] });
 dev("dev registers a repository without origin", { setup: repo("r"), args: ["r"] });
 dev("dev registers with every option it takes", { args: [".", "--name", "x", "--port", "8080", "--approve", "confirm"] });
@@ -623,7 +660,7 @@ back("dev with addedAt written as a float", "JavaScript's number formatting", {
 });
 back("dev with a daemon.json pid written as a float", "not compared", {
   liveDaemon: true,
-  setup: ["mkdir -p <HOME>/.codehost && printf '{\"pid\": %s.0, \"root\": \"/r\", \"token\": \"t\"}' \"$PPID\" > <HOME>/.codehost/daemon.json"],
+  setup: [withRunnerPid("mkdir -p <HOME>/.codehost && printf '{\"pid\": %s.0, \"root\": \"/r\", \"token\": \"t\"}' \"$pid\" > <HOME>/.codehost/daemon.json")],
   args: ["dev", ...SIGNAL, "-t", DEV_TOKEN],
   after: DEV_AFTER,
   normalize: MS,
@@ -647,8 +684,7 @@ const GIT_ASKED = 'sort -u "$TMPDIR/git.log" 2>/dev/null || echo "(git not run)"
 const verify = (name, why, spec) => (why ? back(`verify: ${name}`, why, spec) : add(`verify: ${name}`, spec));
 const vRepo = (origin, dir = ".") => repo(dir, { origin: origin ?? undefined });
 const vCommit = (dir = ".") => `git -C ${sq(dir)} -c user.name=p -c user.email=p@p commit -q --allow-empty -m init`;
-const vDaemon = (root = "/srv/ws", token = DAEMON_TOKEN) =>
-  `mkdir -p <HOME>/.codehost && printf '{\\n  "pid": %s,\\n  "root": %s,\\n  "token": %s,\\n  "startedAt": 1\\n}' "$PPID" ${sq(JSON.stringify(root))} ${sq(JSON.stringify(token))} > <HOME>/.codehost/daemon.json`;
+const vDaemon = (root = "/srv/ws", token = DAEMON_TOKEN) => liveDaemon(token, root);
 const vRawDaemon = (text) => `mkdir -p <HOME>/.codehost && printf '%s' ${sq(text)} > <HOME>/.codehost/daemon.json`;
 const bigOrigin = (bytes) =>
   `printf '[remote "origin"]\\n\\turl = https://github.com/o/r/%s\\n' "$(head -c ${bytes} /dev/zero | tr '\\0' x)" >> .git/config`;
@@ -733,7 +769,7 @@ vDev("dev registers a repository whose origin URL is 9 MB", "git prints more tha
 vOpen("open with a saved token of 200 KB", null, ["--print", "o/r"], {
   setup: [`mkdir -p <HOME>/.codehost && { printf '{"token": "'; head -c 200000 /dev/zero | tr '\\0' A; printf 'b1-/+"}'; } > <HOME>/.codehost/config.json`],
 });
-vServe("serve -t of 100 KB", null, "Aa1-".repeat(25000));
+vServe("serve -t of 100 KB", null, "Aa1-".repeat(25000), { skip: { win32: "a Windows command line holds at most 32,767 characters (spawn: ENAMETOOLONG)" } });
 
 // D. The token policy.
 vServe("serve -t of 11 UTF-16 units ending in astral characters", null, "Aa1-aaa😀😀");
@@ -837,7 +873,7 @@ vInit("with setup.sh a FIFO", null, [], { setup: ["mkdir .codehost && mkfifo .co
 const vWorkspaces = (text) => codehostFile("workspaces.json", text);
 vDev('dev ""', null, [""], [vDaemon()]);
 vDev("with daemon.json in another key order with extra fields", null, ["ws"], [
-  vRawDaemon('{"token": "Odd-Order-1", "extra": [1, {"x": null}], "root": "/r", "startedAt": 1.5, "pid": PID}').replace("PID", `'"$PPID"'`),
+  withRunnerPid(vRawDaemon('{"token": "Odd-Order-1", "extra": [1, {"x": null}], "root": "/r", "startedAt": 1.5, "pid": PID}').replace("PID", `'"$pid"'`)),
   "mkdir ws",
 ]);
 vDev("with a daemon root holding a quote and a newline", null, ["ws"], [vDaemon('/srv/"w\ns"', "Daemon-Token-1"), "mkdir ws"]);
@@ -859,7 +895,7 @@ vDev("with an entry for the directory that has a third key", "an entry the JavaS
   "mkdir ws",
 ]);
 vDev("with daemon.json root and token not strings", "root and token are not strings", ["ws"], [
-  vRawDaemon('{"pid": PID, "root": 5, "token": ["a"]}').replace("PID", `'"$PPID"'`),
+  withRunnerPid(vRawDaemon('{"pid": PID, "root": 5, "token": ["a"]}').replace("PID", `'"$pid"'`)),
   "mkdir ws",
 ]);
 vDev("registers a repository with an upper-case scheme and port", null, ["r"], [vDaemon(), ...vRepo("SSH://git@Git.Example.com:2222/team/svc.GIT/", "r"), vCommit("r")]);
@@ -951,6 +987,27 @@ back("repair: open with a git that writes 9 MB to stderr", "git prints more than
   after: [GIT_ASKED, BROWSER_LOG],
 });
 
+// The git bun starts: the first executable `git` on PATH, started with exec.
+// macOS's posix_spawnp ran a script without `#!` through /bin/sh, where bun
+// fails (the verifier's case above, found when the cases first ran on a
+// Mac); and posix_spawnp passes over a `git` whose interpreter is missing
+// for the next one on PATH, where bun fails. The binary now looks git up
+// itself and starts that file.
+add("repair: open with a git whose #! names a missing interpreter first on PATH", {
+  files: { "pp/git": "#!/nonexistent/sh\necho https://github.com/x/y\n" },
+  setup: [...vRepo("https://github.com/o/r"), "chmod +x pp/git"],
+  env: { PARITY_PATH_PREFIX: "<CWD>/pp" },
+  args: ["open", "--print", "--anon"],
+  after: OPEN_AFTER,
+});
+add("repair: open with a git first on PATH that may not be executed", {
+  files: { "pp/git": "#!/bin/sh\necho https://github.com/x/y\n" },
+  setup: [...vRepo("https://github.com/o/r"), "chmod 644 pp/git"],
+  env: { PARITY_PATH_PREFIX: "<CWD>/pp" },
+  args: ["open", "--print", "--anon"],
+  after: OPEN_AFTER,
+});
+
 // HOME as the TypeScript reads it: path.join(homedir(), ".codehost", …)
 // resolves a `..` by the text, the system through the directories. Found
 // after the verification (the first repair answered both `..` cases with
@@ -974,7 +1031,7 @@ add("repair: open with HOME holding a . segment and a double slash", {
   args: ["open", "--print", "o/r"],
 });
 const homeDaemon = (dir) =>
-  `mkdir -p ${dir}/.codehost && printf '{\\n  "pid": %s,\\n  "root": "/srv/ws",\\n  "token": "Daemon-Token-1"\\n}' "$PPID" > ${dir}/.codehost/daemon.json`;
+  withRunnerPid(`mkdir -p ${dir}/.codehost && printf '{\\n  "pid": %s,\\n  "root": "/srv/ws",\\n  "token": "Daemon-Token-1"\\n}' "$pid" > ${dir}/.codehost/daemon.json`);
 back("repair: dev registers with HOME through a missing directory and ..", HOME_DOTDOT, {
   liveDaemon: true,
   env: { HOME: "<CWD>/nope/../h" },
@@ -1006,6 +1063,8 @@ back("repair: open in a repository with XDG_CONFIG_HOME not UTF-8, whose git con
   ],
   args: ["open", "--print", "--anon"],
   after: OPEN_AFTER,
+  // There the variable alone, the last case here, shows the hand-back.
+  skip: { darwin: "APFS refuses a file name that is not UTF-8 (mkdir: Illegal byte sequence)" },
 });
 add("repair: open in a repository with XDG_CONFIG_HOME whose git config rewrites the origin", {
   env: { XDG_CONFIG_HOME: "<CWD>/cfg" },
@@ -1035,8 +1094,14 @@ const spec = {
   cases,
 };
 const json = `${JSON.stringify(spec, null, 2)}\n`;
+/** Who answers the case on `system`: "native", "back" or "skip". */
+const answeredBy = (c, system) => (c.skip?.[system] ? "skip" : typeof c.handback === "string" || c.handback?.[system] ? "back" : "native");
+const counts = SYSTEMS.map((system) => {
+  const by = (who) => cases.filter((c) => answeredBy(c, system) === who).length;
+  return `${system}: ${by("native")} native, ${by("back")} handed back${by("skip") ? `, ${by("skip")} skipped` : ""}`;
+}).join("; ");
 if (process.argv.includes("--list")) {
-  for (const c of cases) console.log(`${c.handback ? "back" : "add "}  ${c.name}`);
+  for (const c of cases) console.log(`${SYSTEMS.map((system) => answeredBy(c, system).padEnd(6)).join(" ")}  ${c.name}`);
 } else if (process.argv.includes("--check")) {
   const current = fs.existsSync(OUT) ? fs.readFileSync(OUT, "utf8") : "";
   if (current !== json) {
@@ -1046,5 +1111,5 @@ if (process.argv.includes("--list")) {
   console.log(`rs/parity.json is up to date (${cases.length} cases)`);
 } else {
   fs.writeFileSync(OUT, json);
-  console.log(`wrote ${path.relative(process.cwd(), OUT)} (${cases.length} cases, ${cases.filter((c) => c.handback).length} handed back)`);
+  console.log(`wrote ${path.relative(process.cwd(), OUT)} (${cases.length} cases; ${counts})`);
 }
