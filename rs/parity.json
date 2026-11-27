@@ -1,0 +1,4323 @@
+{
+  "env": {
+    "CODEHOST_NO_SELF_UPDATE": "1",
+    "CODEHOST_CODE_BIN": "/nonexistent/code"
+  },
+  "cases": [
+    {
+      "name": "open target \"owner/repo\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "owner/repo"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"owner/repo/tree/main\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "owner/repo/tree/main"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"owner/repo/tree/feat/x/y\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "owner/repo/tree/feat/x/y"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"/owner/repo\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "/owner/repo"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"//gh/owner/repo\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "//gh/owner/repo"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"gh/o/r\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "gh/o/r"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"gh/o\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "gh/o"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"git/gitlab.com/g/p/tree/dev\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "git/gitlab.com/g/p/tree/dev"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"host/Mac/Users/x\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "host/Mac/Users/x"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"dev/C:/ws\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "dev/C:/ws"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"sno@Mac\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "sno@Mac"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"sno@Mac/github.com/o/r/tree/main\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "sno@Mac/github.com/o/r/tree/main"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"@Mac/x\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "@Mac/x"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"x@\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "x@"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"a@b@c/d\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "a@b@c/d"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"a@/b\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "a@/b"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"git@github.com:Foo/Bar.git\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "git@github.com:Foo/Bar.git"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"github.com:o/r\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "github.com:o/r"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"gitlab.com/group/proj.git\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "gitlab.com/group/proj.git"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"gitlab.com/group/proj.GIT\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "gitlab.com/group/proj.GIT"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"GitHub.COM/O/R/\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "GitHub.COM/O/R/"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"x.y/a/b.git.git\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "x.y/a/b.git.git"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"x.y/a/.git\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "x.y/a/.git"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"x.y/a/b/tree\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "x.y/a/b/tree"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"x.y/a/b/c\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "x.y/a/b/c"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"https://github.com/snomiao/codehost\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "https://github.com/snomiao/codehost"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"HTTPS://GitHub.COM/a/b.git/tree/feat/x?y#z\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "HTTPS://GitHub.COM/a/b.git/tree/feat/x?y#z"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"https://github.com/a/b/tree/x?y=1\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "https://github.com/a/b/tree/x?y=1"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"http://gitlab.com/g/p.git#frag\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "http://gitlab.com/g/p.git#frag"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"https://user:pw@github.com/a/b\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "https://user:pw@github.com/a/b"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"ssh://git@git.company.com:2222/team/svc.git\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "ssh://git@git.company.com:2222/team/svc.git"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"git+ssh://git@github.com/o/r.git\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "git+ssh://git@github.com/o/r.git"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"https://github.com:443/a/b\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "https://github.com:443/a/b"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"https://localhost:8080/a/b\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "https://localhost:8080/a/b"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"https://example.com/\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "https://example.com/"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"https://example.com/a\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "https://example.com/a"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"http://127.0.0.1:5173/x?y#z\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "http://127.0.0.1:5173/x?y#z"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"HTTP://EXAMPLE.COM\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "HTTP://EXAMPLE.COM"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"ftp://example.com/a/b\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "ftp://example.com/a/b"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"a/b/c\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "a/b/c"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"a/b/tree\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "a/b/tree"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"a/b/tree/\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "a/b/tree/"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"C:\\\\ws\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "C:\\ws"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"some folder/with space\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "some folder/with space"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"ü/😀\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "ü/😀"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"null\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "null"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"0x1F\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "0x1F"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"1e3\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "1e3"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"  owner/repo  \"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "  owner/repo  "
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"\\towner/repo\\n\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "\towner/repo\n"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"owner/repo/tree/a\\nb\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "owner/repo/tree/a\nb"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"owner /repo\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "owner /repo"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \" owner/repo﻿\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        " owner/repo﻿"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"owner/repo\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "owner/repo"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"a%2Fb/c\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "a%2Fb/c"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"o/r#frag\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r#frag"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"o/r?x=1\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r?x=1"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \".\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "."
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"..\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        ".."
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"~\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "~"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"/\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "/"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"///\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "///"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"owner/repo\" with a token",
+      "args": [
+        "open",
+        "--print",
+        "-t",
+        "Tok/en+ü&#?",
+        "owner/repo"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"https://example.com/a\" with a token",
+      "args": [
+        "open",
+        "--print",
+        "-t",
+        "Tok/en+ü&#?",
+        "https://example.com/a"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"git@github.com:Foo/Bar.git\" with a token",
+      "args": [
+        "open",
+        "--print",
+        "-t",
+        "Tok/en+ü&#?",
+        "git@github.com:Foo/Bar.git"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open target \"a/b/c\" with a token",
+      "args": [
+        "open",
+        "--print",
+        "-t",
+        "Tok/en+ü&#?",
+        "a/b/c"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open blank target \"\" uses the current directory",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        ""
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open blank target \"   \" uses the current directory",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "   "
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open \"--print owner/repo\"",
+      "args": [
+        "open",
+        "--print",
+        "owner/repo"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open \"owner/repo --print\"",
+      "args": [
+        "open",
+        "owner/repo",
+        "--print"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open \"-t tok --print owner/repo\"",
+      "args": [
+        "open",
+        "-t",
+        "tok",
+        "--print",
+        "owner/repo"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open \"--token tok --print owner/repo\"",
+      "args": [
+        "open",
+        "--token",
+        "tok",
+        "--print",
+        "owner/repo"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open \"--token=tok --print owner/repo\"",
+      "args": [
+        "open",
+        "--token=tok",
+        "--print",
+        "owner/repo"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open \"--token=a=b --print owner/repo\"",
+      "args": [
+        "open",
+        "--token=a=b",
+        "--print",
+        "owner/repo"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open \"--token= --print owner/repo\"",
+      "args": [
+        "open",
+        "--token=",
+        "--print",
+        "owner/repo"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open \"-t  --print owner/repo\"",
+      "args": [
+        "open",
+        "-t",
+        "",
+        "--print",
+        "owner/repo"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open \"-t     --print owner/repo\"",
+      "args": [
+        "open",
+        "-t",
+        "   ",
+        "--print",
+        "owner/repo"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open \"-t  a b  --print owner/repo\"",
+      "args": [
+        "open",
+        "-t",
+        " a b ",
+        "--print",
+        "owner/repo"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open \"-t 😀 é --print owner/repo\"",
+      "args": [
+        "open",
+        "-t",
+        "😀 é",
+        "--print",
+        "owner/repo"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open \"-t x-_.!~*'() --print owner/repo\"",
+      "args": [
+        "open",
+        "-t",
+        "x-_.!~*'()",
+        "--print",
+        "owner/repo"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open \"-t 1e3 --print owner/repo\"",
+      "args": [
+        "open",
+        "-t",
+        "1e3",
+        "--print",
+        "owner/repo"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open \"--anon -t x --print owner/repo\"",
+      "args": [
+        "open",
+        "--anon",
+        "-t",
+        "x",
+        "--print",
+        "owner/repo"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open \"--print --page https://x.dev// owner/repo\"",
+      "args": [
+        "open",
+        "--print",
+        "--page",
+        "https://x.dev//",
+        "owner/repo"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open \"--print --page=http://localhost:5173 owner/repo\"",
+      "args": [
+        "open",
+        "--print",
+        "--page=http://localhost:5173",
+        "owner/repo"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open \"--print --page  owner/repo\"",
+      "args": [
+        "open",
+        "--print",
+        "--page",
+        "",
+        "owner/repo"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open \"--print --page / owner/repo\"",
+      "args": [
+        "open",
+        "--print",
+        "--page",
+        "/",
+        "owner/repo"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open \"--print --page a b -t x owner/repo\"",
+      "args": [
+        "open",
+        "--print",
+        "--page",
+        "a b",
+        "-t",
+        "x",
+        "owner/repo"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open \"--print --page 123 owner/repo\"",
+      "args": [
+        "open",
+        "--print",
+        "--page",
+        "123",
+        "owner/repo"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open \"--print --page https://x.dev/ https://example.com/a\"",
+      "args": [
+        "open",
+        "--print",
+        "--page",
+        "https://x.dev/",
+        "https://example.com/a"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open \"-t x owner/repo --anon --print --page https://p.dev\"",
+      "args": [
+        "open",
+        "-t",
+        "x",
+        "owner/repo",
+        "--anon",
+        "--print",
+        "--page",
+        "https://p.dev"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open with a saved token in config.json",
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '%s' '{\n  \"token\": \"Saved-Token-1\",\n  \"hostId\": \"h\"\n}' > <HOME>/.codehost/config.json"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "owner/repo"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\"",
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "open with a saved token with escapes in config.json",
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '%s' '{\"token\": \"s\\u00e9 \\/x\\ud83d\\ude00\"}' > <HOME>/.codehost/config.json"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "owner/repo"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\"",
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "open with an empty saved token in config.json",
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '%s' '{\"token\": \"\"}' > <HOME>/.codehost/config.json"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "owner/repo"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\"",
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "open with a null token in config.json",
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '%s' '{\"token\": null}' > <HOME>/.codehost/config.json"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "owner/repo"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\"",
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "open with no token in config.json",
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '%s' '{\"hostId\": \"x\", \"root\": \"/x\"}' > <HOME>/.codehost/config.json"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "owner/repo"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\"",
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "open with an empty object in config.json",
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '%s' '{}' > <HOME>/.codehost/config.json"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "owner/repo"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\"",
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "open with an array in config.json",
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '%s' '[1]' > <HOME>/.codehost/config.json"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "owner/repo"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\"",
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "open with a string in config.json",
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '%s' '\"str\"' > <HOME>/.codehost/config.json"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "owner/repo"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\"",
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "open with a number in config.json",
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '%s' '5' > <HOME>/.codehost/config.json"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "owner/repo"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\"",
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "open with a token under __proto__ in config.json",
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '%s' '{\"__proto__\": {\"token\": \"x\"}}' > <HOME>/.codehost/config.json"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "owner/repo"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\"",
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "open with a saved token and no repo here",
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '%s' '{\"token\": \"Saved-Token-1\"}' > <HOME>/.codehost/config.json"
+      ],
+      "args": [
+        "open",
+        "--print"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open -t wins over the saved token",
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '%s' '{\"token\": \"Saved-Token-1\"}' > <HOME>/.codehost/config.json"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "-t",
+        "mine",
+        "o/r"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open -t with config.json null (not read)",
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '%s' 'null' > <HOME>/.codehost/config.json"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "-t",
+        "x",
+        "o/r"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open --anon with config.json null (not read)",
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '%s' 'null' > <HOME>/.codehost/config.json"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open a full URL with config.json null (not read)",
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '%s' 'null' > <HOME>/.codehost/config.json"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "https://example.com/a"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open with config.json a dangling link",
+      "setup": [
+        "mkdir -p <HOME>/.codehost && ln -s nowhere <HOME>/.codehost/config.json"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "o/r"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open with config.json null",
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '%s' 'null' > <HOME>/.codehost/config.json"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "o/r"
+      ],
+      "handback": "`null.token` throws: the runtime's report"
+    },
+    {
+      "name": "open with a numeric token",
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '%s' '{\"token\": 5}' > <HOME>/.codehost/config.json"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "o/r"
+      ],
+      "handback": "JavaScript's number formatting"
+    },
+    {
+      "name": "open with config.json not JSON",
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '%s' '{bad' > <HOME>/.codehost/config.json"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "o/r"
+      ],
+      "handback": "JSON.parse's verdict is not reproduced"
+    },
+    {
+      "name": "open with config.json empty",
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '%s' '' > <HOME>/.codehost/config.json"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "o/r"
+      ],
+      "handback": "JSON.parse's verdict is not reproduced"
+    },
+    {
+      "name": "open with config.json behind a byte order mark",
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '%s' '﻿{\"token\": \"x\"}' > <HOME>/.codehost/config.json"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "o/r"
+      ],
+      "handback": "not compared"
+    },
+    {
+      "name": "open with a key twice in config.json",
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '%s' '{\"token\": \"a\", \"token\": \"b\"}' > <HOME>/.codehost/config.json"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "o/r"
+      ],
+      "handback": "not compared"
+    },
+    {
+      "name": "open with config.json a directory",
+      "setup": [
+        "mkdir -p <HOME>/.codehost/config.json"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "o/r"
+      ],
+      "handback": "not compared"
+    },
+    {
+      "name": "open in a repository without origin",
+      "setup": [
+        "mkdir -p '.'",
+        "git -C '.' init -q -b main"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open in origin over https, no commit yet",
+      "setup": [
+        "mkdir -p '.'",
+        "git -C '.' init -q -b main",
+        "git -C '.' remote add origin 'https://github.com/Owner/Repo.git'"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open in origin scp-style",
+      "setup": [
+        "mkdir -p '.'",
+        "git -C '.' init -q -b main",
+        "git -C '.' remote add origin 'git@GitHub.com:Owner/Repo.git'"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open in origin ssh with a port",
+      "setup": [
+        "mkdir -p '.'",
+        "git -C '.' init -q -b main",
+        "git -C '.' remote add origin 'ssh://git@git.company.com:2222/team/svc.git'"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open in origin git://",
+      "setup": [
+        "mkdir -p '.'",
+        "git -C '.' init -q -b main",
+        "git -C '.' remote add origin 'git://example.org/o/r'"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open in origin in a GitLab subgroup",
+      "setup": [
+        "mkdir -p '.'",
+        "git -C '.' init -q -b main",
+        "git -C '.' remote add origin 'https://gitlab.com/group/sub/proj.git'"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open in origin ending .git/",
+      "setup": [
+        "mkdir -p '.'",
+        "git -C '.' init -q -b main",
+        "git -C '.' remote add origin 'https://github.com/o/r.GIT/'"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open in origin of one segment",
+      "setup": [
+        "mkdir -p '.'",
+        "git -C '.' init -q -b main",
+        "git -C '.' remote add origin 'https://github.com/onlyowner'"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open in origin not a URL",
+      "setup": [
+        "mkdir -p '.'",
+        "git -C '.' init -q -b main",
+        "git -C '.' remote add origin 'not a url'"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open in origin a local path",
+      "setup": [
+        "mkdir -p '.'",
+        "git -C '.' init -q -b main",
+        "git -C '.' remote add origin '/srv/git/repo.git'"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open in origin with a user and password",
+      "setup": [
+        "mkdir -p '.'",
+        "git -C '.' init -q -b main",
+        "git -C '.' remote add origin 'https://u:p@example.com:8443/o/r'"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open in a commit on main",
+      "setup": [
+        "mkdir -p '.'",
+        "git -C '.' init -q -b main",
+        "git -C '.' remote add origin 'https://github.com/o/r'",
+        "git -C '.' -c user.name=p -c user.email=p@p commit -q --allow-empty -m init"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open in a branch with slashes",
+      "setup": [
+        "mkdir -p '.'",
+        "git -C '.' init -q -b main",
+        "git -C '.' remote add origin 'https://github.com/o/r'",
+        "git -C '.' -c user.name=p -c user.email=p@p commit -q --allow-empty -m init",
+        "git -C '.' checkout -q -b 'feat/x/y'"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open in a detached HEAD",
+      "setup": [
+        "mkdir -p '.'",
+        "git -C '.' init -q -b main",
+        "git -C '.' remote add origin 'https://github.com/o/r'",
+        "git -C '.' -c user.name=p -c user.email=p@p commit -q --allow-empty -m init",
+        "git -C '.' checkout -q --detach"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open in a branch named HEAD-like",
+      "setup": [
+        "mkdir -p '.'",
+        "git -C '.' init -q -b main",
+        "git -C '.' remote add origin 'https://github.com/o/r'",
+        "git -C '.' -c user.name=p -c user.email=p@p commit -q --allow-empty -m init",
+        "git -C '.' checkout -q -b 'HEADx'"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open in origin rewritten by insteadOf",
+      "setup": [
+        "mkdir -p '.'",
+        "git -C '.' init -q -b main",
+        "git -C '.' remote add origin 'gh:o/r'",
+        "git -C '.' config url.https://github.com/.insteadOf gh:"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open in a subdirectory of a repository",
+      "setup": [
+        "mkdir -p '.'",
+        "git -C '.' init -q -b main",
+        "git -C '.' remote add origin 'https://github.com/o/r'",
+        "mkdir -p sub/deeper"
+      ],
+      "env": {
+        "PARITY_CD": "sub/deeper"
+      },
+      "args": [
+        "open",
+        "--print",
+        "-t",
+        "x"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open inside .git",
+      "setup": [
+        "mkdir -p '.'",
+        "git -C '.' init -q -b main",
+        "git -C '.' remote add origin 'https://github.com/o/r'"
+      ],
+      "env": {
+        "PARITY_CD": ".git"
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open in a bare repository",
+      "setup": [
+        "git init -q --bare -b main"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open in a linked worktree",
+      "setup": [
+        "mkdir -p 'main'",
+        "git -C 'main' init -q -b main",
+        "git -C 'main' remote add origin 'https://github.com/o/r'",
+        "git -C 'main' -c user.name=p -c user.email=p@p commit -q --allow-empty -m init",
+        "git -C main worktree add -q -b wt/x ../wt"
+      ],
+      "env": {
+        "PARITY_CD": "wt"
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open with GIT_DIR naming another repository",
+      "setup": [
+        "env -u GIT_DIR mkdir -p 'other'",
+        "env -u GIT_DIR git -C 'other' init -q -b main",
+        "env -u GIT_DIR git -C 'other' remote add origin 'https://github.com/other/one'",
+        "env -u GIT_DIR mkdir -p '.'",
+        "env -u GIT_DIR git -C '.' init -q -b main",
+        "env -u GIT_DIR git -C '.' remote add origin 'https://github.com/o/r'"
+      ],
+      "env": {
+        "GIT_DIR": "<CWD>/other/.git"
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open with a saved token, in a repository",
+      "setup": [
+        "mkdir -p '.'",
+        "git -C '.' init -q -b main",
+        "git -C '.' remote add origin 'https://github.com/o/r'",
+        "git -C '.' -c user.name=p -c user.email=p@p commit -q --allow-empty -m init",
+        "mkdir -p <HOME>/.codehost && printf '%s' '{\"token\": \"Saved Token+1\"}' > <HOME>/.codehost/config.json"
+      ],
+      "args": [
+        "open",
+        "--print"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open with no git on PATH",
+      "setup": [
+        "mkdir -p '.'",
+        "git -C '.' init -q -b main",
+        "git -C '.' remote add origin 'https://github.com/o/r'"
+      ],
+      "env": {
+        "PARITY_NO_GIT": "1"
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "after": [
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open in a repository whose host is not ASCII",
+      "setup": [
+        "mkdir -p '.'",
+        "git -C '.' init -q -b main",
+        "git -C '.' remote add origin 'https://GÏTHUB.com/o/r'"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "handback": "toLowerCase beyond ASCII is not compared"
+    },
+    {
+      "name": "open a target whose host is not ASCII",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "https://GÏTHUB.com/o/r"
+      ],
+      "handback": "toLowerCase beyond ASCII is not compared"
+    },
+    {
+      "name": "open in a JavaScript project",
+      "files": {
+        "package.json": "{\n  \"name\": \"x\",\n  \"type\": \"module\",\n  \"exports\": { \".\": \"./a.js\", \"./b\": { \"import\": \"./b.js\" } },\n  \"scripts\": { \"t\": \"x\" }\n}\n",
+        "tsconfig.json": "// c\n{\"compilerOptions\": {\"strict\": true,},}\n"
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ]
+    },
+    {
+      "name": "open below a JavaScript project",
+      "files": {
+        "package.json": "{\n  \"name\": \"x\",\n  \"type\": \"module\",\n  \"exports\": { \".\": \"./a.js\", \"./b\": { \"import\": \"./b.js\" } },\n  \"scripts\": { \"t\": \"x\" }\n}\n",
+        "jsconfig.json": "{\"compilerOptions\": {\"paths\": {\"@/*\": [\"./src/*\"]}}}"
+      },
+      "setup": [
+        "mkdir -p sub"
+      ],
+      "env": {
+        "PARITY_CD": "sub"
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ]
+    },
+    {
+      "name": "open beside a package.json that does not parse",
+      "files": {
+        "package.json": "{bad"
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ],
+      "handback": "bun writes its warnings first, or the file was not compared"
+    },
+    {
+      "name": "open beside a package.json with a key twice",
+      "files": {
+        "package.json": "{\"a\": 1, \"a\": 2}"
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ],
+      "handback": "bun writes its warnings first, or the file was not compared"
+    },
+    {
+      "name": "open beside a package.json with an unknown type",
+      "files": {
+        "package.json": "{\"type\": \"Module\"}"
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ],
+      "handback": "bun writes its warnings first, or the file was not compared"
+    },
+    {
+      "name": "open beside a package.json with an exports map bun rejects",
+      "files": {
+        "package.json": "{\"exports\": {\".\": \"./a.js\", \"x\": \"./b.js\"}}"
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ],
+      "handback": "bun writes its warnings first, or the file was not compared"
+    },
+    {
+      "name": "open beside a package.json with a browser map bun rejects",
+      "files": {
+        "package.json": "{\"browser\": {\"a\": 5}}"
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ],
+      "handback": "bun writes its warnings first, or the file was not compared"
+    },
+    {
+      "name": "open beside a tsconfig.json with extends",
+      "files": {
+        "tsconfig.json": "{\"extends\": \"./base.json\"}"
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ],
+      "handback": "bun writes its warnings first, or the file was not compared"
+    },
+    {
+      "name": "open beside a tsconfig.json with paths bun rejects",
+      "files": {
+        "tsconfig.json": "{\"compilerOptions\": {\"paths\": {\"a\": 5}}}"
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ],
+      "handback": "bun writes its warnings first, or the file was not compared"
+    },
+    {
+      "name": "open beside a jsconfig.json with a key twice",
+      "files": {
+        "jsconfig.json": "{\"compilerOptions\": {\"a\": 1, \"a\": 2}}"
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ],
+      "handback": "bun writes its warnings first, or the file was not compared"
+    },
+    {
+      "name": "open beside a package.json in single quotes",
+      "files": {
+        "package.json": "{'a': 1}"
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ],
+      "handback": "bun writes its warnings first, or the file was not compared"
+    },
+    {
+      "name": "open beside a package.json that is a directory",
+      "files": {
+        "package.json/x": ""
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ],
+      "handback": "bun writes its warnings first, or the file was not compared"
+    },
+    {
+      "name": "open below a package.json that does not parse",
+      "files": {
+        "package.json": "{bad"
+      },
+      "setup": [
+        "mkdir -p sub"
+      ],
+      "env": {
+        "PARITY_CD": "sub"
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ],
+      "handback": "bun reads the files above the current directory too"
+    },
+    {
+      "name": "open beside a .env without anything that matters",
+      "files": {
+        ".env": "FOO=1\nGITHUB_TOKEN=not-a-real-one\n"
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ]
+    },
+    {
+      "name": "open beside a .env setting HOME and PATH (set ones win)",
+      "files": {
+        ".env": "HOME=/elsewhere\nPATH=/nowhere\n"
+      },
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '%s' '{\"token\": \"Saved-Token-1\"}' > <HOME>/.codehost/config.json"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "o/r"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open beside a .env setting GIT_DIR",
+      "files": {
+        ".env": "GIT_DIR=<CWD>/other/.git\n"
+      },
+      "setup": [
+        "mkdir -p 'other'",
+        "git -C 'other' init -q -b main",
+        "git -C 'other' remote add origin 'https://github.com/other/one'",
+        "mkdir -p '.'",
+        "git -C '.' init -q -b main",
+        "git -C '.' remote add origin 'https://github.com/o/r'"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "handback": "bun loads it into the environment git reads"
+    },
+    {
+      "name": "open beside a .env.local setting XDG_CONFIG_HOME",
+      "files": {
+        ".env.local": "XDG_CONFIG_HOME=/x\n"
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ],
+      "handback": "bun loads it into the environment git reads"
+    },
+    {
+      "name": "open beside a .env.production mentioning NODE",
+      "files": {
+        ".env.production": "NODE_ENV=production\n"
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ],
+      "handback": "not compared"
+    },
+    {
+      "name": "open beside a bunfig.toml",
+      "files": {
+        "bunfig.toml": "[install]\nexact = true\n"
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ],
+      "handback": "bun reads it before the program"
+    },
+    {
+      "name": "open with a ~/.bunfig.toml",
+      "setup": [
+        "printf '[install]\\nexact = true\\n' > <HOME>/.bunfig.toml"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ],
+      "handback": "bun reads it before the program"
+    },
+    {
+      "name": "open with NODE_ENV set",
+      "env": {
+        "NODE_ENV": "production"
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ],
+      "handback": "a variable for the runtime"
+    },
+    {
+      "name": "open with a BUN_ variable set",
+      "env": {
+        "BUN_CONFIG_NO_CLEAR_TERMINAL_ON_RELOAD": "1"
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ],
+      "handback": "a variable for the runtime"
+    },
+    {
+      "name": "open with BUN_INSTALL set",
+      "env": {
+        "BUN_INSTALL": "/opt/bun"
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ]
+    },
+    {
+      "name": "open with FORCE_COLOR and a line on stderr",
+      "env": {
+        "FORCE_COLOR": "1"
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "handback": "console.error is coloured"
+    },
+    {
+      "name": "open with FORCE_COLOR and nothing on stderr",
+      "env": {
+        "FORCE_COLOR": "1"
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ]
+    },
+    {
+      "name": "open with FORCE_COLOR in a repository",
+      "env": {
+        "FORCE_COLOR": "1"
+      },
+      "setup": [
+        "mkdir -p '.'",
+        "git -C '.' init -q -b main",
+        "git -C '.' remote add origin 'https://github.com/o/r'"
+      ],
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ],
+      "handback": "the binary declines before asking git whether stderr is needed"
+    },
+    {
+      "name": "open with NO_COLOR and a line on stderr",
+      "env": {
+        "NO_COLOR": "1"
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open with a relative directory in PATH",
+      "env": {
+        "PARITY_PATH_PREFIX": "bin"
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ],
+      "handback": "where git is looked up is not compared"
+    },
+    {
+      "name": "open with CODEHOST_NO_NATIVE=1",
+      "env": {
+        "CODEHOST_NO_NATIVE": "1"
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "o/r"
+      ],
+      "handback": "the way out: everything goes back"
+    },
+    {
+      "name": "init with CODEHOST_NO_NATIVE=1",
+      "env": {
+        "CODEHOST_NO_NATIVE": "1"
+      },
+      "args": [
+        "init"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ],
+      "handback": "the way out: everything goes back"
+    },
+    {
+      "name": "open from a linked directory in a repository",
+      "setup": [
+        "mkdir -p 'real'",
+        "git -C 'real' init -q -b main",
+        "git -C 'real' remote add origin 'https://github.com/o/r'",
+        "git -C 'real' -c user.name=p -c user.email=p@p commit -q --allow-empty -m init",
+        "git -C 'real' checkout -q -b 'b'",
+        "ln -s real link"
+      ],
+      "env": {
+        "PARITY_CD": "link"
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "init from a linked directory",
+      "setup": [
+        "mkdir real && ln -s real link"
+      ],
+      "env": {
+        "PARITY_CD": "link"
+      },
+      "args": [
+        "init",
+        "ws"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "open from a directory with spaces and ü",
+      "setup": [
+        "mkdir -p 'my dir ü'",
+        "git -C 'my dir ü' init -q -b main",
+        "git -C 'my dir ü' remote add origin 'https://github.com/o/r'"
+      ],
+      "env": {
+        "PARITY_CD": "my dir ü"
+      },
+      "args": [
+        "open",
+        "--print",
+        "--anon"
+      ],
+      "after": [
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\"",
+        "cat \"$TMPDIR/browser.log\" 2>/dev/null || echo \"(no browser)\""
+      ]
+    },
+    {
+      "name": "open \"--print --help\"",
+      "args": [
+        "open",
+        "--print",
+        "--help"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "open \"--help\"",
+      "args": [
+        "open",
+        "--help"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "open \"-h --print\"",
+      "args": [
+        "open",
+        "-h",
+        "--print"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "open \"--print help\"",
+      "args": [
+        "open",
+        "--print",
+        "help"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "open \"help --print\"",
+      "args": [
+        "open",
+        "help",
+        "--print"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "open \"--print --version\"",
+      "args": [
+        "open",
+        "--print",
+        "--version"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "open \"--print -t x -t y o/r\"",
+      "args": [
+        "open",
+        "--print",
+        "-t",
+        "x",
+        "-t",
+        "y",
+        "o/r"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "open \"--print --print o/r\"",
+      "args": [
+        "open",
+        "--print",
+        "--print",
+        "o/r"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "open \"--print o/r extra\"",
+      "args": [
+        "open",
+        "--print",
+        "o/r",
+        "extra"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "open \"--print -- o/r\"",
+      "args": [
+        "open",
+        "--print",
+        "--",
+        "o/r"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "open \"--print -tabc o/r\"",
+      "args": [
+        "open",
+        "--print",
+        "-tabc",
+        "o/r"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "open \"--print -t=abc o/r\"",
+      "args": [
+        "open",
+        "--print",
+        "-t=abc",
+        "o/r"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "open \"--print --unknown o/r\"",
+      "args": [
+        "open",
+        "--print",
+        "--unknown",
+        "o/r"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "open \"--print true\"",
+      "args": [
+        "open",
+        "--print",
+        "true"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "open \"--print --anon true o/r\"",
+      "args": [
+        "open",
+        "--print",
+        "--anon",
+        "true",
+        "o/r"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "open \"--print --token=-x o/r\"",
+      "args": [
+        "open",
+        "--print",
+        "--token=-x",
+        "o/r"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "open \"--print -t -x o/r\"",
+      "args": [
+        "open",
+        "--print",
+        "-t",
+        "-x",
+        "o/r"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "open \"-t -_.!~*'() --print owner/repo\"",
+      "args": [
+        "open",
+        "-t",
+        "-_.!~*'()",
+        "--print",
+        "owner/repo"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "open \"--print -t\"",
+      "args": [
+        "open",
+        "--print",
+        "-t"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "open \"--print --page.x=1 o/r\"",
+      "args": [
+        "open",
+        "--print",
+        "--page.x=1",
+        "o/r"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "open \"--print -\"",
+      "args": [
+        "open",
+        "--print",
+        "-"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "open \"--print ---\"",
+      "args": [
+        "open",
+        "--print",
+        "---"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "open \"--print --Print o/r\"",
+      "args": [
+        "open",
+        "--print",
+        "--Print",
+        "o/r"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "no command",
+      "args": [],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "--help",
+      "args": [
+        "--help"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "-h",
+      "args": [
+        "-h"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "--version",
+      "args": [
+        "--version"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "an unknown command",
+      "args": [
+        "OPEN",
+        "--print",
+        "o/r"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "an option before the command",
+      "args": [
+        "--print",
+        "open",
+        "o/r"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "init --help",
+      "args": [
+        "init",
+        "--help"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "serve --help",
+      "args": [
+        "serve",
+        "--help",
+        "--signal",
+        "ws://127.0.0.1:1"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "init here",
+      "args": [
+        "init"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "init .",
+      "args": [
+        "init",
+        "."
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "init a new directory",
+      "args": [
+        "init",
+        "ws"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "init a new nested directory",
+      "args": [
+        "init",
+        "a/b/c"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "init an existing directory",
+      "setup": [
+        "mkdir ws"
+      ],
+      "args": [
+        "init",
+        "ws"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "init an absolute path",
+      "args": [
+        "init",
+        "<CWD>/abs"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "init a path to normalise",
+      "args": [
+        "init",
+        "a//b/./c/../d/"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "init above the current directory",
+      "setup": [
+        "mkdir -p sub"
+      ],
+      "env": {
+        "PARITY_CD": "sub"
+      },
+      "args": [
+        "init",
+        "../up"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "init a directory with spaces and ü",
+      "args": [
+        "init",
+        "my ws ü"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "init a directory with a backslash",
+      "args": [
+        "init",
+        "a\\b"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "init twice: already set up",
+      "setup": [
+        "mkdir -p .codehost && touch .codehost/config.yaml .codehost/setup.sh .codehost/setup.ps1"
+      ],
+      "args": [
+        "init"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "init with config.yaml there already",
+      "files": {
+        ".codehost/config.yaml": "workspace: \"{repo}\"\n"
+      },
+      "args": [
+        "init"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "init with setup.sh there already, mode 644",
+      "files": {
+        ".codehost/setup.sh": "echo mine\n"
+      },
+      "setup": [
+        "chmod 644 .codehost/setup.sh"
+      ],
+      "args": [
+        "init"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "init -f over everything",
+      "files": {
+        ".codehost/config.yaml": "workspace: \"{repo}\"\n",
+        ".codehost/setup.sh": "echo mine\n",
+        ".codehost/setup.ps1": "mine\n"
+      },
+      "setup": [
+        "chmod 600 .codehost/setup.sh .codehost/config.yaml"
+      ],
+      "args": [
+        "init",
+        "-f"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "init --force a directory",
+      "files": {
+        "ws/.codehost/setup.ps1": "mine\n"
+      },
+      "args": [
+        "init",
+        "--force",
+        "ws"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "init ws -f",
+      "args": [
+        "init",
+        "ws",
+        "-f"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "init with config.yaml a directory",
+      "setup": [
+        "mkdir -p .codehost/config.yaml"
+      ],
+      "args": [
+        "init"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "init into a linked .codehost",
+      "setup": [
+        "mkdir real && ln -s real .codehost"
+      ],
+      "args": [
+        "init"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "init in a JavaScript project",
+      "files": {
+        "package.json": "{\n  \"name\": \"x\",\n  \"type\": \"module\",\n  \"exports\": { \".\": \"./a.js\", \"./b\": { \"import\": \"./b.js\" } },\n  \"scripts\": { \"t\": \"x\" }\n}\n"
+      },
+      "args": [
+        "init"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "init -f with config.yaml a directory",
+      "setup": [
+        "mkdir -p .codehost/config.yaml"
+      ],
+      "args": [
+        "init",
+        "-f"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ],
+      "handback": "writeFileSync fails: the runtime's report"
+    },
+    {
+      "name": "init with .codehost a file",
+      "files": {
+        ".codehost": "x"
+      },
+      "args": [
+        "init"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ],
+      "handback": "mkdirSync fails: the runtime's report"
+    },
+    {
+      "name": "init below a file",
+      "files": {
+        "f": "x"
+      },
+      "args": [
+        "init",
+        "f/ws"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ],
+      "handback": "mkdirSync fails: the runtime's report"
+    },
+    {
+      "name": "init with setup.sh a link",
+      "setup": [
+        "mkdir .codehost && echo x > t && ln -s ../t .codehost/setup.sh"
+      ],
+      "args": [
+        "init"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ],
+      "handback": "existsSync follows links; not compared"
+    },
+    {
+      "name": "init with setup.sh a dangling link",
+      "setup": [
+        "mkdir .codehost && ln -s ../nowhere .codehost/setup.sh"
+      ],
+      "args": [
+        "init"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ],
+      "handback": "existsSync follows links; not compared"
+    },
+    {
+      "name": "init with .codehost a dangling link",
+      "setup": [
+        "ln -s nowhere .codehost"
+      ],
+      "args": [
+        "init"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ],
+      "handback": "not compared"
+    },
+    {
+      "name": "init \"-f -f\"",
+      "args": [
+        "init",
+        "-f",
+        "-f"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "init \"a b\"",
+      "args": [
+        "init",
+        "a",
+        "b"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "init \"--force=true\"",
+      "args": [
+        "init",
+        "--force=true"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "init \"--no-force\"",
+      "args": [
+        "init",
+        "--no-force"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "init \"-x\"",
+      "args": [
+        "init",
+        "-x"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "init \"\"",
+      "args": [
+        "init",
+        ""
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "init \"help\"",
+      "args": [
+        "init",
+        "help"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "init \"-- ws\"",
+      "args": [
+        "init",
+        "--",
+        "ws"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "init \"-fx\"",
+      "args": [
+        "init",
+        "-fx"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "serve -t \"short\"",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "short"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ]
+    },
+    {
+      "name": "serve -t \"\"",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        ""
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ]
+    },
+    {
+      "name": "serve -t \"   \"",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "   "
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ]
+    },
+    {
+      "name": "serve -t \"Aa1-aaaaaaa\"",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Aa1-aaaaaaa"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ]
+    },
+    {
+      "name": "serve -t \"aaaaaaaaaaaa\"",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "aaaaaaaaaaaa"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ]
+    },
+    {
+      "name": "serve -t \"AAAAAAAAAAAA\"",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "AAAAAAAAAAAA"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ]
+    },
+    {
+      "name": "serve -t \"123456789012\"",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "123456789012"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ]
+    },
+    {
+      "name": "serve -t \"aaaaaa123456\"",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "aaaaaa123456"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ]
+    },
+    {
+      "name": "serve -t \"Aa1 Bb2 Cc3 Dd4\"",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Aa1 Bb2 Cc3 Dd4"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ]
+    },
+    {
+      "name": "serve -t \"Aa1- aaaaaaaa\"",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Aa1- aaaaaaaa"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ]
+    },
+    {
+      "name": "serve -t \"Aa1- aaaaaaaa\"",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Aa1- aaaaaaaa"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ]
+    },
+    {
+      "name": "serve -t \"Aa1-﻿aaaaaaaa\"",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Aa1-﻿aaaaaaaa"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ]
+    },
+    {
+      "name": "serve -t \"Aa1-　aaaaaaaa\"",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Aa1-　aaaaaaaa"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ]
+    },
+    {
+      "name": "serve -t \"Aa1-\\taaaaaaaa\"",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Aa1-\taaaaaaaa"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ]
+    },
+    {
+      "name": "serve -t \"  short  \"",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "  short  "
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ]
+    },
+    {
+      "name": "serve -t \"Changeme1234\"",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Changeme1234"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ]
+    },
+    {
+      "name": "serve -t \"Password1234\"",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Password1234"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ]
+    },
+    {
+      "name": "serve -t \"LetMeIn12345\"",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "LetMeIn12345"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ]
+    },
+    {
+      "name": "serve -t \"CodeHost1234\"",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "CodeHost1234"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ]
+    },
+    {
+      "name": "serve -t \"codehost1234\"",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "codehost1234"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ]
+    },
+    {
+      "name": "serve -t \"😀😀😀😀😀😀\"",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "😀😀😀😀😀😀"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ]
+    },
+    {
+      "name": "serve -t \"😀😀😀😀😀\"",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "😀😀😀😀😀"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ]
+    },
+    {
+      "name": "serve -t \"ééééééééééé1\"",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "ééééééééééé1"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ]
+    },
+    {
+      "name": "serve -t \"Aa1-xxxxxxxx… (257 units)\"",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Aa1-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ]
+    },
+    {
+      "name": "serve -t \"Aa1-😀😀😀😀… (258 units)\"",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Aa1-😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ]
+    },
+    {
+      "name": "dev -t \"short\"",
+      "args": [
+        "dev",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "short"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ]
+    },
+    {
+      "name": "expose 8080 -t \"short\"",
+      "args": [
+        "expose",
+        "8080",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "short"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "dev -t \"Changeme1234\"",
+      "args": [
+        "dev",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Changeme1234"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ]
+    },
+    {
+      "name": "expose 8080 -t \"Changeme1234\"",
+      "args": [
+        "expose",
+        "8080",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Changeme1234"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "dev -t \"😀😀😀😀😀😀\"",
+      "args": [
+        "dev",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "😀😀😀😀😀😀"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ]
+    },
+    {
+      "name": "expose 8080 -t \"😀😀😀😀😀😀\"",
+      "args": [
+        "expose",
+        "8080",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "😀😀😀😀😀😀"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "dev -t \"Aa1- aaaaaaaa\"",
+      "args": [
+        "dev",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Aa1- aaaaaaaa"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ]
+    },
+    {
+      "name": "expose 8080 -t \"Aa1- aaaaaaaa\"",
+      "args": [
+        "expose",
+        "8080",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Aa1- aaaaaaaa"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "dev -t \"\"",
+      "args": [
+        "dev",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        ""
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ]
+    },
+    {
+      "name": "expose 8080 -t \"\"",
+      "args": [
+        "expose",
+        "8080",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        ""
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "serve --token=short",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "--token=short"
+      ]
+    },
+    {
+      "name": "serve --token short with a dir",
+      "args": [
+        "serve",
+        "ws",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "--token",
+        "short"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "serve with every option it takes and a bad token",
+      "args": [
+        "serve",
+        "ws",
+        "--name",
+        "x",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "--port",
+        "8080",
+        "--approve",
+        "confirm",
+        "-t",
+        "short"
+      ],
+      "after": [
+        "cd <CWD> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done"
+      ]
+    },
+    {
+      "name": "serve --approve auto with a bad token",
+      "args": [
+        "serve",
+        "--approve=auto",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "short"
+      ]
+    },
+    {
+      "name": "dev with every option it takes and a bad token",
+      "args": [
+        "dev",
+        "ws",
+        "--name",
+        "x",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "--port",
+        "1",
+        "--approve",
+        "auto",
+        "-t",
+        "short"
+      ]
+    },
+    {
+      "name": "expose a port out of range with a bad token",
+      "args": [
+        "expose",
+        "70000",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "short"
+      ]
+    },
+    {
+      "name": "expose 0 with a bad token",
+      "args": [
+        "expose",
+        "0",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "--name",
+        "n",
+        "-t",
+        "short"
+      ]
+    },
+    {
+      "name": "serve with a bad token in a JavaScript project",
+      "files": {
+        "package.json": "{\n  \"name\": \"x\",\n  \"type\": \"module\",\n  \"exports\": { \".\": \"./a.js\", \"./b\": { \"import\": \"./b.js\" } },\n  \"scripts\": { \"t\": \"x\" }\n}\n"
+      },
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "short"
+      ]
+    },
+    {
+      "name": "serve without -t",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "serve with an --approve yargs rejects",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "--approve",
+        "maybe",
+        "-t",
+        "short"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "serve with --allow",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "--allow",
+        "x",
+        "-t",
+        "short"
+      ],
+      "handback": "--allow is greedy in yargs"
+    },
+    {
+      "name": "serve with -t twice",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "short",
+        "-t",
+        "short2"
+      ],
+      "handback": "yargs makes an array of it"
+    },
+    {
+      "name": "serve -t help",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "help"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "serve with --port not a number",
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "--port",
+        "abc",
+        "-t",
+        "short"
+      ],
+      "handback": "not compared"
+    },
+    {
+      "name": "expose a port that is not a number",
+      "args": [
+        "expose",
+        "abc",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "short"
+      ],
+      "handback": "not compared"
+    },
+    {
+      "name": "expose without a port",
+      "args": [
+        "expose",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "short"
+      ],
+      "handback": "yargs's to answer"
+    },
+    {
+      "name": "serve with a bad token and FORCE_COLOR",
+      "env": {
+        "FORCE_COLOR": "1"
+      },
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "short"
+      ],
+      "handback": "console.error is coloured"
+    },
+    {
+      "name": "serve with a bad token beside a bunfig.toml",
+      "files": {
+        "bunfig.toml": "[install]\nexact = true\n"
+      },
+      "args": [
+        "serve",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "short"
+      ],
+      "handback": "bun reads it before the program"
+    },
+    {
+      "name": "dev registers the current directory",
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '{\\n  \"pid\": %s,\\n  \"root\": %s,\\n  \"token\": %s,\\n  \"startedAt\": 1\\n}' \"$PPID\" '\"/srv/ws\"' '\"Daemon Token/1+é\"' > <HOME>/.codehost/daemon.json"
+      ],
+      "args": [
+        "dev",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Parity-Token-1"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ],
+      "normalize": [
+        [
+          "\"addedAt\": \\d{13}",
+          "\"addedAt\": <MS>"
+        ]
+      ]
+    },
+    {
+      "name": "dev registers a directory",
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '{\\n  \"pid\": %s,\\n  \"root\": %s,\\n  \"token\": %s,\\n  \"startedAt\": 1\\n}' \"$PPID\" '\"/srv/ws\"' '\"Daemon Token/1+é\"' > <HOME>/.codehost/daemon.json",
+        "mkdir ws"
+      ],
+      "args": [
+        "dev",
+        "ws",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Parity-Token-1"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ],
+      "normalize": [
+        [
+          "\"addedAt\": \\d{13}",
+          "\"addedAt\": <MS>"
+        ]
+      ]
+    },
+    {
+      "name": "dev registers a directory that does not exist",
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '{\\n  \"pid\": %s,\\n  \"root\": %s,\\n  \"token\": %s,\\n  \"startedAt\": 1\\n}' \"$PPID\" '\"/srv/ws\"' '\"Daemon Token/1+é\"' > <HOME>/.codehost/daemon.json"
+      ],
+      "args": [
+        "dev",
+        "missing/dir",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Parity-Token-1"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ],
+      "normalize": [
+        [
+          "\"addedAt\": \\d{13}",
+          "\"addedAt\": <MS>"
+        ]
+      ]
+    },
+    {
+      "name": "dev registers a directory with spaces and ü",
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '{\\n  \"pid\": %s,\\n  \"root\": %s,\\n  \"token\": %s,\\n  \"startedAt\": 1\\n}' \"$PPID\" '\"/srv/ws\"' '\"Daemon Token/1+é\"' > <HOME>/.codehost/daemon.json",
+        "mkdir 'my ws ü'"
+      ],
+      "args": [
+        "dev",
+        "my ws ü",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Parity-Token-1"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ],
+      "normalize": [
+        [
+          "\"addedAt\": \\d{13}",
+          "\"addedAt\": <MS>"
+        ]
+      ]
+    },
+    {
+      "name": "dev registers a directory with a backslash",
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '{\\n  \"pid\": %s,\\n  \"root\": %s,\\n  \"token\": %s,\\n  \"startedAt\": 1\\n}' \"$PPID\" '\"/srv/ws\"' '\"Daemon Token/1+é\"' > <HOME>/.codehost/daemon.json",
+        "mkdir 'a\\b'"
+      ],
+      "args": [
+        "dev",
+        "a\\b",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Parity-Token-1"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ],
+      "normalize": [
+        [
+          "\"addedAt\": \\d{13}",
+          "\"addedAt\": <MS>"
+        ]
+      ]
+    },
+    {
+      "name": "dev registers a repository",
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '{\\n  \"pid\": %s,\\n  \"root\": %s,\\n  \"token\": %s,\\n  \"startedAt\": 1\\n}' \"$PPID\" '\"/srv/ws\"' '\"Daemon Token/1+é\"' > <HOME>/.codehost/daemon.json",
+        "mkdir -p 'r'",
+        "git -C 'r' init -q -b main",
+        "git -C 'r' remote add origin 'git@github.com:O/R.git'",
+        "git -C 'r' -c user.name=p -c user.email=p@p commit -q --allow-empty -m init",
+        "git -C 'r' checkout -q -b 'feat/x'"
+      ],
+      "args": [
+        "dev",
+        "r",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Parity-Token-1"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ],
+      "normalize": [
+        [
+          "\"addedAt\": \\d{13}",
+          "\"addedAt\": <MS>"
+        ]
+      ]
+    },
+    {
+      "name": "dev registers a repository without origin",
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '{\\n  \"pid\": %s,\\n  \"root\": %s,\\n  \"token\": %s,\\n  \"startedAt\": 1\\n}' \"$PPID\" '\"/srv/ws\"' '\"Daemon Token/1+é\"' > <HOME>/.codehost/daemon.json",
+        "mkdir -p 'r'",
+        "git -C 'r' init -q -b main"
+      ],
+      "args": [
+        "dev",
+        "r",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Parity-Token-1"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ],
+      "normalize": [
+        [
+          "\"addedAt\": \\d{13}",
+          "\"addedAt\": <MS>"
+        ]
+      ]
+    },
+    {
+      "name": "dev registers with every option it takes",
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '{\\n  \"pid\": %s,\\n  \"root\": %s,\\n  \"token\": %s,\\n  \"startedAt\": 1\\n}' \"$PPID\" '\"/srv/ws\"' '\"Daemon Token/1+é\"' > <HOME>/.codehost/daemon.json"
+      ],
+      "args": [
+        "dev",
+        ".",
+        "--name",
+        "x",
+        "--port",
+        "8080",
+        "--approve",
+        "confirm",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Parity-Token-1"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ],
+      "normalize": [
+        [
+          "\"addedAt\": \\d{13}",
+          "\"addedAt\": <MS>"
+        ]
+      ]
+    },
+    {
+      "name": "dev registers next to other workspaces",
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '{\\n  \"pid\": %s,\\n  \"root\": %s,\\n  \"token\": %s,\\n  \"startedAt\": 1\\n}' \"$PPID\" '\"/srv/ws\"' '\"Daemon Token/1+é\"' > <HOME>/.codehost/daemon.json",
+        "mkdir -p <HOME>/.codehost && printf '%s' '[\n  {\n    \"path\": \"/a\\u00e9\\\"q\",\n    \"addedAt\": 5\n  },\n  {\"addedAt\": 170000000000, \"path\": \"/b\"}\n]' > <HOME>/.codehost/workspaces.json"
+      ],
+      "args": [
+        "dev",
+        "ws",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Parity-Token-1"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ],
+      "normalize": [
+        [
+          "\"addedAt\": \\d{13}",
+          "\"addedAt\": <MS>"
+        ]
+      ]
+    },
+    {
+      "name": "dev registers into an empty list",
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '{\\n  \"pid\": %s,\\n  \"root\": %s,\\n  \"token\": %s,\\n  \"startedAt\": 1\\n}' \"$PPID\" '\"/srv/ws\"' '\"Daemon Token/1+é\"' > <HOME>/.codehost/daemon.json",
+        "mkdir -p <HOME>/.codehost && printf '%s' '[]' > <HOME>/.codehost/workspaces.json"
+      ],
+      "args": [
+        "dev",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Parity-Token-1"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ],
+      "normalize": [
+        [
+          "\"addedAt\": \\d{13}",
+          "\"addedAt\": <MS>"
+        ]
+      ]
+    },
+    {
+      "name": "dev with the directory registered already",
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '{\\n  \"pid\": %s,\\n  \"root\": %s,\\n  \"token\": %s,\\n  \"startedAt\": 1\\n}' \"$PPID\" '\"/srv/ws\"' '\"Daemon Token/1+é\"' > <HOME>/.codehost/daemon.json",
+        "mkdir ws",
+        "mkdir -p <HOME>/.codehost && printf '%s' '[{\"path\": \"<CWD>/ws\", \"addedAt\": 7}]' > <HOME>/.codehost/workspaces.json"
+      ],
+      "args": [
+        "dev",
+        "ws",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Parity-Token-1"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ],
+      "normalize": [
+        [
+          "\"addedAt\": \\d{13}",
+          "\"addedAt\": <MS>"
+        ]
+      ]
+    },
+    {
+      "name": "dev with the daemon's own token",
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '{\\n  \"pid\": %s,\\n  \"root\": %s,\\n  \"token\": %s,\\n  \"startedAt\": 1\\n}' \"$PPID\" '\"/srv/ws\"' '\"Parity-Token-1\"' > <HOME>/.codehost/daemon.json"
+      ],
+      "args": [
+        "dev",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        " Parity-Token-1 "
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ],
+      "normalize": [
+        [
+          "\"addedAt\": \\d{13}",
+          "\"addedAt\": <MS>"
+        ]
+      ]
+    },
+    {
+      "name": "dev with a daemon serving an odd root",
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '{\\n  \"pid\": %s,\\n  \"root\": %s,\\n  \"token\": %s,\\n  \"startedAt\": 1\\n}' \"$PPID\" '\"/srv/\\\"ws\\\" ü\"' '\"Daemon Token/1+é\"' > <HOME>/.codehost/daemon.json"
+      ],
+      "args": [
+        "dev",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "--token",
+        "Parity-Token-1"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ],
+      "normalize": [
+        [
+          "\"addedAt\": \\d{13}",
+          "\"addedAt\": <MS>"
+        ]
+      ]
+    },
+    {
+      "name": "dev with a bad token and a live daemon",
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '{\\n  \"pid\": %s,\\n  \"root\": %s,\\n  \"token\": %s,\\n  \"startedAt\": 1\\n}' \"$PPID\" '\"/srv/ws\"' '\"Daemon Token/1+é\"' > <HOME>/.codehost/daemon.json"
+      ],
+      "args": [
+        "dev",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "short"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ]
+    },
+    {
+      "name": "dev with workspaces.json not JSON",
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '{\\n  \"pid\": %s,\\n  \"root\": %s,\\n  \"token\": %s,\\n  \"startedAt\": 1\\n}' \"$PPID\" '\"/srv/ws\"' '\"Daemon Token/1+é\"' > <HOME>/.codehost/daemon.json",
+        "mkdir -p <HOME>/.codehost && printf '%s' 'not json' > <HOME>/.codehost/workspaces.json"
+      ],
+      "args": [
+        "dev",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Parity-Token-1"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ],
+      "normalize": [
+        [
+          "\"addedAt\": \\d{13}",
+          "\"addedAt\": <MS>"
+        ]
+      ],
+      "handback": "JSON.parse's verdict is not reproduced"
+    },
+    {
+      "name": "dev with an entry of workspaces.json the JavaScript keeps as it is",
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '{\\n  \"pid\": %s,\\n  \"root\": %s,\\n  \"token\": %s,\\n  \"startedAt\": 1\\n}' \"$PPID\" '\"/srv/ws\"' '\"Daemon Token/1+é\"' > <HOME>/.codehost/daemon.json",
+        "mkdir -p <HOME>/.codehost && printf '%s' '[{\"path\": \"/a\", \"addedAt\": 1, \"x\": [1.50]}, 5]' > <HOME>/.codehost/workspaces.json"
+      ],
+      "args": [
+        "dev",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Parity-Token-1"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ],
+      "normalize": [
+        [
+          "\"addedAt\": \\d{13}",
+          "\"addedAt\": <MS>"
+        ]
+      ],
+      "handback": "the JavaScript rewrites what it read"
+    },
+    {
+      "name": "dev with addedAt written as a float",
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '{\\n  \"pid\": %s,\\n  \"root\": %s,\\n  \"token\": %s,\\n  \"startedAt\": 1\\n}' \"$PPID\" '\"/srv/ws\"' '\"Daemon Token/1+é\"' > <HOME>/.codehost/daemon.json",
+        "mkdir -p <HOME>/.codehost && printf '%s' '[{\"path\": \"/a\", \"addedAt\": 1.7e12}]' > <HOME>/.codehost/workspaces.json"
+      ],
+      "args": [
+        "dev",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Parity-Token-1"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ],
+      "normalize": [
+        [
+          "\"addedAt\": \\d{13}",
+          "\"addedAt\": <MS>"
+        ]
+      ],
+      "handback": "JavaScript's number formatting"
+    },
+    {
+      "name": "dev with a daemon.json pid written as a float",
+      "setup": [
+        "mkdir -p <HOME>/.codehost && printf '{\"pid\": %s.0, \"root\": \"/r\", \"token\": \"t\"}' \"$PPID\" > <HOME>/.codehost/daemon.json"
+      ],
+      "args": [
+        "dev",
+        "--signal",
+        "ws://127.0.0.1:1",
+        "-t",
+        "Parity-Token-1"
+      ],
+      "after": [
+        "cd <HOME> && find . -mindepth 1 -printf '%y %m %p\\n' | sort && find . -type f | sort | while IFS= read -r f; do echo \"== $f\"; cat \"$f\"; echo; done",
+        "cat \"$TMPDIR/git.log\" 2>/dev/null || echo \"(git not run)\""
+      ],
+      "normalize": [
+        [
+          "\"addedAt\": \\d{13}",
+          "\"addedAt\": <MS>"
+        ]
+      ],
+      "handback": "not compared"
+    }
+  ]
+}
