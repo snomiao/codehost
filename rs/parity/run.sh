@@ -34,7 +34,9 @@ set -eu
 shims="$TMPDIR/shims"
 mkdir -p "$shims"
 shims_on_path=$shims
+windows=
 if command -v cygpath > /dev/null 2>&1; then
+  windows=1
   shims_on_path=$(cygpath -u "$shims")
 fi
 for opener in xdg-open open; do
@@ -43,7 +45,15 @@ for opener in xdg-open open; do
 done
 
 if [ "${PARITY_NO_GIT:-}" = 1 ]; then
-  ln -s "$(command -v bun)" "$shims/bun"
+  bun=$(command -v bun)
+  if [ -n "$windows" ]; then
+    # A Windows program finds bun only as bun.exe, and Git Bash's ln -s
+    # would copy it: a hard link, or a copy where that cannot be made.
+    case $bun in *.exe) ;; *) bun=$bun.exe ;; esac
+    ln "$bun" "$shims/bun.exe" 2> /dev/null || cp "$bun" "$shims/bun.exe"
+  else
+    ln -s "$bun" "$shims/bun"
+  fi
   PATH="$shims_on_path"
 else
   real_git=$(command -v git)
