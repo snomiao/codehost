@@ -43,6 +43,12 @@
 //!   but cannot be loaded, such as a glibc build on a musl system, is not
 //!   detected: there the TypeScript fails at every command.)
 //!
+//! The program's own files are `path.join(os.homedir(), ".codehost", …)`:
+//! HOME as it is, with `..` resolved by the text. A HOME that is unset or
+//! empty (`os.homedir()` then asks the user database) or has a `..`
+//! component (the system would resolve it through the directories) hands
+//! back.
+//!
 //! And while it runs, bun prints `console.error` in red when standard output
 //! or standard error is a terminal, or FORCE_COLOR is set. A command that
 //! would write to standard error then hands back (`Machine::plain_stderr`).
@@ -298,6 +304,17 @@ fn datachannel_addon(package_root: &Path) -> bool {
     false
 }
 
+/// The TypeScript names its files `join(homedir(), ".codehost", name)`, and
+/// path.join resolves a `..` by the text: `/nope/../h` becomes `/h`. The
+/// system resolves it by the directories it passes through, so there the
+/// same text is a missing directory, or, through a link, another one. The
+/// binary uses HOME as it is, which names the same files only when it has
+/// no `..` component (`.`, `//` and a trailing `/` the system takes as
+/// path.join does).
+fn home_names_the_same_files(home: &str) -> bool {
+    !home.split('/').any(|part| part == "..")
+}
+
 /// bun cannot load a program from a path with `?` or `\` in it (it takes the
 /// one for a query and the other for a `/`).
 fn loadable(path: &Path) -> bool {
@@ -319,6 +336,9 @@ pub fn machine() -> Result<Machine, HandBack> {
     }
     // Without HOME, `os.homedir()` asks the system's user database.
     let home = std::env::var("HOME").ok().filter(|home| !home.is_empty()).ok_or(HandBack)?;
+    if !home_names_the_same_files(&home) {
+        return Err(HandBack);
+    }
     // `git` is looked up in PATH; an empty or relative entry is looked up
     // from the current directory, which the two runtimes need not do alike.
     let path = std::env::var("PATH").map_err(|_| HandBack)?;
@@ -428,6 +448,16 @@ mod tests {
         // bun 1.4.0 takes A, B, C and D for keys here: line ends count as
         // blanks between a key and its `=`.
         assert_eq!(keys("A\r=1\nB\n=2\nC\r\n=3\nD\x0b\x0c =4\n"), ["A", "B", "C", "D"]);
+    }
+
+    #[test]
+    fn homes_that_name_the_same_files_as_path_join() {
+        for home in ["/root", "/tmp/", "//x", "/./h/", "h", "./h", "/a..b/c.", "/...", " "] {
+            assert!(home_names_the_same_files(home), "{home}");
+        }
+        for home in ["/nope/../h", "..", "../h", "/a/..", "/a/../", "h/..//x"] {
+            assert!(!home_names_the_same_files(home), "{home}");
+        }
     }
 
     #[test]
