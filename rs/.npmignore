@@ -1,0 +1,5 @@
+# package.json has no `files` list, so without this file npm would pack the
+# whole Rust crate (sources, parity cases, and a local rs/target of hundreds
+# of megabytes) into the codehost tarball. The binary reaches users through
+# the platform packages the rustify pipeline builds, never through rs/.
+*

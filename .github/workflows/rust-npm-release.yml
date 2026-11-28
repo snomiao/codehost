@@ -1,0 +1,74 @@
+# Builds the Rust `codehost` binary for every platform, packs it together with
+# the TypeScript the package ships, checks on Linux, macOS and Windows that the
+# binary behaves like the TypeScript, and checks on Linux, macOS and Windows
+# (x64 and arm64) that `bun i -g` / `npm i -g` gives working `codehost` and
+# `ch` commands.
+#
+# It does not publish. Releases still go through release.yaml.
+#
+# The pipeline lives in https://github.com/snomiao/rustify.
+
+name: rust-npm-release
+
+on:
+  pull_request:
+    # The parity cases compare the binary with the TypeScript, so a change to
+    # either side has to run them.
+    paths:
+      - "rs/**"
+      - "src/**"
+      - "packages/ws-provision/src/**"
+      - "package.json"
+      - ".gitattributes"
+      - ".github/workflows/rust-npm-release.yml"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build, without a leading v (default: the version in rs/Cargo.toml)"
+        required: false
+        type: string
+
+jobs:
+  build:
+    uses: snomiao/rustify/.github/workflows/rust-npm-build.yml@releases/v1
+    with:
+      manifest: rs/Cargo.toml
+      bins: codehost
+      version: ${{ inputs.version }}
+      # --help is yargs's, so it is handed to src/cli/index.ts on every
+      # machine. (--version is no use as the check: installed with bun, yargs
+      # cannot find the package and prints "unknown", today as well.)
+      smoke: codehost --help
+      smoke-expect: codehost <command> [options]
+      # Rust against TypeScript, on the binaries that were just built, on
+      # Linux, macOS and Windows: rs/parity/proof.sh checks that
+      # rs/parity.json is what rs/parity.gen.mjs writes, compares every case
+      # on pipes and (not on Windows, which has no pseudo-terminal) on a
+      # terminal, checks which cases the binary answered itself on this
+      # system (the cases' "handback" and "skip" say it per system), and runs
+      # `cargo test` (which compares the helpers with the TypeScript's own
+      # functions under bun, where they are compiled). The binary answers on
+      # Linux and macOS and hands every case back on Windows, which the
+      # win32-x64 run shows. No case reaches the network, a process manager
+      # or a browser, and none reads the real home directory. bun.lock is not
+      # committed, hence a plain `bun install`; it fetches node-datachannel's
+      # prebuilt addon, which every TypeScript command loads.
+      parity-platforms: '["linux-x64", "darwin-arm64", "win32-x64"]'
+      parity: >-
+        bun install
+        && sh rs/parity/proof.sh "$RUSTIFY_PARITY" "$RUSTIFY_BIN_DIR/codehost"
+      # Run once on every platform after installing. None needs a token or
+      # the network. `open --print`, `init` and the token check are native
+      # on Linux and macOS, where the parity job compares them, and handed
+      # back on Windows, where the JavaScript prints the same; the markers
+      # make each platform show who answered (rs/src/js_fallback.rs is helper
+      # v5). Under `bun i -g` the `smoke` line above runs first and is the
+      # JavaScript's: it fetches node-datachannel's addon, which bun's
+      # install did not, and without which the binary hands back. `init -f`
+      # writes ./smoke-ws/.codehost in the job's directory, the same each
+      # time.
+      smoke-extra: |
+        [native:linux,darwin] [handback:win32] codehost open --print --anon owner/repo => [codehost] https://codehost.dev/github.com/owner/repo
+        [native:linux,darwin] [handback:win32] ch open --print -t Tok/en+1 https://github.com/o/r.git => [codehost] https://codehost.dev/github.com/o/r#t=Tok%2Fen%2B1
+        [native:linux,darwin] [handback:win32] codehost init smoke-ws -f => [codehost] scaffolded:
+        [1] [native:linux,darwin] [handback:win32] codehost serve -t short --signal ws://127.0.0.1:1 => token must be at least 12 characters

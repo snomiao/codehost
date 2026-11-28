@@ -70,5 +70,13 @@
   },
   "trustedDependencies": [
     "node-datachannel"
-  ]
+  ],
+  "rustify": {
+    "mode": "hybrid",
+    "bins": {
+      "ch": "codehost",
+      "codehost": "codehost"
+    },
+    "rootEnv": "CODEHOST_PACKAGE_ROOT"
+  }
 }
